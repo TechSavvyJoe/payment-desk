@@ -148,7 +148,7 @@ export default function App() {
             <div className="calculator-layout">
               <div className="calculator-left">
                 <div className="page-intro"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
-                <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} /></div>
+                <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
                 <details className="deal-details" open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)}>
                 <summary><strong>Deal details</strong><span>{dealInput.vehicleDescription || 'Vehicle reference & estimate date'}</span><time dateTime={dealInput.dealDate}>{formatShortDate(dealInput.dealDate)}</time></summary>
@@ -180,7 +180,7 @@ export default function App() {
           <p>Figures stay in this browser unless you share or print. Refreshing clears the deal.</p>
           <p>Michigan purchase estimates · v{APP_VERSION} · {BUILD_ID}</p>
         </footer>
-        {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}
+        {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { if (!(result.salePrice > 0)) { summaryProps.onStartEstimate(); return; } dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}
       </div>
     </ValidationContext.Provider>
   );

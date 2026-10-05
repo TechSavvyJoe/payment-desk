@@ -10,8 +10,8 @@ export default function MobileNav({ payment, onGrid, onPayment, hasEstimate = tr
         <ArrowIcon direction="right" size={18} />
       </button>
       <span aria-hidden="true" className="mobile-nav__divider" />
-      <button aria-label={hasEstimate ? `View estimate, ${formatCurrency(payment, { cents: true })} per month` : 'View estimate'} className="mobile-nav__payment" onClick={onPayment} type="button">
-        <strong>{hasEstimate ? `${formatCurrency(payment, { cents: true })}/mo` : 'Your estimate'}</strong>
+      <button aria-label={hasEstimate ? `View estimate, ${formatCurrency(payment, { cents: true })} per month` : undefined} className="mobile-nav__payment" onClick={onPayment} type="button">
+        <strong>{hasEstimate ? `${formatCurrency(payment, { cents: true })}/mo` : 'Enter selling price'}</strong>
         <ArrowIcon direction="right" size={20} />
       </button>
     </nav>

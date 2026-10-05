@@ -26,7 +26,8 @@ The interface keeps the established navy-blue identity: a navy header and paymen
 
 ## Component states and behavior
 
-- **Empty estimate:** explanatory text and Enter selling price replace a misleading zero payment and initial error alert. The payment grid provides the same starting action.
+- **Empty estimate:** explanatory text and Enter selling price replace a misleading zero payment and initial error alert. The payment grid provides the same starting action. On phones (≤800px) the dealer worksheet opens at the inputs: the page heading is visually hidden (kept for screen readers and focus), the start card is omitted, and the bottom bar offers Enter selling price.
+- **Phone payment card:** once a price exists, the card shows the payment line, any warnings, and Details plus Review customer estimate. Totals and the itemized breakdown open with Details, so the Trade section stays on the first screen.
 - **Invalid input:** retain the user's draft and last valid calculation; show the error and focus its field before moving to a customer estimate.
 - **Section disclosure:** the header is a button with expanded state. Hidden inputs leave the keyboard order. A section shortcut focuses the header so Enter or Space can reopen it.
 - **Field instructions:** helper text and validation messages both remain associated with the input.

@@ -14,7 +14,11 @@ test('a new deal leads from selling price to customer review and back to editing
   const summary = currentSummary(page);
   const price = page.getByRole('textbox', { name: 'Selling price', exact: true });
 
-  await summary.getByRole('button', { name: 'Enter selling price', exact: true }).click();
+  // Phones start from the bottom bar; their summary card appears once a price exists.
+  const start = page.viewportSize().width <= 800
+    ? page.getByRole('navigation', { name: 'Mobile calculator shortcuts' }).getByRole('button', { name: 'Enter selling price', exact: true })
+    : summary.getByRole('button', { name: 'Enter selling price', exact: true });
+  await start.click();
   await expect(price).toBeFocused();
   await price.fill('30000');
   await price.blur();
