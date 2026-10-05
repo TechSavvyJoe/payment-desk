@@ -2844,3 +2844,39 @@ input[type="checkbox"] { flex:0 0 auto; }
   .brand--has-logo .brand__name { display: none; }
   .brand__credit { font-size: 0.5rem; letter-spacing: 0.14em; }
 }
+
+/* ---------- Dealership settings dialog ---------- */
+.settings-dialog {
+  width: min(460px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+}
+.settings-dialog::backdrop { background: rgba(0, 9, 91, 0.45); }
+.settings-dialog__form { display: grid; gap: 14px; padding: 20px; }
+.settings-dialog h2 { margin: 0; font-size: 1.2rem; font-weight: 800; color: var(--navy); }
+.settings-dialog__note, .settings-dialog__hint { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.settings-dialog__field { display: grid; gap: 6px; }
+.settings-dialog__field label, .settings-dialog__logo legend { font-weight: 700; color: var(--ink-soft); }
+.settings-dialog__field label span, .settings-dialog__logo legend span { font-size: 0.78rem; font-weight: 500; color: var(--muted); }
+.settings-dialog__logo { display: grid; gap: 10px; margin: 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.settings-dialog__logo legend { padding: 0 4px; }
+.settings-dialog__preview { display: flex; align-items: center; min-height: 52px; padding: 8px; border-radius: 8px; background: var(--navy); color: #d6ddff; font-size: 0.8rem; }
+.settings-dialog__logo-actions, .settings-dialog__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.settings-dialog__actions { justify-content: space-between; }
+.settings-dialog__actions > span { display: flex; gap: 8px; margin-left: auto; }
+.settings-dialog__button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1.5px solid var(--input-border); border-radius: 8px; background: var(--surface); color: var(--ink-soft); font-size: 0.88rem; font-weight: 700; cursor: pointer; }
+.settings-dialog__button:hover { background: var(--blue-tint); }
+.settings-dialog__button:disabled, .settings-dialog__logo:disabled .settings-dialog__button { opacity: 0.55; cursor: not-allowed; }
+.settings-dialog__button--primary { border-color: var(--blue); background: var(--blue); color: #ffffff; }
+.settings-dialog__button--primary:hover { background: var(--blue-dark); }
+.settings-dialog__button--danger { border-color: transparent; padding-inline: 4px; color: var(--red); }
+.settings-dialog__button--danger:hover { background: var(--red-bg); }
+.settings-dialog__file:focus-within { outline: 3px solid var(--blue); outline-offset: 2px; }
+.settings-dialog__notice { margin: 0; min-height: 1.2em; font-size: 0.85rem; color: var(--ink-soft); }
+.settings-dialog__notice.is-error { color: var(--red); font-weight: 700; }

@@ -30,6 +30,8 @@ Products use **Service Contract**, **Gap**, or **Other**. Before a positive Othe
 
 Payment results are outputs. **Set payment target** opens the target tool; suggestions show the result they will apply. An Undo expires after a later deal edit. Customer view provides the selected payment, reconciled charges/trade/cash, assumptions, and separate Copy summary, Share, and Print actions. Incomplete or invalid deals cannot be exported through these controls.
 
+**Dealership name and logo.** In Dealer view, select **Settings** (the gear) to add an optional dealership name and logo. They appear in the header, on the customer estimate, on the printout, and on the first line of copied or shared summaries, with a small Payment Desk credit in the header and printout. They are saved only on that device; with nothing saved, the app shows Payment Desk.
+
 ## Rules and limits
 
 - Michigan 6% tax and eligible trade credit by deal date: $12,000 in 2026, $13,000 in 2027, $14,000 in 2028, and no scheduled cap from 2029.
@@ -42,6 +44,6 @@ Leases, nonresident/exempt transactions, special registrations, and manufacturer
 
 ## Data and operation
 
-Entered figures remain in browser memory unless the user copies, shares, or prints them. There is no saved-deal backend, analytics SDK, or external font request. Hosting still serves ordinary web requests. Refresh/close can lose the deal; a navigation warning is a convenience, not storage or recovery. Installation metadata does not provide offline availability.
+Entered figures remain in browser memory unless the user copies, shares, or prints them. The only thing the app saves is the optional dealership name and logo, in this browser's local storage on this device; customer figures are never saved. On a shared device, use **Settings → Clear dealership settings** to remove them. There is no saved-deal backend, analytics SDK, or external font request. Hosting still serves ordinary web requests. Refresh/close can lose the deal; a navigation warning is a convenience, not storage or recovery. Installation metadata does not provide offline availability.
 
 [Handoff and release guide](docs/HANDOFF.md) · [Acceptance checklist](docs/ACCEPTANCE.md) · [Review resolution map](docs/REVIEW-RESOLUTION.md)

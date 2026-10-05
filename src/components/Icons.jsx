@@ -128,3 +128,11 @@ export const PrintIcon = (props) => (
     <path d="M7 14h10v6H7z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
   </Icon>
 );
+
+export const SettingsIcon = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.9" />
+    <circle cx="12" cy="12" r="6.6" stroke="currentColor" strokeWidth="1.9" />
+    <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.9" />
+  </Icon>
+);

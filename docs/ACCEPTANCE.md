@@ -19,6 +19,7 @@ On Linux CI, browser installation includes `--with-deps`. The checked-in Playwri
 | State/input tests | Normalized money/rates, strict input grammar, cash/finance transitions, grid synchronization, undo expiry, reset, mutually valid view/grid state |
 | Proposal tests | Each ledger reconciles, upfront negative equity stays outside financing, cash credits remain valid, incomplete exports blocked, positive Other products require a name and explicit tax choice, identity/qualifications retained, immutable reference snapshot |
 | Browser tests | Input-to-result flow, both release-blocking regressions, viewport layout, keyboard/collapse behavior, result visibility, taxonomy and exports, accessibility scan |
+| Dealership tests | Saved name/logo normalization and fallback, logo type and sizing limits, header/estimate/printout/copied-text display, persistence, Clear, storage failure, and dialog accessibility |
 
 Consult the actual tests and final CI report for implemented browser assertions. Automated accessibility scans do not establish complete conformance.
 
@@ -35,6 +36,7 @@ Consult the actual tests and final CI report for implemented browser assertions.
 - [ ] Use only the keyboard: visible focus on all surfaces, no focus inside collapsed panels, logical destination focus after jumps, and usable grid return. Check Windows forced colors and reduced motion. Verify selected scenarios without relying on color.
 - [ ] Use NVDA or VoiceOver to verify labels, tables, selected scenario, collapsed sections, field errors, and status messages. Check a physical iPhone/Android device; emulation does not prove native Share or keyboard behavior.
 - [ ] Copy finance and cash summaries into plain text. Confirm the Payment Desk heading, date/reference/version, vehicle reference when supplied, APR/payment cents, products, trade/payoff, cash requirements, assumptions, and estimate qualifications.
+- [ ] In Dealer view, open Settings, add a dealership name and a wide transparent logo, and save. Confirm the header (desktop and a 375px phone), customer estimate, printed estimate, and copied/shared summary show the dealership; reload and Reset deal keep it; Clear dealership settings restores Payment Desk. Repeat in a private window and confirm the could-not-save message.
 - [ ] Try clipboard/native-share denial and cancellation. The app provides recovery without unexpectedly opening Print. Generic calculator links are clearly labeled and not described as saved deals.
 - [ ] Print/save PDF from a supported normal browser with background graphics disabled. Check paper pagination, legibility, identity/reference, selected payment and complete qualifications for multi-product and credit cases. Browser print-media emulation alone is insufficient.
 - [ ] Check the policy review boundary: a 2027 date uses the scheduled trade cap but requires updated fee/tax review before export. Verify low-price documentary-fee examples against the approved dealership basis.

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
-import { loadBrandSettings, resolveBrand } from './lib/brandSettings.js';
+import { clearBrandSettings, loadBrandSettings, resolveBrand, saveBrandSettings } from './lib/brandSettings.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
@@ -14,6 +14,7 @@ import ResultsPanel from './components/ResultsPanel.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
 import { ValidationContext } from './components/ValidationContext.jsx';
 import EstimateDateField from './components/EstimateDateField.jsx';
+import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
@@ -27,8 +28,14 @@ const focusDestination = id => requestAnimationFrame(() => {
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
   const { deal: dealInput, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
-  const [brandSettings] = useState(loadBrandSettings);
+  const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
   const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsButtonRef = useRef(null);
+  // Even when the browser refuses to store them, the settings apply for this visit.
+  const saveBrand = next => { const outcome = saveBrandSettings(next); setBrandSettings(outcome.settings); return outcome; };
+  const clearBrand = () => { const outcome = clearBrandSettings(); setBrandSettings(outcome.settings); return outcome; };
+  const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState('payment');
   const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
   const [solverExpanded, setSolverExpanded] = useState(false);
@@ -130,7 +137,8 @@ export default function App() {
     <ValidationContext.Provider value={reportError}>
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
-        <ViewToggle brand={brand} onReset={resetDeal} onViewChange={changeView} view={view} />
+        <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
+        {settingsOpen ? <DealershipSettingsDialog settings={brandSettings} onClear={clearBrand} onClose={closeSettings} onSave={saveBrand} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
