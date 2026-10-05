@@ -11,7 +11,7 @@ export default function ViewToggle({ view, onViewChange, onReset, brand }) {
         onClick={(event) => { event.preventDefault(); onViewChange("dealer"); }}>
         {custom ? (
           <>
-            {brand.logo ? <span className="brand__chip"><img alt="" className="brand__logo" src={brand.logo} /></span> : null}
+            {brand.logo ? <span className="brand__chip"><img alt={brand.dealershipName ? "" : "Dealership logo"} className="brand__logo" src={brand.logo} /></span> : null}
             <span className="brand__text">
               {brand.dealershipName ? <strong className="brand__name">{brand.dealershipName}</strong> : null}
               <span className="brand__credit">PAYMENT DESK</span>

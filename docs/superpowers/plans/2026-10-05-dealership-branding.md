@@ -702,7 +702,7 @@ test.describe('dealership on customer estimates', () => {
   test('a logo-only dealership keeps Payment Desk in the text and labels the logo', async ({ page }) => {
     await seedBrand(page, { logo: LOGO });
     await openEstimate(page);
-    await expect(page.getByRole('img', { name: 'Dealership logo' })).toBeVisible();
+    await expect(page.locator('.proposal-identity').getByRole('img', { name: 'Dealership logo' })).toBeVisible();
     await expect(page.locator('.proposal-identity .proposal-brand')).toHaveCount(0);
     expect((await copySummary(page)).split('\n')[0]).toBe('Payment Desk');
     await expect(page.locator('.print-brand strong')).toHaveCount(0);

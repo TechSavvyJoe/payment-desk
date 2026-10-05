@@ -24,11 +24,19 @@ test.describe('dealership header', () => {
     const home = page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' });
     await expect(home.locator('.brand__credit')).toHaveText('PAYMENT DESK');
     await expect(home.locator('img.brand__logo')).toHaveAttribute('src', LOGO);
+    await expect(home.locator('img.brand__logo')).toHaveAttribute('alt', '');
     const name = home.locator('.brand__name');
     await expect(name).toHaveText('Lakeside Motors');
     // Phones (≤440px) show the logo chip without the name text.
     if (page.viewportSize().width <= 440) await expect(name).toBeHidden();
     else await expect(name).toBeVisible();
+  });
+
+  test('a logo-only dealership gives the header logo an accessible name', async ({ page }) => {
+    await seedBrand(page, { logo: LOGO });
+    await page.goto('/');
+    const logo = page.getByRole('link', { name: 'Payment Desk home' }).locator('img.brand__logo');
+    await expect(logo).toHaveAttribute('alt', 'Dealership logo');
   });
 
   test('a name-only dealership shows the name above the credit', async ({ page }) => {
