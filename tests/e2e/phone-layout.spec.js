@@ -52,6 +52,27 @@ test.describe('phone worksheet starts at the inputs', () => {
     await expect(card.locator('.result-totals').getByText('Amount financed')).toBeHidden();
   });
 
+  for (const width of [390, 320]) {
+    test(`the Set payment target label fits inside its button at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await enterPrice(page);
+      const button = page.locator('.mobile-results .payment-edit-button');
+      await expect(button).toBeVisible();
+      const fit = await button.evaluate(element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
+        const box = element.getBoundingClientRect();
+        return { textLeft: text.left, textRight: text.right, left: box.left, right: box.right, height: box.height, scroll: element.scrollWidth, client: element.clientWidth };
+      });
+      expect(fit.textLeft).toBeGreaterThanOrEqual(fit.left);
+      expect(fit.textRight).toBeLessThanOrEqual(fit.right);
+      expect(fit.scroll).toBeLessThanOrEqual(fit.client);
+      expect(fit.height).toBeGreaterThanOrEqual(44);
+      expect((await pageBox(page.locator('.mobile-results'))).height).toBeLessThanOrEqual(170);
+    });
+  }
+
   test('warnings stay visible while the card is slim', async ({ page }) => {
     await enterPrice(page);
     await page.getByRole('button', { name: 'New plate', exact: true }).click();
