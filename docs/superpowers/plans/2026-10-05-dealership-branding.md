@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let any dealership optionally save its name and logo on a device. They show in the header, on the customer estimate, the printout and the copied or shared summary, with a small "PAYMENT DESK" credit. With nothing saved, the app is unchanged.
+**Goal:** Let any dealership optionally save its name and logo on a device. They show in the header, on the customer estimate, the printout and the copied or shared summary, with a small "PAYMENT DESK" credit. With nothing saved, the app is unchanged. Task 6 also makes the phone worksheet open at the inputs, with a slim payment card.
 
 **Architecture:** A pure `brandSettings` module owns the saved record (normalize, load, save, clear, resolve), with storage injected for unit tests. A browser-only `logoImage` module turns an uploaded file into a resized PNG data URL. `App` holds the settings in state and passes a resolved `brand` to the header and the customer view. The proposal snapshot carries `brand` so the estimate card, printout and copied text all read one frozen value. A native `<dialog>` edits a draft and saves through `App`.
 
@@ -1385,10 +1385,310 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
+### Task 6: Phone worksheet starts at the inputs
+
+Design approved in conversation on 2026-10-05. On screens ≤800px, in Dealer view only (desktop and Customer view unchanged):
+
+- The "Build the deal. See the payment." heading and subtitle are visually hidden but kept for screen readers and focus jumps.
+- No navy start box until a selling price exists. The bottom bar's estimate button reads **Enter selling price** and focuses that field.
+- After a price, the payment card is slim. It shows the payment line, any warnings, and a row with **Details** and **Review customer estimate**. Totals and the itemized breakdown open with **Details**.
+
+Measured before the change on 390×844: Selling price started 495px down; after a price, the card was 299px tall and Trade allowance sat at 910px (off screen).
+
+**Files:**
+- Modify: `src/components/ResultsPanel.jsx` (imports; signature; body after `isStarting`; return block)
+- Modify: `src/components/MobileNav.jsx` (estimate button label when there is no estimate)
+- Modify: `src/App.jsx` (`.mobile-results` panel gets `compact`; MobileNav `onPayment`)
+- Modify: `src/redesign.css` (appended phone rules)
+- Modify: `tests/e2e/workflow.spec.js` (phones start from the bottom bar)
+- Modify: `docs/DESIGN-SYSTEM.md`, `docs/ACCEPTANCE.md`
+- Create: `tests/e2e/phone-layout.spec.js`
+
+**Interfaces:**
+- Consumes: nothing from Tasks 1–5. It edits different lines of `App.jsx` and `redesign.css`, appended after Task 5's rules.
+- Produces: `ResultsPanel({ …, compact })`. With `compact`, it returns `null` while the deal is starting, and otherwise renders the slim card. New classes: `estimate-actions--compact`, `estimate-details-toggle`, `estimate-details`.
+
+- [ ] **Step 1: Write the failing phone-layout tests**
+
+Create `tests/e2e/phone-layout.spec.js`:
+
+```js
+import { test, expect } from '@playwright/test';
+
+// Position within the whole page, so the checks don't depend on the current scroll.
+const pageBox = locator => locator.evaluate(element => {
+  const rect = element.getBoundingClientRect();
+  return { top: rect.top + window.scrollY, bottom: rect.bottom + window.scrollY, height: rect.height };
+});
+const enterPrice = async page => {
+  const price = page.getByRole('textbox', { name: 'Selling price', exact: true });
+  await price.fill('30000');
+  await price.press('Tab');
+};
+
+test.describe('phone worksheet starts at the inputs', () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+    await page.goto('/');
+    await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
+  });
+
+  test('the opening screen shows Selling price in the top half with no intro or start box', async ({ page }) => {
+    const price = page.getByRole('textbox', { name: 'Selling price', exact: true });
+    expect((await pageBox(price)).bottom).toBeLessThanOrEqual(page.viewportSize().height * 0.45);
+    await expect(page.getByRole('heading', { name: 'Build the deal. See the payment.' })).toBeAttached();
+    expect((await pageBox(page.locator('#worksheet-heading'))).height).toBeLessThanOrEqual(1);
+    await expect(page.locator('.mobile-results')).toBeHidden();
+    await expect(page.locator('.estimate-start:visible')).toHaveCount(0);
+  });
+
+  test('the bottom bar starts the estimate at the selling price', async ({ page }) => {
+    await page.getByRole('navigation', { name: 'Mobile calculator shortcuts' }).getByRole('button', { name: 'Enter selling price', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeFocused();
+  });
+
+  test('after a price, the payment card stays slim and Trade allowance is on the first screen', async ({ page }) => {
+    await enterPrice(page);
+    const card = page.locator('.mobile-results');
+    await expect(card.locator('.payment-number strong')).toHaveText('$540.67');
+    expect((await pageBox(card)).height).toBeLessThanOrEqual(170);
+    const details = card.getByRole('button', { name: 'Details', exact: true });
+    await expect(details).toHaveAttribute('aria-expanded', 'false');
+    await expect(card.getByText('Amount financed')).toBeHidden();
+    await expect(card.getByRole('button', { name: 'Review customer estimate', exact: true })).toBeVisible();
+    const navHeight = (await page.locator('.mobile-nav').boundingBox()).height;
+    const trade = page.getByRole('textbox', { name: 'Trade allowance', exact: true });
+    expect((await pageBox(trade)).bottom).toBeLessThanOrEqual(page.viewportSize().height - navHeight);
+    await details.click();
+    await expect(details).toHaveAttribute('aria-expanded', 'true');
+    await expect(card.getByText('Amount financed')).toBeVisible();
+    await expect(card.getByText('View itemized deal breakdown')).toBeVisible();
+    await details.click();
+    await expect(card.getByText('Amount financed')).toBeHidden();
+  });
+
+  test('warnings stay visible while the card is slim', async ({ page }) => {
+    await enterPrice(page);
+    await page.getByRole('button', { name: 'New plate', exact: true }).click();
+    const warning = page.locator('.mobile-results .result-warning');
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText('New plate cost has not been entered');
+  });
+
+  test('a cash deal shows its cash line and keeps totals behind Details', async ({ page }) => {
+    await enterPrice(page);
+    await page.getByRole('button', { name: 'Cash', exact: true }).click();
+    const card = page.locator('.mobile-results');
+    await expect(card.locator('.results-payment h2')).toContainText(/cash/i);
+    await expect(card.getByText('Out-the-door total')).toBeHidden();
+    await card.getByRole('button', { name: 'Details', exact: true }).click();
+    await expect(card.getByText('Out-the-door total')).toBeVisible();
+  });
+});
+
+test('desktop keeps the full heading and start card', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'Desktop layout only.');
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Build the deal. See the payment.' })).toBeVisible();
+  expect((await page.locator('#worksheet-heading').boundingBox()).height).toBeGreaterThan(20);
+  await expect(page.locator('.desktop-results').getByRole('button', { name: 'Enter selling price', exact: true })).toBeVisible();
+});
+```
+
+- [ ] **Step 2: Run them to verify they fail**
+
+Run: `npm run build && npx playwright test --config <alt config> tests/e2e/phone-layout.spec.js`
+Expected: the mobile tests FAIL. Selling price is below 45% of the screen, `.mobile-results` is visible, and there's no **Details** button. The desktop test passes.
+
+- [ ] **Step 3: Make the results panel compact on phones**
+
+In `src/components/ResultsPanel.jsx`, add a React import at the top and extend the icon import:
+
+```jsx
+import { useId, useState } from "react";
+```
+```jsx
+import { ArrowIcon, ChevronIcon, EditIcon, GridIcon } from "./Icons.jsx";
+```
+
+Change the signature to add `compact = false`:
+
+```jsx
+export default function ResultsPanel({ dealInput, result, customer = false, compact = false, onActivatePaymentTarget, onComparePayments, onReviewEstimate, onStartEstimate, hasInputErrors = false }) {
+```
+
+After the `const isStarting = …;` line, add the state, the early return, and the shared pieces. Each piece is the existing JSX moved, unchanged:
+
+```jsx
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
+  // Phones start at the Selling price field; the bottom bar offers the same start action.
+  if (compact && isStarting) return null;
+
+  const totals = !isStarting ? (
+    <section className="result-totals" aria-label="Key deal totals">
+      {summary.isFinanced ? <BreakdownRow label="Amount financed" value={money(summary.amountFinanced)} /> : null}
+      <BreakdownRow label="Out-the-door total" value={money(summary.outTheDoor)} />
+      <BreakdownRow label={summary.isFinanced ? "Due at signing" : "Cash due after trade"} value={money(summary.dueAtSigning)} />
+      {summary.hasCashCredit ? <BreakdownRow label="Customer credit" value={money(summary.customerCredit)} /> : null}
+    </section>
+  ) : null;
+  const warning = !isStarting && summary.reasons.length ? (
+    <div className="result-warning" role="alert">
+      <strong>Estimate needs attention</strong>
+      {summary.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+    </div>
+  ) : null;
+  const breakdown = !customer && !isStarting ? (
+    <details className="deal-breakdown">
+      <summary>View itemized deal breakdown</summary>
+      {groups.map((section) => (
+        <section className="breakdown-group" key={section.id}>
+          <h3>{section.title}</h3>
+          {section.rows.map((item) => <BreakdownRow key={item.id} label={item.label} value={money(item.amount)} />)}
+          <BreakdownRow label={section.total.label} value={money(section.total.amount)} strong />
+        </section>
+      ))}
+    </details>
+  ) : null;
+  const review = onReviewEstimate ? <button className="estimate-review" type="button" onClick={onReviewEstimate}>Review customer estimate<ArrowIcon size={18} /></button> : null;
+```
+
+In the `return`, keep `<aside …>` and the whole `<section className="results-payment">…</section>` unchanged. Replace everything after that section, up to `</aside>`, with:
+
+```jsx
+      {compact ? (
+        <>
+          {warning}
+          <div className="estimate-actions estimate-actions--compact">
+            <button aria-controls={detailsId} aria-expanded={detailsOpen} className="estimate-details-toggle" onClick={() => setDetailsOpen((open) => !open)} type="button">
+              Details<ChevronIcon direction={detailsOpen ? "up" : "down"} size={18} />
+            </button>
+            {review}
+          </div>
+          <div className="estimate-details" hidden={!detailsOpen} id={detailsId}>{totals}{breakdown}</div>
+        </>
+      ) : (
+        <>
+          {isStarting ? <div className="estimate-start"><strong>Your next deal starts here.</strong><p>Payments, taxes, and totals update as you enter the figures.</p><button type="button" onClick={onStartEstimate}>Enter selling price<ArrowIcon size={17} /></button></div> : totals}
+          {warning}
+          {breakdown}
+          {!customer && !isStarting ? <div className="estimate-actions">
+            {summary.isFinanced && onComparePayments ? <button className="estimate-compare" type="button" onClick={onComparePayments}><GridIcon size={18} />Compare payments</button> : null}
+            {review}
+            <p>Review the itemized estimate before sharing or printing.</p>
+          </div> : null}
+        </>
+      )}
+```
+
+The non-compact branch renders the same elements in the same order as today.
+
+- [ ] **Step 4: Point the bottom bar at Selling price before an estimate exists**
+
+In `src/components/MobileNav.jsx`, replace the estimate button with:
+
+```jsx
+      <button aria-label={hasEstimate ? `View estimate, ${formatCurrency(payment, { cents: true })} per month` : undefined} className="mobile-nav__payment" onClick={onPayment} type="button">
+        <strong>{hasEstimate ? `${formatCurrency(payment, { cents: true })}/mo` : 'Enter selling price'}</strong>
+        <ArrowIcon direction="right" size={20} />
+      </button>
+```
+
+In `src/App.jsx`, give the phone panel `compact`:
+
+```jsx
+                <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
+```
+
+and change the `MobileNav` `onPayment` handler to:
+
+```jsx
+onPayment={() => { if (!(result.salePrice > 0)) { summaryProps.onStartEstimate(); return; } dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }}
+```
+
+- [ ] **Step 5: Add the phone CSS**
+
+Append to `src/redesign.css`:
+
+```css
+/* Phones: the dealer worksheet starts at the inputs. The heading stays for screen
+   readers and focus jumps; the payment card is slim until Details is opened. */
+@media screen and (max-width: 800px) {
+  .page-intro:not(.page-intro--customer) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .mobile-results:empty { display: none; }
+  .mobile-results .estimate-actions--compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; padding: 0 12px 12px; }
+  .mobile-results .estimate-details-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; padding: 8px; border: 1px solid rgb(255 255 255 / 45%); border-radius: 8px; background: transparent; color: #ffffff; font-size: 0.8rem; font-weight: 700; }
+  .mobile-results .estimate-details-toggle:hover { background: rgb(255 255 255 / 12%); }
+  .mobile-results .estimate-details[hidden] { display: none; }
+}
+```
+
+The `.mobile-results` prefix is needed so these rules beat the existing `.estimate-actions button` and `.mobile-results .estimate-actions` rules.
+
+- [ ] **Step 6: Update the workflow test for phones**
+
+In `tests/e2e/workflow.spec.js`, in `'a new deal leads from selling price to customer review and back to editing'`, replace
+
+```js
+  await summary.getByRole('button', { name: 'Enter selling price', exact: true }).click();
+```
+
+with:
+
+```js
+  // Phones start from the bottom bar; their summary card appears once a price exists.
+  const start = page.viewportSize().width <= 800
+    ? page.getByRole('navigation', { name: 'Mobile calculator shortcuts' }).getByRole('button', { name: 'Enter selling price', exact: true })
+    : summary.getByRole('button', { name: 'Enter selling price', exact: true });
+  await start.click();
+```
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `npm run build && npx playwright test --config <alt config> && npm test && npm run lint`
+Expected: the whole e2e suite passes in all projects (new phone-layout tests, updated workflow test, existing accessibility scans covering the slim card); unit tests and lint are clean.
+
+- [ ] **Step 8: Update the docs**
+
+`docs/DESIGN-SYSTEM.md`: replace the `**Empty estimate:**` bullet with:
+
+```markdown
+- **Empty estimate:** explanatory text and Enter selling price replace a misleading zero payment and initial error alert. The payment grid provides the same starting action. On phones (≤800px) the dealer worksheet opens at the inputs: the page heading is visually hidden (kept for screen readers and focus), the start card is omitted, and the bottom bar offers Enter selling price.
+- **Phone payment card:** once a price exists, the card shows the payment line, any warnings, and Details plus Review customer estimate. Totals and the itemized breakdown open with Details, so the Trade section stays on the first screen.
+```
+
+`docs/ACCEPTANCE.md`: add after the `On a phone-width screen, open the payment grid…` item:
+
+```markdown
+- [ ] On a phone, open the app: Selling price is in the top half with no large heading or start box. Enter a price: the payment card stays slim, Trade allowance is visible without scrolling, and Details shows the totals and itemized breakdown.
+```
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/components/ResultsPanel.jsx src/components/MobileNav.jsx src/App.jsx src/redesign.css tests/e2e/phone-layout.spec.js tests/e2e/workflow.spec.js docs/DESIGN-SYSTEM.md docs/ACCEPTANCE.md
+git commit -m "Start the phone worksheet at the inputs with a slim payment card
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
 ## Final: release verification and delivery
 
 - [ ] Run `npm run check` (lint, unit tests, build). Expected: clean.
 - [ ] Run the full e2e suite: `npx playwright test --config <alt config>`. Expected: every test passes in chromium, mobile and webkit.
 - [ ] Visually check in a browser at 1440px and 375px: the default header, the dealership with logo, a name-only dealership, the open settings dialog, the customer estimate card, and print preview.
 - [ ] Confirm the built `dist/` has no "Maxey" (`grep -ri maxey dist`) and no `localStorage` writes other than the dealership key (`grep -o "localStorage[^;]*" dist/assets/*.js`).
-- [ ] Push `remove-bob-maxey-branding`, retitle PR #15 "Remove Bob Maxey branding and add optional dealership name and logo", and add the dealership feature, its tests and the narrow-screen header behavior to the description.
+- [ ] Push `remove-bob-maxey-branding`, retitle PR #15 "Remove Bob Maxey branding and add optional dealership name and logo", and add the dealership feature, its tests, the narrow-screen header behavior, and the phone worksheet changes (Task 6) to the description.
