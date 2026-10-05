@@ -19,6 +19,8 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
   const snapshot = useMemo(() => createProposalSnapshot({
     dealInput, result, gridRates, hasInputErrors, createdAt, brand, version: APP_VERSION + " (" + BUILD_ID + ")",
   }), [dealInput, result, gridRates, hasInputErrors, createdAt, brand]);
+  // With a saved logo but no name, the logo alone identifies the dealership.
+  const brandLine = snapshot.brand.isCustom ? snapshot.brand.dealershipName : snapshot.brand.name;
   const [status, setStatus] = useState("");
   const [copyFallback, setCopyFallback] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,7 +68,8 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
     <><div className="customer-layout">
       <main className="customer-content">
         <header className="proposal-identity">
-          <p className="proposal-brand">{snapshot.brand.name}</p>
+          {snapshot.brand.logo ? <img alt={brandLine ? "" : "Dealership logo"} className="proposal-logo" src={snapshot.brand.logo} /> : null}
+          {brandLine ? <p className="proposal-brand">{brandLine}</p> : null}
           <h2>{snapshot.title}</h2>
           {snapshot.vehicleReference ? <p className="proposal-vehicle">Vehicle / stock: {snapshot.vehicleReference}</p> : null}
           <p className="proposal-meta">Created {snapshot.createdLabel} Eastern time</p>

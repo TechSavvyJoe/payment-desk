@@ -2387,7 +2387,8 @@ input[type="checkbox"] { flex:0 0 auto; }
 .proposal-identity,.proposal-qualification { padding:16px 18px; border:1px solid var(--line-strong); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); }
 .proposal-identity h2 { margin:4px 0 7px; font-size:1.35rem; font-weight:800; color:var(--navy); }
 .proposal-identity p { margin:3px 0; }
-.proposal-brand { font-weight:800; color:var(--navy); }
+.proposal-brand { font-weight:800; color:var(--navy); overflow-wrap:anywhere; }
+.proposal-logo { display:block; max-width:240px; max-height:56px; margin:0 0 8px; object-fit:contain; }
 .proposal-vehicle { font-weight:600; }
 .proposal-meta { font-size:.76rem; color:var(--muted); }
 .proposal-qualification { font-size:.8rem; line-height:1.5; }

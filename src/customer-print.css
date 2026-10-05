@@ -5,11 +5,14 @@
 .customer-print-sheet { position:absolute; top:0; left:0; transform-origin:top left; width:190mm; color:#152746; background:#fff; font-size:11px; line-height:1.28; padding:0; }
 .customer-print-sheet * { box-sizing:border-box; }
 .customer-print-sheet :is(h1,h2,h3,p,dl,dd,ol,ul) { margin:0; }
-.print-masthead { display:flex; align-items:center; justify-content:space-between; border-top:4px solid #00095b; padding:13px 0 12px; }
-.print-brand { display:flex; align-items:center; gap:11px; }
+.print-masthead { display:flex; align-items:center; justify-content:space-between; gap:16px; border-top:4px solid #00095b; padding:13px 0 12px; }
+.print-brand { display:flex; align-items:center; gap:11px; min-width:0; }
+.print-brand > div { min-width:0; }
 .print-brand img { display:block; border-radius:9px; }
-.print-brand strong { display:block; font-size:17px; letter-spacing:.08em; text-transform:uppercase; color:#00095b; }
-.print-date { text-align:right; }
+.print-brand img.print-brand__logo { width:auto; height:auto; max-width:190px; max-height:44px; object-fit:contain; border-radius:0; }
+.print-brand strong { display:block; font-size:17px; letter-spacing:.08em; text-transform:uppercase; color:#00095b; overflow-wrap:anywhere; }
+.print-brand span { display:block; font-size:8px; letter-spacing:.23em; color:#3c618e; margin-top:3px; }
+.print-date { flex:0 0 auto; text-align:right; }
 .print-date>span { display:block; color:#65748a; font-size:7px; letter-spacing:.13em; }
 .print-date>strong { display:block; font-size:13px; color:#00095b; margin:3px 0; }
 .print-date small { color:#65748a; font-size:8px; }
