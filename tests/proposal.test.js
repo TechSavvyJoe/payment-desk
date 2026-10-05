@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { calculateDeal } from "../src/lib/calculations.js";
 import { buildProposalGroups, createProposalSnapshot, formatProposalText, getProposalStatus } from "../src/lib/proposal.js";
+import { resolveBrand } from "../src/lib/brandSettings.js";
 
 const base = { salePrice: 30_000, cashDown: 2_000, apr: 6.5, termMonths: 72, dealDate: "2026-09-24", dealType: "finance", plateMode: "transfer", optionalItems: [] };
 const create = (patch = {}, options = {}) => {
@@ -136,4 +137,22 @@ test("proposal display dates use MM/DD/YY while policy and creation values stay 
   assert.match(text, /Created: 09\/24\/26, 8:30 PM/);
   assert.match(text, /effective 01\/01\/26 through 12\/31\/26; reviewed 09\/24\/26/);
   assert.match(text, /Deal date: 09\/24\/26\./);
+});
+
+test("estimate identity defaults to Payment Desk and uses a saved dealership", () => {
+  const plain = create();
+  assert.deepEqual({ ...plain.brand }, { name: "Payment Desk", dealershipName: "", logo: null, isCustom: false });
+  assert.equal(formatProposalText(plain).split("\n")[0], "Payment Desk");
+
+  const named = create({}, { brand: resolveBrand({ name: "Lakeside Motors" }) });
+  assert.equal(named.brand.name, "Lakeside Motors");
+  assert.equal(named.brand.isCustom, true);
+  assert.equal(formatProposalText(named).split("\n")[0], "Lakeside Motors");
+  assert.equal(named.reference, plain.reference, "branding does not change the deal reference");
+  assert.ok(Object.isFrozen(named.brand));
+
+  const logo = "data:image/png;base64,iVBORw0KGgo=";
+  const logoOnly = create({}, { brand: resolveBrand({ logo }) });
+  assert.deepEqual({ ...logoOnly.brand }, { name: "Payment Desk", dealershipName: "", logo, isCustom: true });
+  assert.equal(formatProposalText(logoOnly).split("\n")[0], "Payment Desk");
 });

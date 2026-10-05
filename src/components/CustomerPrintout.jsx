@@ -69,7 +69,7 @@ export default function CustomerPrintout({ snapshot, result }) {
   return createPortal(<div className="customer-print-root" ref={root} aria-hidden="true">
     <article className={`customer-print-sheet print-density--${density}`}>
       <header className="print-masthead">
-        <div className="print-brand"><img src="./payment-desk-icon.svg" width="40" height="40" alt="" /><div><strong>{snapshot.brand}</strong></div></div>
+        <div className="print-brand"><img src="./payment-desk-icon.svg" width="40" height="40" alt="" /><div><strong>{snapshot.brand.name}</strong></div></div>
         <div className="print-date"><span>ESTIMATE DATE</span><strong>{formatShortDate(snapshot.policy.dealDate)}</strong><small>Prepared {snapshot.createdLabel} ET</small></div>
       </header>
       <div className="print-title"><h1>Your vehicle estimate</h1><span>{summary.isFinanced ? 'FINANCE' : 'CASH'} ESTIMATE</span></div>
