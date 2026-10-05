@@ -95,7 +95,7 @@ test("proposal copies itemized products, cash requirements, identity, policy and
   const text = formatProposalText(snapshot, { calculatorUrl: "https://example.test/calculator/" });
   assert.doesNotMatch(text, /interest|total (?:loan )?payments/i);
   assert.match(text, /2026 trade deduction limit: \$12,000\.00/);
-  for (const expected of ["Bob Maxey Ford", "2026 F-150 / stock X123", snapshot.reference, "2.0.0 (test-build)", "Service Contract", "GAP", "Bed liner", "trade payoff", "$14,000.00", "Negative equity paid at signing", "$6,000.00", "6.50% APR", "12/31/26", "Estimate only", "not a financing approval or contract", "Open calculator: https://example.test/calculator/", "does not restore this proposal"]) assert.ok(text.includes(expected), expected);
+  for (const expected of ["Payment Desk", "2026 F-150 / stock X123", snapshot.reference, "2.0.0 (test-build)", "Service Contract", "GAP", "Bed liner", "trade payoff", "$14,000.00", "Negative equity paid at signing", "$6,000.00", "6.50% APR", "12/31/26", "Estimate only", "not a financing approval or contract", "Open calculator: https://example.test/calculator/", "does not restore this proposal"]) assert.ok(text.includes(expected), expected);
   assert.equal(snapshot.groups[0].rows.reduce((total, item) => total + item.cents, 0), snapshot.groups[0].total.cents);
 });
 

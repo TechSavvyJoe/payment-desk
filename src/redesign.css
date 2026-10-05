@@ -1,4 +1,4 @@
-/* Bob Maxey Payment Desk — Ford Blue desk theme
+/* Payment Desk — navy desk theme
    Raised, separated cards; bold dark text; visibly-editable inputs. */
 
 :root {
@@ -149,18 +149,6 @@ a:focus-visible {
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.09em;
-}
-
-.brand > span:last-child {
-  font-size: 0.86rem;
-  font-weight: 700;
-  color: #d6ddff;
-}
-
-.brand__rule {
-  width: 1px;
-  height: 26px;
-  background: rgba(255, 255, 255, 0.35);
 }
 
 .header-actions {
@@ -1641,14 +1629,6 @@ a:focus-visible {
     font-size: 0.86rem;
   }
 
-  .brand > span:last-child {
-    font-size: 0.72rem;
-  }
-
-  .brand__rule {
-    height: 22px;
-  }
-
   .header-actions {
     gap: 6px;
   }
@@ -2214,11 +2194,6 @@ a:focus-visible {
 }
 
 @media (max-width: 440px) {
-  .brand > span:last-child,
-  .brand__rule {
-    display: none;
-  }
-
   .header-actions {
     flex: 1;
     justify-content: flex-end;
@@ -2246,7 +2221,7 @@ a:focus-visible {
 }
 
 
-/* Current workflow compatibility: original Ford Blue visual identity, corrected layout. */
+/* Current workflow compatibility: original navy visual identity, corrected layout. */
 html { scroll-padding-top:88px; }
 body { margin:0; }
 button,input,select,textarea { font:inherit; max-width:100%; }
@@ -2366,7 +2341,7 @@ input[type="checkbox"] { flex:0 0 auto; }
 .proposal-identity,.proposal-qualification { padding:16px 18px; border:1px solid var(--line-strong); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); }
 .proposal-identity h2 { margin:4px 0 7px; font-size:1.35rem; font-weight:800; color:var(--navy); }
 .proposal-identity p { margin:3px 0; }
-.proposal-dealership { font-weight:800; color:var(--navy); }
+.proposal-brand { font-weight:800; color:var(--navy); }
 .proposal-vehicle { font-weight:600; }
 .proposal-meta { font-size:.76rem; color:var(--muted); }
 .proposal-qualification { font-size:.8rem; line-height:1.5; }
@@ -2485,7 +2460,7 @@ input[type="checkbox"] { flex:0 0 auto; }
  .results-panel--customer *,.customer-layout * { color:black!important; box-shadow:none!important; text-shadow:none!important; }
  .proposal-identity h1,.proposal-identity h2 { font-size:18px; margin-bottom:5px; }
  .proposal-identity p,.proposal-identity .proposal-vehicle { font-size:11px; margin:3px 0; }
- .proposal-identity .proposal-dealership { font-size:13px; }
+ .proposal-identity .proposal-brand { font-size:13px; }
  .proposal-meta { font-size:10px; margin-top:5px; gap:4px 14px; }
  .results-payment { background:white!important; padding:0 0 6px; border-bottom:1px solid #999; }
  .results-payment h2 { font-size:12px; }
@@ -2718,7 +2693,7 @@ input[type="checkbox"] { flex:0 0 auto; }
  .date-calendar { display:none!important; }
  .customer-layout { display:flex; }
  .proposal-identity { border:0; border-top:5px solid #00095b; border-bottom:1px solid #96a5bd; padding:12px 0 10px; margin-bottom:12px; }
- .proposal-identity .proposal-dealership { color:#00095b!important; font-size:17px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+ .proposal-identity .proposal-brand { color:#00095b!important; font-size:17px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
  .proposal-identity h2 { font-size:23px; font-weight:500; margin:4px 0 8px; }
  .proposal-identity .proposal-vehicle { font-size:12px; font-weight:700; margin-bottom:5px; overflow-wrap:anywhere; }
  .proposal-identity .proposal-meta { display:inline-block; font-size:9px; margin:0 16px 0 0; color:#42516a!important; }

@@ -147,7 +147,7 @@ export function createProposalSnapshot({ dealInput = {}, result, createdAt = new
   const vehicleReference = String(dealInput.vehicleDescription ?? dealInput.vehicleReference ?? "").trim();
   const isoDate = timestamp.toISOString();
   const snapshot = {
-    dealership: "Bob Maxey Ford",
+    brand: "Payment Desk",
     title: "Vehicle purchase estimate",
     reference: `PD-${isoDate.slice(0, 10).replaceAll("-", "")}-${referenceFor({ isoDate, groups, apr: result.apr, term: result.termMonths, vehicleReference, version, rule })}`,
     createdAt: isoDate,
@@ -167,7 +167,7 @@ export function createProposalSnapshot({ dealInput = {}, result, createdAt = new
 
 export function formatProposalText(snapshot, { calculatorUrl } = {}) {
   const { summary } = snapshot;
-  const lines = [snapshot.dealership, snapshot.title, `Reference: ${snapshot.reference}`, `Created: ${snapshot.createdLabel} (Eastern time)`, `App version: ${snapshot.version}`];
+  const lines = [snapshot.brand, snapshot.title, `Reference: ${snapshot.reference}`, `Created: ${snapshot.createdLabel} (Eastern time)`, `App version: ${snapshot.version}`];
   if (snapshot.vehicleReference) lines.push(`Vehicle / stock: ${snapshot.vehicleReference}`);
   if (!summary.canExport) lines.push("INCOMPLETE ESTIMATE", ...summary.reasons);
   lines.push("", `${summary.headline}: ${money(summary.headlineAmount)}${summary.isFinanced ? "/mo" : ""}`);

@@ -9,7 +9,6 @@
 .print-brand { display:flex; align-items:center; gap:11px; }
 .print-brand img { display:block; border-radius:9px; }
 .print-brand strong { display:block; font-size:17px; letter-spacing:.08em; text-transform:uppercase; color:#00095b; }
-.print-brand span { display:block; font-size:8px; letter-spacing:.23em; color:#3c618e; margin-top:3px; }
 .print-date { text-align:right; }
 .print-date>span { display:block; color:#65748a; font-size:7px; letter-spacing:.13em; }
 .print-date>strong { display:block; font-size:13px; color:#00095b; margin:3px 0; }

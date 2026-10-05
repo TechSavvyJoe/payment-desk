@@ -1,4 +1,4 @@
-# Bob Maxey Payment Desk
+# Payment Desk
 
 A browser-based **Michigan vehicle purchase estimator** for dealership conversations. Build a deal, compare payments, and prepare an itemized customer estimate. It is not a lender approval, contracting system, or replacement for the dealership's approved deal figures.
 

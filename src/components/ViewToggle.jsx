@@ -6,9 +6,7 @@ export default function ViewToggle({ view, onViewChange, onReset }) {
     <header className="app-header">
       <a aria-label="Payment Desk home" className="brand" href="#worksheet-heading"
         onClick={(event) => { event.preventDefault(); onViewChange("dealer"); }}>
-        <strong>BOB MAXEY</strong>
-        <span aria-hidden="true" className="brand__rule" />
-        <span>PAYMENT DESK</span>
+        <strong>PAYMENT DESK</strong>
       </a>
       <div className="header-actions">
         <SegmentedControl

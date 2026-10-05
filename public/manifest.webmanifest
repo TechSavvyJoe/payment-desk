@@ -1,5 +1,5 @@
 {
-  "name": "Bob Maxey Payment Desk",
+  "name": "Payment Desk",
   "short_name": "Payment Desk",
   "description": "Dealership vehicle payment calculator with Michigan tax, trade credit, target rolling, and a rate grid.",
   "start_url": "./",

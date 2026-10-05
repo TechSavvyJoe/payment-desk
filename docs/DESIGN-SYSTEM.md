@@ -1,6 +1,6 @@
 # Payment Desk interface
 
-The interface keeps the established Ford-blue identity: a navy header and payment summary, raised white cards, bold labels, and clearly editable figures. Refinements should improve this direction rather than replace it with a flat worksheet.
+The interface keeps the established navy-blue identity: a navy header and payment summary, raised white cards, bold labels, and clearly editable figures. Refinements should improve this direction rather than replace it with a flat worksheet.
 
 ## Hierarchy and layout
 
