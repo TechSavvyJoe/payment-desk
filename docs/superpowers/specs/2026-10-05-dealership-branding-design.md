@@ -43,7 +43,7 @@ Syncing across devices, per-salesperson profiles, a site-wide built-in default, 
 | Browser tab, install manifest | "Payment Desk" | Unchanged |
 
 - **Reset deal** and the error-boundary reset never clear dealership settings.
-- Narrow phones (≤440px): logo chip and name shrink; a long name truncates with an ellipsis; the header must not overflow horizontally at 375px.
+- Narrow phones (≤440px): measured at 375px, the header leaves about 90px for the brand once the gear button is added. Header gaps tighten and the two header buttons become 38px wide. With a logo, the phone header shows the logo chip with the credit beneath it and hides the name text (the name stays in the link's accessible name). Without a logo, the name truncates with an ellipsis above the credit. The default wordmark shrinks slightly so it still fits. The header must not overflow horizontally at 375px.
 - Accessibility: when the name is visible beside the logo, the logo `alt` is empty (decorative); with a logo only, `alt="Dealership logo"`. The header home link's accessible name becomes "<Dealership> Payment Desk home" when a name is set.
 
 ## Data and processing
