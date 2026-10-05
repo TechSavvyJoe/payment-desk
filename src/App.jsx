@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
+import { loadBrandSettings, resolveBrand } from './lib/brandSettings.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
@@ -26,6 +27,8 @@ const focusDestination = id => requestAnimationFrame(() => {
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
   const { deal: dealInput, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
+  const [brandSettings] = useState(loadBrandSettings);
+  const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
   const [targetType, setTargetType] = useState('payment');
   const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
   const [solverExpanded, setSolverExpanded] = useState(false);
@@ -127,7 +130,7 @@ export default function App() {
     <ValidationContext.Provider value={reportError}>
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
-        <ViewToggle onReset={resetDeal} onViewChange={changeView} view={view} />
+        <ViewToggle brand={brand} onReset={resetDeal} onViewChange={changeView} view={view} />
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
@@ -156,7 +159,7 @@ export default function App() {
             {result.isFinanced ? <button className="grid-jump" onClick={scrollToGrid} type="button"><span>Payment grid</span><strong>Compare terms, rates, and down payments</strong></button> : null}
           </> : <>
             <div className="page-intro page-intro--customer"><h1 id="customer-heading" tabIndex={-1}>Your purchase estimate</h1><p>The selected vehicle, products, and payment — together in one place.</p></div>
-            <CustomerView dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} />
+            <CustomerView brand={brand} dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} />
           </>}
         </div>
         {view === 'dealer' && result.isFinanced ? <PaymentGrid key={`grid-${resetCount}`} dealInput={dealInput} downPayments={gridDownPayments}

@@ -14,11 +14,11 @@ const LedgerRow = ({ item, total = false }) => (
   </div>
 );
 
-export default function CustomerView({ dealInput, result, gridRates, hasInputErrors = false, onEditDeal }) {
+export default function CustomerView({ dealInput, result, gridRates, hasInputErrors = false, onEditDeal, brand }) {
   const [createdAt] = useState(() => new Date().toISOString());
   const snapshot = useMemo(() => createProposalSnapshot({
-    dealInput, result, gridRates, hasInputErrors, createdAt, version: APP_VERSION + " (" + BUILD_ID + ")",
-  }), [dealInput, result, gridRates, hasInputErrors, createdAt]);
+    dealInput, result, gridRates, hasInputErrors, createdAt, brand, version: APP_VERSION + " (" + BUILD_ID + ")",
+  }), [dealInput, result, gridRates, hasInputErrors, createdAt, brand]);
   const [status, setStatus] = useState("");
   const [copyFallback, setCopyFallback] = useState(false);
   const [busy, setBusy] = useState(false);

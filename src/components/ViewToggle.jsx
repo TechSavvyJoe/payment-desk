@@ -1,12 +1,23 @@
 import { SegmentedControl } from "./Fields.jsx";
 import { ResetIcon } from "./Icons.jsx";
 
-export default function ViewToggle({ view, onViewChange, onReset }) {
+export default function ViewToggle({ view, onViewChange, onReset, brand }) {
+  const custom = Boolean(brand?.isCustom);
+  const homeLabel = brand?.dealershipName ? `${brand.dealershipName} Payment Desk home` : "Payment Desk home";
+  const brandClass = ["brand", custom && "brand--custom", custom && brand.logo && "brand--has-logo"].filter(Boolean).join(" ");
   return (
     <header className="app-header">
-      <a aria-label="Payment Desk home" className="brand" href="#worksheet-heading"
+      <a aria-label={homeLabel} className={brandClass} href="#worksheet-heading"
         onClick={(event) => { event.preventDefault(); onViewChange("dealer"); }}>
-        <strong>PAYMENT DESK</strong>
+        {custom ? (
+          <>
+            {brand.logo ? <span className="brand__chip"><img alt="" className="brand__logo" src={brand.logo} /></span> : null}
+            <span className="brand__text">
+              {brand.dealershipName ? <strong className="brand__name">{brand.dealershipName}</strong> : null}
+              <span className="brand__credit">PAYMENT DESK</span>
+            </span>
+          </>
+        ) : <strong>PAYMENT DESK</strong>}
       </a>
       <div className="header-actions">
         <SegmentedControl
