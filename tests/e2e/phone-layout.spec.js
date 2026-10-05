@@ -70,17 +70,31 @@ test.describe('phone worksheet starts at the inputs', () => {
       expect(fit.textRight).toBeLessThanOrEqual(fit.right);
       expect(fit.scroll).toBeLessThanOrEqual(fit.client);
       expect(fit.height).toBeGreaterThanOrEqual(44);
-      expect((await pageBox(page.locator('.mobile-results'))).height).toBeLessThanOrEqual(170);
+      // At 320px the Review label wraps to two lines by design, so that width keeps the looser budget.
+      expect((await pageBox(page.locator('.mobile-results'))).height).toBeLessThanOrEqual(width >= 360 ? 160 : 170);
     });
   }
 
-  for (const width of [360, 390]) {
-    test(`the Review customer estimate label stays on one line at ${width}px`, async ({ page }) => {
+  for (const width of [320, 360, 390]) {
+    test(`the Review customer estimate label fits inside its button at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await enterPrice(page);
-      const review = page.locator('.mobile-results').getByRole('button', { name: 'Review customer estimate', exact: true });
-      expect((await pageBox(review)).height).toBeLessThanOrEqual(52);
-      expect((await pageBox(review)).height).toBeGreaterThanOrEqual(44);
+      const button = page.locator('.mobile-results').getByRole('button', { name: 'Review customer estimate', exact: true });
+      await expect(button).toBeVisible();
+      const fit = await button.evaluate(element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
+        const arrow = element.querySelector('svg').getBoundingClientRect();
+        const box = element.getBoundingClientRect();
+        return { textLeft: text.left, textRight: text.right, arrowRight: arrow.right, left: box.left, right: box.right, height: box.height, scroll: element.scrollWidth, client: element.clientWidth };
+      });
+      expect(fit.textLeft).toBeGreaterThanOrEqual(fit.left);
+      expect(fit.textRight).toBeLessThanOrEqual(fit.right);
+      expect(fit.arrowRight).toBeLessThanOrEqual(fit.right);
+      expect(fit.scroll).toBeLessThanOrEqual(fit.client);
+      expect(fit.height).toBeGreaterThanOrEqual(44);
+      if (width >= 360) expect(fit.height).toBeLessThanOrEqual(52);
     });
   }
 

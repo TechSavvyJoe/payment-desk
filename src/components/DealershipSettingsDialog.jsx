@@ -3,7 +3,7 @@ import { MAX_DEALERSHIP_NAME_LENGTH } from "../lib/brandSettings.js";
 import { LogoError, prepareLogo } from "../lib/logoImage.js";
 
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.png,.jpg,.jpeg,.webp,.gif,.svg";
-const SAVE_FAILED = "Couldn't save on this device — private browsing or storage is full. The dealership will show until this page is closed.";
+const SAVE_FAILED = "Couldn't save on this device — storage is blocked or full. The dealership will show until this page is closed.";
 const CLEAR_FAILED = "Couldn't remove the saved dealership on this device. It is hidden until this page is closed.";
 
 /** Edits a draft of the dealership name and logo. Nothing changes until Save. */
@@ -93,7 +93,7 @@ export default function DealershipSettingsDialog({ settings, onSave, onClear, on
         </fieldset>
         <p aria-live="polite" className={"settings-dialog__notice" + (notice?.tone === "error" ? " is-error" : "")} role="status">{notice?.text ?? ""}</p>
         <div className="settings-dialog__actions">
-          {!finished ? <button className="settings-dialog__button settings-dialog__button--danger" onClick={clear} type="button">Clear dealership settings</button> : null}
+          {!finished ? <button className="settings-dialog__button settings-dialog__button--danger" disabled={processing} onClick={clear} type="button">Clear dealership settings</button> : null}
           <span>
             <button className="settings-dialog__button" onClick={close} type="button">{finished ? "Done" : "Cancel"}</button>
             {!finished ? <button className="settings-dialog__button settings-dialog__button--primary" disabled={processing} type="submit">Save</button> : null}
