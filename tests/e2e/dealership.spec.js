@@ -86,6 +86,9 @@ test.describe('dealership header', () => {
     await page.getByRole('button', { name: 'Reset deal' }).click();
     await expect.poll(() => confirmed).toBe(true);
     await expect(page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' })).toBeVisible();
+    // The dealership lives in App state, so reload to prove Reset did not wipe storage.
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' })).toBeVisible();
   });
 
   test('damaged or unreadable storage falls back to Payment Desk without errors', async ({ page }) => {

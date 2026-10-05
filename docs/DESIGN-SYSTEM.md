@@ -8,7 +8,7 @@ The interface keeps the established navy-blue identity: a navy header and paymen
 - Trade and Financing share the left desktop column. Taxes and Products share the right column. Financing stays visible while products are added.
 - The payment is the primary result; amount financed, out-the-door total, and due at signing remain visible together.
 - Compare payments and Set payment target are adjustment paths. Review customer estimate is the primary next action. Edit deal returns to the existing figures.
-- The compact mobile summary keeps all key totals visible while leaving the first input within the opening screen at 390 × 844. Existing sticky shortcuts remain available.
+- The compact mobile summary stays slim, showing the payment and its actions; the totals open with Details. This leaves the first input within the opening screen at 390 × 844. Existing sticky shortcuts remain available.
 - Target adjustments use separate bordered cards on a tinted grid. The title, adjustment amount, and Apply action share a compact header; the resulting payment and three financial totals sit below. Keep qualification notes visible and omit repeated result sentences. Desktop compares cards side by side; mobile stacks them.
 
 ## Shared visual rules

@@ -87,7 +87,7 @@ export default function DealershipSettingsDialog({ settings, onSave, onClear, on
               {logo ? "Replace logo" : "Choose logo"}
               <input accept={LOGO_ACCEPT} className="sr-only" disabled={processing || finished} onChange={chooseLogo} type="file" />
             </label>
-            {logo ? <button className="settings-dialog__button" onClick={removeLogo} type="button">Remove logo</button> : null}
+            {logo ? <button className="settings-dialog__button" disabled={processing} onClick={removeLogo} type="button">Remove logo</button> : null}
           </div>
           <p className="settings-dialog__hint">PNG, JPG, WebP, GIF, or SVG up to 10 MB. Large logos are resized to fit 600 × 200 pixels.</p>
         </fieldset>

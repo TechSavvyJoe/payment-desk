@@ -30,6 +30,12 @@ test("names are collapsed, trimmed, and cut to 60 characters without splitting e
   assert.equal(normalizeBrandSettings({ name: 42 }).name, "");
 });
 
+test("zero-width and format characters are stripped so they cannot leave an invisible name", () => {
+  assert.equal(normalizeBrandSettings({ name: "\u200B\u200C\u200D\u2060\uFEFF" }).name, "");
+  assert.equal(normalizeBrandSettings({ name: "Lake\u200Bside" }).name, "Lakeside");
+  assert.equal(resolveBrand({ name: "\u200B\uFEFF" }).isCustom, false);
+});
+
 test("only PNG data URLs within the size limit are accepted as logos", () => {
   assert.equal(normalizeBrandSettings({ logo: LOGO }).logo, LOGO);
   for (const logo of [

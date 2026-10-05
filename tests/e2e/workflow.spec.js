@@ -7,7 +7,9 @@ const currentSummary = page => page
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-09-24T16:00:00Z'));
   await page.goto('/');
-  await expect(page.locator('#worksheet-heading')).toBeVisible();
+  // The heading is visually hidden on phones, so check it is attached and the first input is visible.
+  await expect(page.locator('#worksheet-heading')).toBeAttached();
+  await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
 });
 
 test('a new deal leads from selling price to customer review and back to editing', async ({ page }) => {

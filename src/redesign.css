@@ -2898,8 +2898,8 @@ input[type="checkbox"] { flex:0 0 auto; }
   }
   .mobile-results:empty { display: none; }
   .mobile-results .results-payment { padding-block: 10px; }
-  .mobile-results .estimate-actions--compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; padding: 0 12px 8px; }
-  .mobile-results .estimate-actions--compact .estimate-review { min-height: 44px; padding: 8px; font-size: 0.8rem; }
+  .mobile-results .estimate-actions--compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; padding: 0 12px 8px; }
+  .mobile-results .estimate-actions--compact .estimate-review { gap: 6px; padding-inline: 6px; letter-spacing: -0.01em; white-space: nowrap; }
   .mobile-results .estimate-details-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; padding: 8px; border: 1px solid rgb(255 255 255 / 45%); border-radius: 8px; background: transparent; color: #ffffff; font-size: 0.8rem; font-weight: 700; }
   .mobile-results .estimate-details-toggle:hover { background: rgb(255 255 255 / 12%); }
   .mobile-results .estimate-details[hidden] { display: none; }

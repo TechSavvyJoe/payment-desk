@@ -24,7 +24,7 @@ const isQuotaError = (error) => error?.name === "QuotaExceededError"
 
 export function normalizeBrandSettings(value) {
   if (!value || typeof value !== "object") return empty();
-  const collapsed = typeof value.name === "string" ? value.name.replace(/\s+/g, " ").trim() : "";
+  const collapsed = typeof value.name === "string" ? value.name.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").replace(/\s+/g, " ").trim() : "";
   // Cut by code point so an emoji at the limit is never split in half.
   const name = [...collapsed].slice(0, MAX_DEALERSHIP_NAME_LENGTH).join("").trim();
   const logo = typeof value.logo === "string"

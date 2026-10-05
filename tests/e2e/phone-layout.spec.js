@@ -36,7 +36,8 @@ test.describe('phone worksheet starts at the inputs', () => {
     await enterPrice(page);
     const card = page.locator('.mobile-results');
     await expect(card.locator('.payment-number strong')).toHaveText('$540.67');
-    expect((await pageBox(card)).height).toBeLessThanOrEqual(170);
+    expect((await pageBox(card)).height).toBeLessThanOrEqual(160);
+    expect((await pageBox(card.getByRole('button', { name: 'Review customer estimate', exact: true }))).height).toBeLessThanOrEqual(52);
     const details = card.getByRole('button', { name: 'Details', exact: true });
     await expect(details).toHaveAttribute('aria-expanded', 'false');
     await expect(card.locator('.result-totals').getByText('Amount financed')).toBeHidden();
@@ -70,6 +71,16 @@ test.describe('phone worksheet starts at the inputs', () => {
       expect(fit.scroll).toBeLessThanOrEqual(fit.client);
       expect(fit.height).toBeGreaterThanOrEqual(44);
       expect((await pageBox(page.locator('.mobile-results'))).height).toBeLessThanOrEqual(170);
+    });
+  }
+
+  for (const width of [360, 390]) {
+    test(`the Review customer estimate label stays on one line at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await enterPrice(page);
+      const review = page.locator('.mobile-results').getByRole('button', { name: 'Review customer estimate', exact: true });
+      expect((await pageBox(review)).height).toBeLessThanOrEqual(52);
+      expect((await pageBox(review)).height).toBeGreaterThanOrEqual(44);
     });
   }
 
