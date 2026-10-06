@@ -2967,3 +2967,28 @@ input[type="checkbox"] { flex:0 0 auto; }
   .mobile-results .estimate-details-toggle:hover { background: rgb(255 255 255 / 12%); }
   .mobile-results .estimate-details[hidden] { display: none; }
 }
+
+/* Short phones (device screen 760px or less on its long side, set as html.compact-height in
+   main.jsx): tighten the header, payment card, and section rows, and drop the shortcut row, so
+   Trade allowance is fully visible above the bottom bar on the first screen after a price. The
+   class follows the device screen, not the viewport, so the layout does not re-flow when the
+   on-screen keyboard shrinks the viewport. Taller phones and larger screens are untouched. */
+@media (max-width: 800px) {
+  .compact-height .app-header { min-height: 54px; padding-block: 5px; }
+  .compact-height .view-toggle button,
+  .compact-height .header-actions .reset-button { min-height: 40px; }
+  .compact-height .mobile-results { margin-bottom: 8px; }
+  .compact-height .mobile-results .results-payment { padding-block: 8px; }
+  .compact-height .mobile-results .payment-number { min-height: 34px; margin: 0; }
+  .compact-height .mobile-results .payment-number strong { font-size: 30px; }
+  .compact-height .mobile-results .estimate-actions--compact { padding-bottom: 8px; }
+  .compact-height .mobile-results .estimate-actions--compact button { min-height: 40px; }
+  .compact-height .quick-jump-nav { display: none; }
+  .compact-height .deal-details { margin-bottom: 8px; }
+  .compact-height .deal-details > summary { min-height: 40px; padding-block: 6px; }
+  .compact-height .deal-section__header { min-height: 42px; padding-block: 4px; }
+  .compact-height .field-row { min-height: 52px; padding-block: 4px; }
+  .compact-height .dealer-workspace,
+  .compact-height .deal-grid,
+  .compact-height .deal-column { gap: 8px; }
+}

@@ -19,6 +19,10 @@ function Root() {
   );
 }
 
+// Compact phone layout follows the device screen, not the viewport: orientation-independent, and
+// stable while the on-screen keyboard shrinks the viewport mid-typing. (CSP forbids inline scripts.)
+if (Math.max(window.screen.width, window.screen.height) <= 760) document.documentElement.classList.add('compact-height');
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <Root />
