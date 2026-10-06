@@ -430,6 +430,35 @@ test.describe('dealership settings dialog', () => {
     await expect(page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' })).toBeVisible();
   });
 
+  test('the logo preview keeps its desktop size above 440px and matches the header chip on phones', async ({ page }) => {
+    await seedBrand(page, { name: 'Lakeside Motors', logo: LOGO });
+    await page.reload();
+    const chipSizes = () => page.evaluate(() => {
+      const size = selector => {
+        const box = document.querySelector(selector).getBoundingClientRect();
+        return [Math.round(box.width), Math.round(box.height)];
+      };
+      return {
+        previewChip: size('.settings-dialog__preview .brand__chip'),
+        previewLogo: size('.settings-dialog__preview .brand__logo'),
+        headerChip: size('.app-header .brand__chip'),
+        headerLogo: size('.app-header .brand__logo'),
+      };
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openSettings(page);
+    const desktop = await chipSizes();
+    await page.setViewportSize({ width: 500, height: 900 });
+    const narrow = await chipSizes();
+    // The header has switched to its compact lockup; the preview has not.
+    expect(narrow.headerChip[1]).toBeLessThan(desktop.headerChip[1]);
+    expect({ chip: narrow.previewChip, logo: narrow.previewLogo }).toEqual({ chip: desktop.previewChip, logo: desktop.previewLogo });
+    // On phones the preview shows the logo as the header chip does.
+    await page.setViewportSize({ width: 375, height: 812 });
+    const phone = await chipSizes();
+    expect({ chip: phone.previewChip, logo: phone.previewLogo }).toEqual({ chip: phone.headerChip, logo: phone.headerLogo });
+  });
+
   test('the dialog fits a phone, avoids iOS zoom, keeps the file picker focusable, and passes an accessibility scan', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     const dialog = await openSettings(page);
