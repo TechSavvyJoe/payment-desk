@@ -50,30 +50,47 @@ test.describe('dealership header', () => {
     await expect(home.locator('img')).toHaveCount(0);
   });
 
-  for (const [label, value] of [
-    ['default wordmark', null],
-    ['60-character unbroken name with a logo', { name: 'W'.repeat(60), logo: LOGO }],
-    ['long name only', { name: 'Superior Chevrolet Buick GMC of Southwest Michigan Lakeshore' }],
-  ]) {
-    test(`header fits a 375px phone: ${label}`, async ({ page }) => {
-      await page.setViewportSize({ width: 375, height: 812 });
-      if (value) await seedBrand(page, value);
-      await page.goto('/');
-      await expect(page.locator('#worksheet-heading')).toBeVisible();
-      const layout = await page.evaluate(() => {
-        const header = document.querySelector('.app-header');
-        const brand = header.querySelector('.brand').getBoundingClientRect();
-        const actions = header.querySelector('.header-actions').getBoundingClientRect();
-        return {
-          pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
-          headerOverflow: header.scrollWidth - header.clientWidth,
-          brandPastActions: Math.round(brand.right - actions.left),
-        };
+  for (const width of [375, 320]) {
+    for (const [label, value] of [
+      ['default wordmark', null],
+      ['60-character unbroken name with a logo', { name: 'W'.repeat(60), logo: LOGO }],
+      ['long name only', { name: 'Superior Chevrolet Buick GMC of Southwest Michigan Lakeshore' }],
+    ]) {
+      test(`header fits a ${width}px phone: ${label}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 812 });
+        if (value) await seedBrand(page, value);
+        await page.goto('/');
+        await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
+        const layout = await page.evaluate(() => {
+          const header = document.querySelector('.app-header');
+          const brandNode = header.querySelector('.brand');
+          const brand = brandNode.getBoundingClientRect();
+          const actions = header.querySelector('.header-actions').getBoundingClientRect();
+          // The wordmark, logo chip and credit must sit wholly inside the brand box;
+          // a long name may only shorten itself with its own ellipsis.
+          const clipped = [...brandNode.querySelectorAll(':scope > strong, .brand__chip, .brand__credit')]
+            .filter(node => node.getBoundingClientRect().width > 0)
+            .filter(node => node.getBoundingClientRect().right > brand.right + 0.5 || node.scrollWidth > node.clientWidth + 1)
+            .map(node => node.className || node.tagName);
+          const toggleOverflow = [...header.querySelectorAll('.view-toggle button')].some(button => button.scrollWidth > button.clientWidth + 1);
+          return {
+            pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+            headerOverflow: header.scrollWidth - header.clientWidth,
+            brandPastActions: Math.round(brand.right - actions.left),
+            clipped,
+            toggleOverflow,
+          };
+        });
+        expect(layout.pageOverflow).toBeLessThanOrEqual(0);
+        expect(layout.headerOverflow).toBeLessThanOrEqual(0);
+        expect(layout.brandPastActions).toBeLessThanOrEqual(0);
+        expect(layout.clipped).toEqual([]);
+        expect(layout.toggleOverflow).toBe(false);
+        // Screen readers keep the full view names at every width.
+        await expect(page.getByRole('button', { name: 'Dealer view', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Customer view', exact: true })).toBeVisible();
       });
-      expect(layout.pageOverflow).toBeLessThanOrEqual(0);
-      expect(layout.headerOverflow).toBeLessThanOrEqual(0);
-      expect(layout.brandPastActions).toBeLessThanOrEqual(0);
-    });
+    }
   }
 
   test('Reset deal keeps the saved dealership', async ({ page }) => {

@@ -35,7 +35,7 @@ The interface keeps the established navy-blue identity: a navy header and paymen
 - **Product choices:** Service Contract, Gap, and Other retain the same amounts and explicit tax-treatment rules.
 - **Motion:** focus navigation respects reduced-motion preferences. Color is never the only status indication.
 - **Print:** use the dedicated Letter-page customer composition: branded masthead, navy payment panel, numbered purchase/settlement sections, green trade-tax savings, itemized products, and outlined payment options. The print portal is separate from the responsive screen layout. Preserve all financial figures, full product names, tax treatment, and qualifications; never hide or truncate them to fit.
-- **Dealership identity:** an optional saved name and logo replace the PAYMENT DESK wordmark, with a small PAYMENT DESK credit. Logos sit on a white chip in the navy header so dark artwork stays visible; on phones (≤440px) the header shows the chip and credit without the name text. The printout uses the logo in place of the PD icon. With nothing saved, the default wordmark and PD icon remain.
+- **Dealership identity:** an optional saved name and logo replace the PAYMENT DESK wordmark, with a small PAYMENT DESK credit. Logos sit on a white chip in the navy header so dark artwork stays visible; on phones (≤440px) the header shows the chip and credit without the name text. Below 360px the view toggle shows short labels (Dealer / Customer; screen readers keep the full names), the header buttons narrow, and the wordmark, logo and credit shrink or wrap to fit rather than clip. The printout uses the logo in place of the PD icon. With nothing saved, the default wordmark and PD icon remain.
 
 ## Validation and references
 

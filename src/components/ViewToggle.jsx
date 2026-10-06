@@ -25,8 +25,8 @@ export default function ViewToggle({ view, onViewChange, onReset, brand, onOpenS
           label="Calculator view"
           onChange={onViewChange}
           options={[
-            { label: "Dealer view", value: "dealer" },
-            { label: "Customer view", value: "customer" },
+            { label: "Dealer view", shortLabel: "Dealer", value: "dealer" },
+            { label: "Customer view", shortLabel: "Customer", value: "customer" },
           ]}
           value={view}
         />
