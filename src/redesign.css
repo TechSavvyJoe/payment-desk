@@ -2852,7 +2852,9 @@ input[type="checkbox"] { flex:0 0 auto; }
    spacing, shrink the wordmark, and show the logo chip above the credit without the name. */
 @media (max-width: 599px) {
   .app-header { gap: 8px; }
-  .brand > strong { font-size: 0.72rem; letter-spacing: 0.03em; }
+  /* With IBM Plex the wordmark fits on one line; a wider fallback font (slow or
+     failed font request) wraps it onto two lines instead of being clipped. */
+  .brand > strong { font-size: 0.72rem; letter-spacing: 0.02em; white-space: normal; line-height: 1.05; }
   .brand--custom { flex-direction: column; align-items: flex-start; gap: 2px; }
   .brand__text { max-width: 100%; }
   /* The chip never outgrows the brand box (a 6:1 logo's 100px chip is wider than it

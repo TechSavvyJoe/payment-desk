@@ -18,10 +18,10 @@ git worktree add --detach /tmp/payment-desk-release origin/main
 cd /tmp/payment-desk-release
 npm ci
 npm run build
-wrangler pages deploy dist --project-name mysoldlog-desking --branch main --commit-hash "$(git rev-parse HEAD)" --commit-message "$(git log -1 --format=%s)" --commit-dirty=false
+npx wrangler pages deploy dist --project-name mysoldlog-desking --branch main --commit-hash "$(git rev-parse HEAD)" --commit-message "$(git log -1 --format=%s)" --commit-dirty=false
 ```
 
-`wrangler login` must have granted the Pages scope; without it the API answers `Authentication error [code: 10000]`. To verify, fetch `https://desking.mysoldlog.com/`, open the `assets/index-*.js` file it references, and confirm it contains the first eight characters of the released commit and matches the local `dist` bundle byte for byte. Then remove the worktree (`git worktree remove /tmp/payment-desk-release`).
+Wrangler is not a project dependency, so `npx wrangler` downloads it on first use (a global `wrangler` also works). Run `npx wrangler login` first; the login must grant the Pages scope, or the API answers `Authentication error [code: 10000]`. To verify, fetch `https://desking.mysoldlog.com/`, open the `assets/index-*.js` file it references, and confirm it contains the first eight characters of the released commit and matches the local `dist` bundle byte for byte. Then remove the worktree (`git worktree remove /tmp/payment-desk-release`).
 
 ## Initial domain launch — historical evidence
 

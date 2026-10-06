@@ -165,6 +165,31 @@ test.describe('dealership header', () => {
     });
   }
 
+  // On a slow or failed font request the wider fallback font must wrap, never clip.
+  for (const width of [375, 441, 599]) {
+    test(`default wordmark stays whole without the web font at ${width}px`, async ({ page }) => {
+      await page.route(/\.woff2?(\?.*)?$/, route => route.abort());
+      await page.setViewportSize({ width, height: 812 });
+      await page.goto('/');
+      await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const fit = await page.evaluate(() => {
+        const brand = document.querySelector('.app-header .brand');
+        const mark = brand.querySelector(':scope > strong');
+        const b = brand.getBoundingClientRect();
+        const m = mark.getBoundingClientRect();
+        return {
+          plexLoaded: [...document.fonts].some(face => /IBM Plex/.test(face.family) && face.status === 'loaded'),
+          inside: m.right <= b.right + 0.5,
+          overflow: mark.scrollWidth - mark.clientWidth,
+        };
+      });
+      expect(fit.plexLoaded).toBe(false);
+      expect(fit.inside).toBe(true);
+      expect(fit.overflow).toBeLessThanOrEqual(1);
+    });
+  }
+
   test('Reset deal keeps the saved dealership', async ({ page }) => {
     await seedBrand(page, { name: 'Lakeside Motors' });
     await page.goto('/');
