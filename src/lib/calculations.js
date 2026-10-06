@@ -1,4 +1,5 @@
 import { getMichiganPolicy, POLICY_CONFIG } from './policy.js';
+import { CRV_FEE_MAXIMUM } from './feeSettings.js';
 
 const CENTS_PER_DOLLAR = 100;
 
@@ -262,6 +263,29 @@ function normalizeOptionalItems(items) {
   });
 }
 
+// The dealership's own document and CRV fees, in dollars. Missing or unreadable
+// values use the policy default; readable values are clamped to [0, maximum].
+
+function dealershipFeeCents(value, defaultCents, maximumCents) {
+  if (value === undefined || value === null || value === '') return defaultCents;
+  let cents;
+  try {
+    cents = toCents(value);
+  } catch {
+    return defaultCents;
+  }
+  return Math.min(Math.max(cents, 0), maximumCents);
+}
+
+function normalizeDealershipFees(fees, policy) {
+  const source = fees && typeof fees === 'object' ? fees : {};
+  const documentFeeMaximumCents = toCents(policy.documentFeeMaximum);
+  return {
+    documentFeeCents: dealershipFeeCents(source.documentFee, DEFAULT_CENTS.documentFee, documentFeeMaximumCents),
+    crvFeeCents: dealershipFeeCents(source.crvFee, DEFAULT_CENTS.crvFee, toCents(CRV_FEE_MAXIMUM)),
+  };
+}
+
 function dollarsForCentsObject(centsObject) {
   return Object.fromEntries(
     Object.entries(centsObject).map(([key, value]) => [key, fromCents(value)]),
@@ -317,13 +341,15 @@ export function calculateDeal(input = {}) {
 
   const isFinanced = dealType === 'finance';
   const hasVehicle = salePriceCents > 0;
+  const dealershipFees = normalizeDealershipFees(input.dealershipFees, policy);
+  // The dealership's fee never overrides the legal maximum or the 5% cap.
   // Selling price is a conservative base, not a claim about the complete
   // statutory contract cash-price definition. Floor prevents exceeding 5%.
   const documentFeeCents = hasVehicle
-    ? Math.min(toCents(policy.documentFeeMaximum),
+    ? Math.min(dealershipFees.documentFeeCents, toCents(policy.documentFeeMaximum),
       Number(BigInt(salePriceCents) * BigInt(policy.documentFeeSalePricePercent) / 100n))
     : 0;
-  const crvFeeCents = hasVehicle ? DEFAULT_CENTS.crvFee : 0;
+  const crvFeeCents = hasVehicle ? dealershipFees.crvFeeCents : 0;
   const taxableFixedFeesCents = documentFeeCents + crvFeeCents;
   const plateTransferFeeCents = hasVehicle && plateMode === 'transfer' ? DEFAULT_CENTS.plateTransferFee : 0;
   const additionalTransferFeeCents =
