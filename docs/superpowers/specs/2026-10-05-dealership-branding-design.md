@@ -73,7 +73,7 @@ Key `payment-desk.dealership.v1`, JSON `{ "name": string, "logo": string | null 
 
 ## Components and wiring
 
-- `App.jsx`: `brandSettings` state initialized from `loadBrandSettings()`, `settingsOpen` state, `brand = resolveBrand(brandSettings)`. Passes `brand` to `ViewToggle` and `CustomerView`, and save/clear handlers to the dialog. If saving fails, the settings still apply for this page session, and the dialog stays open with a warning ("Couldn't save on this device — private browsing or storage is full. The dealership will show until this page is closed.") and a **Done** button.
+- `App.jsx`: `brandSettings` state initialized from `loadBrandSettings()`, `settingsOpen` state, `brand = resolveBrand(brandSettings)`. Passes `brand` to `ViewToggle` and `CustomerView`, and save/clear handlers to the dialog. If saving fails, the settings still apply for this page session, and the dialog stays open with a warning ("Couldn't save on this device — storage is blocked or full. The dealership will show until this page is closed.") and a **Done** button.
 - `ViewToggle.jsx`: renders the default wordmark or the logo/name/credit lockup; adds the gear button in Dealer view.
 - `DealershipSettingsDialog.jsx` (new): draft state, file processing via `prepareLogo`, preview, save/cancel/clear.
 - `CustomerView.jsx`: passes `brand` into the snapshot; renders the logo and name in the identity card; uses `snapshot.brand.name` for the share title and footer meta.
