@@ -4,6 +4,7 @@ import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
 import { clearBrandSettings, loadBrandSettings, resolveBrand, saveBrandSettings } from './lib/brandSettings.js';
 import { clearFeeSettings, loadFeeSettings, resolveFees, saveFeeSettings } from './lib/feeSettings.js';
+import { policyReviewReminder, policyReviewReminderShort, todayDealDate } from './lib/policy.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
@@ -16,6 +17,7 @@ import ViewToggle from './components/ViewToggle.jsx';
 import { ValidationContext } from './components/ValidationContext.jsx';
 import EstimateDateField from './components/EstimateDateField.jsx';
 import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
+import PolicyReminder from './components/PolicyReminder.jsx';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
@@ -75,6 +77,8 @@ export default function App() {
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
   const canCompare = getProposalStatus({ dealInput, result, hasInputErrors }).canExport;
+  // Read on every render so a desk left open overnight picks up the new day.
+  const today = todayDealDate();
 
   useEffect(() => {
     if (!hasDeal) return;
@@ -156,6 +160,7 @@ export default function App() {
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
+        {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
         {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}

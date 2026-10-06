@@ -1,0 +1,112 @@
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+const REMINDER = 'Tax and fee rules are reviewed through Dec 31, 2026. Have them reviewed and the app updated before January 1, or estimates dated 2027 will be blocked.';
+const reminder = page => page.getByRole('note').filter({ hasText: 'Tax and fee rules are reviewed through' });
+const price = page => page.getByRole('textbox', { name: 'Selling price', exact: true });
+
+// Noon in Detroit, so the Eastern calendar day is unambiguous.
+async function openOn(page, isoDate) {
+  await page.clock.setFixedTime(new Date(`${isoDate}T17:00:00Z`));
+  await page.goto('/');
+  await expect(price(page)).toBeVisible();
+}
+
+test('the reminder stays hidden through November 30', async ({ page }) => {
+  await openOn(page, '2026-11-30');
+  await expect(page.getByRole('heading', { name: 'Build the deal. See the payment.' })).toBeAttached();
+  await expect(reminder(page)).toHaveCount(0);
+  await expect(page.getByText('Tax and fee rules are reviewed through')).toHaveCount(0);
+});
+
+for (const isoDate of ['2026-12-01', '2026-12-31']) {
+  test(`on ${isoDate} Dealer view shows the reminder under the header and Customer view does not`, async ({ page }) => {
+    await openOn(page, isoDate);
+    const note = reminder(page);
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(REMINDER);
+    // It sits directly under the header and is not dismissible.
+    const header = await page.locator('.app-header').boundingBox();
+    const box = await note.boundingBox();
+    expect(Math.abs(box.y - (header.y + header.height))).toBeLessThanOrEqual(1);
+    await expect(note.getByRole('button')).toHaveCount(0);
+    // An information color, never the error red.
+    const colors = await note.evaluate(node => {
+      const style = getComputedStyle(node);
+      return [style.backgroundColor, style.color, style.borderTopColor, style.borderLeftColor, style.borderBottomColor];
+    });
+    for (const color of colors) expect(color).not.toMatch(/rgb\(180, 35, 24\)|rgb\(253, 241, 240\)/);
+
+    await price(page).fill('30000');
+    await price(page).press('Tab');
+    await page.getByRole('button', { name: 'Customer view', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Your purchase estimate', exact: true })).toBeVisible();
+    await expect(reminder(page)).toHaveCount(0);
+    // A December estimate is still within the review window, so it can be exported.
+    await expect(page.getByRole('button', { name: 'Copy summary', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Dealer view', exact: true }).click();
+    await expect(reminder(page)).toBeVisible();
+  });
+}
+
+test('on January 2, 2027 the reminder is gone and the per-deal review warning takes over', async ({ page }) => {
+  await openOn(page, '2027-01-02');
+  await expect(reminder(page)).toHaveCount(0);
+  await price(page).fill('30000');
+  await price(page).press('Tab');
+  const summary = page.locator('.desktop-results:visible, .mobile-results:visible');
+  await expect(summary.locator('.result-warning')).toContainText('fee and tax policy must be reviewed for this date');
+});
+
+test('the reminder passes an accessibility scan', async ({ page }) => {
+  await openOn(page, '2026-12-15');
+  await expect(reminder(page)).toBeVisible();
+  const scan = await new AxeBuilder({ page }).include('.policy-reminder').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(scan.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))).toEqual([]);
+});
+
+// Distinct line tops of the text a sighted reader sees (visually hidden text is skipped).
+const visibleLines = note => note.evaluate(node => {
+  const tops = new Set();
+  for (const element of [node, ...node.querySelectorAll('*')]) {
+    const box = element.getBoundingClientRect();
+    if (box.width <= 1 || box.height <= 1 || !element.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+    for (const child of element.childNodes) {
+      if (child.nodeType !== Node.TEXT_NODE || !child.textContent.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(child);
+      for (const rect of range.getClientRects()) if (rect.width > 1 && rect.height > 1) tops.add(Math.round(rect.top));
+    }
+  }
+  return tops.size;
+});
+// The text assistive technology reads: everything outside aria-hidden subtrees.
+const spokenText = note => note.evaluate(node => {
+  const walk = current => current.nodeType === Node.TEXT_NODE ? current.textContent
+    : current.nodeType === Node.ELEMENT_NODE && current.getAttribute('aria-hidden') === 'true' ? ''
+      : [...current.childNodes].map(walk).join('');
+  return walk(node).replace(/\s+/g, ' ').trim();
+});
+
+for (const [width, height] of [[320, 640], [360, 740], [375, 667], [390, 844], [430, 932], [600, 900], [601, 900], [800, 900], [801, 900], [1440, 1000]]) {
+  test(`at ${width}px the reminder keeps to ${width >= 1280 ? 'one line' : 'two lines'} without sideways scrolling`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await openOn(page, '2026-12-01');
+    const note = reminder(page);
+    await expect(note).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    expect(await visibleLines(note)).toBeGreaterThanOrEqual(1);
+    expect(await visibleLines(note)).toBeLessThanOrEqual(width >= 1280 ? 1 : 2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+    // Screen readers always get the complete sentence, once.
+    expect(await spokenText(note)).toBe(REMINDER);
+  });
+}
+
+test('on a phone the reminder keeps Selling price in the top half of the opening screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openOn(page, '2026-12-01');
+  await expect(reminder(page)).toBeVisible();
+  const bottom = await price(page).evaluate(element => element.getBoundingClientRect().bottom + window.scrollY);
+  expect(bottom).toBeLessThanOrEqual(844 * 0.45);
+});
