@@ -125,124 +125,132 @@ test('desktop keeps the full heading and start card', async ({ page }, testInfo)
   await expect(page.locator('.desktop-results').getByRole('button', { name: 'Enter selling price', exact: true })).toBeVisible();
 });
 
-// Short phones: compact mode is keyed to the device screen (not the viewport), so Playwright's
-// `screen` option is what decides it; `viewport` is only the layout size.
+// Compact mode: main.jsx decides it once at load from window.innerHeight, the height the browser
+// leaves visible, so these tests drive it with the viewport. The phone viewports below are what
+// common phones show inside their browser, after the status bar, address bar and toolbars.
 const tradeAndBar = async page => {
   const trade = page.getByRole('textbox', { name: 'Trade allowance', exact: true });
-  const bar = page.locator('.mobile-nav');
   await expect(trade).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
   const tradeBox = await pageBox(trade);
-  const barTop = (await bar.boundingBox()).y;
+  const barTop = (await page.locator('.mobile-nav').boundingBox()).y;
   return { tradeBottom: tradeBox.bottom, barTop };
 };
-
-test.describe('short phone worksheet (375x667)', () => {
-  test.use({ viewport: { width: 375, height: 667 }, screen: { width: 375, height: 667 } });
-  test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
-    await page.goto('/');
-    await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
-  });
-
-  test('Selling price is fully visible before a price is entered', async ({ page }) => {
-    const price = page.getByRole('textbox', { name: 'Selling price', exact: true });
-    await expect(price).toBeVisible();
-    expect((await pageBox(price)).bottom).toBeLessThanOrEqual(page.viewportSize().height);
-  });
-
-  test('after a price, Trade allowance sits fully above the bottom bar at the top of the page', async ({ page }) => {
-    await enterPrice(page);
-    await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(page.locator('html')).toHaveClass(/compact-height/);
-    const { tradeBottom, barTop } = await tradeAndBar(page);
-    expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
-    await expect(page.locator('.quick-jump-nav')).toBeHidden();
-    expect((await pageBox(page.locator('.app-header'))).height).toBeLessThanOrEqual(60);
-    const card = page.locator('.mobile-results');
-    expect((await pageBox(card)).height).toBeLessThanOrEqual(140);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-    await expect(card.getByRole('button', { name: 'Details', exact: true })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Review customer estimate', exact: true })).toBeVisible();
-  });
+const primaryHeights = page => page.evaluate(() => {
+  const buttons = [
+    ...document.querySelectorAll('.view-toggle button, .header-actions button'),
+    ...[...document.querySelectorAll('.mobile-results button')].filter(button => /Details|Review customer estimate/.test(button.textContent)),
+  ];
+  return buttons.map(button => Math.round(button.getBoundingClientRect().height));
 });
+const tradeLift = async page => {
+  // How much higher compact mode puts Trade allowance than the regular layout at the same size.
+  const compact = (await tradeAndBar(page)).tradeBottom;
+  await page.evaluate(() => document.documentElement.classList.remove('compact-height'));
+  const regular = (await pageBox(page.getByRole('textbox', { name: 'Trade allowance', exact: true }))).bottom;
+  await page.evaluate(() => document.documentElement.classList.add('compact-height'));
+  return regular - compact;
+};
 
-test.describe('short phone worksheet (412x732)', () => {
-  test.use({ viewport: { width: 412, height: 732 }, screen: { width: 412, height: 732 } });
-  test('Trade allowance is on the first screen after a price', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
-    await page.goto('/');
-    await enterPrice(page);
-    await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
-    const { tradeBottom, barTop } = await tradeAndBar(page);
-    expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
-  });
-});
-
-// Current Android flagships (Galaxy S22-S24, many Moto G) report 360x780; many others 360x800. The
-// regular layout leaves Trade allowance under the bottom bar there, so compact mode covers screens up
-// to and including 800px on the long side.
-for (const [width, height] of [[360, 780], [360, 800]]) {
-  test.describe(`short Android worksheet (${width}x${height})`, () => {
-    test.use({ viewport: { width, height }, screen: { width, height } });
-    test('compact mode is on and Trade allowance sits fully above the bottom bar after a price', async ({ page }, testInfo) => {
+for (const [label, width, height, tradeOnFirstScreen] of [
+  ['iPhone SE in Safari', 375, 553, false],
+  ['iPhone 14 in Safari', 390, 664, true],
+  ['Galaxy S23 in Chrome', 360, 668, true],
+  ['Pixel 7 in Chrome', 412, 740, true],
+]) {
+  test.describe(`compact phone worksheet: ${label} (${width}x${height} visible)`, () => {
+    test.use({ viewport: { width, height } });
+    test.beforeEach(async ({ page }, testInfo) => {
       test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
       await page.goto('/');
-      await enterPrice(page);
-      await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
-      expect(await page.evaluate(() => window.scrollY)).toBe(0);
-      const { tradeBottom, barTop } = await tradeAndBar(page);
-      expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
+      await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
+    });
+
+    test('compact mode tightens the worksheet and keeps 44px primary controls', async ({ page }) => {
       await expect(page.locator('html')).toHaveClass(/compact-height/);
       await expect(page.locator('.quick-jump-nav')).toBeHidden();
+      const price = page.getByRole('textbox', { name: 'Selling price', exact: true });
+      expect((await pageBox(price)).bottom).toBeLessThanOrEqual(height);
+      await enterPrice(page);
+      await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
+      for (const h of await primaryHeights(page)) expect(h).toBeGreaterThanOrEqual(44);
+      expect((await pageBox(page.locator('.app-header'))).height).toBeLessThanOrEqual(64);
+      expect((await pageBox(page.locator('.mobile-results'))).height).toBeLessThanOrEqual(145);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      // Cash down (the next field after the price) is above the bottom bar on every phone listed.
+      const cash = await pageBox(page.getByRole('textbox', { name: 'Cash down', exact: true }));
+      const barTop = (await page.locator('.mobile-nav').boundingBox()).y;
+      if (height >= 600) expect(cash.bottom).toBeLessThanOrEqual(barTop);
+    });
+
+    test(`after a price, Trade allowance ${tradeOnFirstScreen ? 'is above the bottom bar' : 'sits at least 130px higher than the regular layout'}`, async ({ page }) => {
+      await enterPrice(page);
+      await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
+      const { tradeBottom, barTop } = await tradeAndBar(page);
+      if (tradeOnFirstScreen) expect(tradeBottom).toBeLessThanOrEqual(barTop);
+      expect(await tradeLift(page)).toBeGreaterThanOrEqual(130);
     });
   });
 }
 
-// Just above the cutoff the regular layout already fits, so it keeps the shortcut row.
-test.describe('regular phone worksheet (375x812)', () => {
-  test.use({ viewport: { width: 375, height: 812 }, screen: { width: 375, height: 812 } });
-  test('compact mode stays off and Trade allowance still sits above the bottom bar', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+// The decision follows the visible height, not the device screen: an iPhone 14 screen is 844px tall,
+// but Safari leaves about 664px visible, where the regular layout puts Trade allowance under the bar.
+// (The page fixture's window.screen follows the viewport, so this builds its own context.)
+test('a tall phone screen with a short browser viewport goes compact', async ({ browser, baseURL }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+  const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 664 }, screen: { width: 390, height: 844 } });
+  try {
+    const page = await context.newPage();
     await page.goto('/');
+    expect(await page.evaluate(() => [window.screen.height, window.innerHeight])).toEqual([844, 664]);
+    await expect(page.locator('html')).toHaveClass(/compact-height/);
     await enterPrice(page);
     await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
-    await expect(page.locator('html')).not.toHaveClass(/compact-height/);
-    await expect(page.locator('.quick-jump-nav')).toBeVisible();
     const { tradeBottom, barTop } = await tradeAndBar(page);
-    expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
-  });
+    expect(tradeBottom).toBeLessThanOrEqual(barTop);
+  } finally {
+    await context.close();
+  }
 });
 
-test.describe('keyboard-shrunk viewport on a regular phone screen', () => {
-  test('compact mode stays off and the shortcut row stays', async ({ browser, baseURL }, testInfo) => {
-    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
-    // The test-level `screen` option is ignored for the page fixture here (window.screen follows the
-    // viewport), so build the context directly: a 390x844 screen whose viewport the keyboard shrank to 500.
-    const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 500 }, screen: { width: 390, height: 844 } });
-    try {
-      const page = await context.newPage();
-      await page.goto('/');
-      expect(await page.evaluate(() => [window.screen.height, window.innerHeight])).toEqual([844, 500]);
-      await enterPrice(page);
-      await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
-      await expect(page.locator('html')).not.toHaveClass(/compact-height/);
-      await expect(page.locator('.quick-jump-nav')).toBeVisible();
-    } finally {
-      await context.close();
-    }
-  });
-});
-
-test.describe('regular phone worksheet (390x844)', () => {
-  test.use({ viewport: { width: 390, height: 844 }, screen: { width: 390, height: 844 } });
-  test('keeps the shortcut row and the 70px header', async ({ page }, testInfo) => {
+// A phone that shows 804px or more (for example an installed, full-screen app on a tall phone)
+// already fits Trade allowance in the regular layout, so it keeps the shortcut row.
+test.describe('regular phone worksheet (390x844 visible)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+  test('keeps the shortcut row and the 70px header, and Trade allowance fits', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
     await page.goto('/');
     await enterPrice(page);
     await expect(page.locator('html')).not.toHaveClass(/compact-height/);
     await expect(page.locator('.quick-jump-nav')).toBeVisible();
     expect(Math.abs((await pageBox(page.locator('.app-header'))).height - 70)).toBeLessThanOrEqual(2);
+    const { tradeBottom, barTop } = await tradeAndBar(page);
+    expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
+  });
+});
+
+// The decision is made once at load, so a keyboard shrinking the viewport (or a toolbar collapsing)
+// never switches layouts while someone is typing.
+test.describe('compact decision is fixed after load', () => {
+  test('a regular layout stays regular when the viewport shrinks', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await expect(page.locator('html')).not.toHaveClass(/compact-height/);
+    await page.setViewportSize({ width: 390, height: 500 });
+    await enterPrice(page);
+    await expect(page.locator('html')).not.toHaveClass(/compact-height/);
+    await expect(page.locator('.quick-jump-nav')).toBeVisible();
+  });
+
+  test('a compact layout stays compact when the viewport grows', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+    await page.setViewportSize({ width: 390, height: 664 });
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveClass(/compact-height/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await enterPrice(page);
+    await expect(page.locator('html')).toHaveClass(/compact-height/);
+    await expect(page.locator('.quick-jump-nav')).toBeHidden();
   });
 });
