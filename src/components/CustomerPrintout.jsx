@@ -48,6 +48,8 @@ function PrintGroup({ group }) {
 export default function CustomerPrintout({ snapshot, result }) {
   const root = useRef(null);
   const { summary, groups } = snapshot;
+  const { brand } = snapshot;
+  const brandLine = brand.isCustom ? brand.dealershipName : brand.name;
   const transaction = groups.find(group => group.id === 'transaction');
   const productRows = transaction.rows.filter(item => item.id.startsWith('product-'));
   const purchaseRows = transaction.rows.filter(item => !item.id.startsWith('product-'));
@@ -69,7 +71,15 @@ export default function CustomerPrintout({ snapshot, result }) {
   return createPortal(<div className="customer-print-root" ref={root} aria-hidden="true">
     <article className={`customer-print-sheet print-density--${density}`}>
       <header className="print-masthead">
-        <div className="print-brand"><img src="./payment-desk-icon.svg" width="40" height="40" alt="" /><div><strong>{snapshot.dealership}</strong><span>PAYMENT DESK</span></div></div>
+        <div className="print-brand">
+          {brand.logo
+            ? <img alt="" className="print-brand__logo" src={brand.logo} />
+            : <img alt="" height="40" src="./payment-desk-icon.svg" width="40" />}
+          <div>
+            {brandLine ? <strong>{brandLine}</strong> : null}
+            {brand.isCustom ? <span>PAYMENT DESK</span> : null}
+          </div>
+        </div>
         <div className="print-date"><span>ESTIMATE DATE</span><strong>{formatShortDate(snapshot.policy.dealDate)}</strong><small>Prepared {snapshot.createdLabel} ET</small></div>
       </header>
       <div className="print-title"><h1>Your vehicle estimate</h1><span>{summary.isFinanced ? 'FINANCE' : 'CASH'} ESTIMATE</span></div>

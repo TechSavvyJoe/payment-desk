@@ -49,7 +49,7 @@ test('product categories, explicit Other tax treatment, and complete customer ex
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('.print-qualification')).toBeVisible();
   await expect(page.locator('.customer-actions')).toBeHidden();
-  await expect(page.locator('.print-brand')).toContainText('Bob Maxey Ford');
+  await expect(page.locator('.print-brand')).toContainText('Payment Desk');
   await expect(page.locator('.customer-print-root')).toBeVisible();
   await expect(page.locator('.customer-print-root')).not.toContainText(/interest|total (?:loan )?payments/i);
   await expect(page.locator('.print-tax-credit')).toContainText('2026 trade deduction limit: $12,000.00');

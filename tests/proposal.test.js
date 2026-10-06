@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { calculateDeal } from "../src/lib/calculations.js";
 import { buildProposalGroups, createProposalSnapshot, formatProposalText, getProposalStatus } from "../src/lib/proposal.js";
+import { resolveBrand } from "../src/lib/brandSettings.js";
 
 const base = { salePrice: 30_000, cashDown: 2_000, apr: 6.5, termMonths: 72, dealDate: "2026-09-24", dealType: "finance", plateMode: "transfer", optionalItems: [] };
 const create = (patch = {}, options = {}) => {
@@ -95,7 +96,7 @@ test("proposal copies itemized products, cash requirements, identity, policy and
   const text = formatProposalText(snapshot, { calculatorUrl: "https://example.test/calculator/" });
   assert.doesNotMatch(text, /interest|total (?:loan )?payments/i);
   assert.match(text, /2026 trade deduction limit: \$12,000\.00/);
-  for (const expected of ["Bob Maxey Ford", "2026 F-150 / stock X123", snapshot.reference, "2.0.0 (test-build)", "Service Contract", "GAP", "Bed liner", "trade payoff", "$14,000.00", "Negative equity paid at signing", "$6,000.00", "6.50% APR", "12/31/26", "Estimate only", "not a financing approval or contract", "Open calculator: https://example.test/calculator/", "does not restore this proposal"]) assert.ok(text.includes(expected), expected);
+  for (const expected of ["Payment Desk", "2026 F-150 / stock X123", snapshot.reference, "2.0.0 (test-build)", "Service Contract", "GAP", "Bed liner", "trade payoff", "$14,000.00", "Negative equity paid at signing", "$6,000.00", "6.50% APR", "12/31/26", "Estimate only", "not a financing approval or contract", "Open calculator: https://example.test/calculator/", "does not restore this proposal"]) assert.ok(text.includes(expected), expected);
   assert.equal(snapshot.groups[0].rows.reduce((total, item) => total + item.cents, 0), snapshot.groups[0].total.cents);
 });
 
@@ -136,4 +137,22 @@ test("proposal display dates use MM/DD/YY while policy and creation values stay 
   assert.match(text, /Created: 09\/24\/26, 8:30 PM/);
   assert.match(text, /effective 01\/01\/26 through 12\/31\/26; reviewed 09\/24\/26/);
   assert.match(text, /Deal date: 09\/24\/26\./);
+});
+
+test("estimate identity defaults to Payment Desk and uses a saved dealership", () => {
+  const plain = create();
+  assert.deepEqual({ ...plain.brand }, { name: "Payment Desk", dealershipName: "", logo: null, isCustom: false });
+  assert.equal(formatProposalText(plain).split("\n")[0], "Payment Desk");
+
+  const named = create({}, { brand: resolveBrand({ name: "Lakeside Motors" }) });
+  assert.equal(named.brand.name, "Lakeside Motors");
+  assert.equal(named.brand.isCustom, true);
+  assert.equal(formatProposalText(named).split("\n")[0], "Lakeside Motors");
+  assert.equal(named.reference, plain.reference, "branding does not change the deal reference");
+  assert.ok(Object.isFrozen(named.brand));
+
+  const logo = "data:image/png;base64,iVBORw0KGgo=";
+  const logoOnly = create({}, { brand: resolveBrand({ logo }) });
+  assert.deepEqual({ ...logoOnly.brand }, { name: "Payment Desk", dealershipName: "", logo, isCustom: true });
+  assert.equal(formatProposalText(logoOnly).split("\n")[0], "Payment Desk");
 });

@@ -14,11 +14,13 @@ const LedgerRow = ({ item, total = false }) => (
   </div>
 );
 
-export default function CustomerView({ dealInput, result, gridRates, hasInputErrors = false, onEditDeal }) {
+export default function CustomerView({ dealInput, result, gridRates, hasInputErrors = false, onEditDeal, brand }) {
   const [createdAt] = useState(() => new Date().toISOString());
   const snapshot = useMemo(() => createProposalSnapshot({
-    dealInput, result, gridRates, hasInputErrors, createdAt, version: APP_VERSION + " (" + BUILD_ID + ")",
-  }), [dealInput, result, gridRates, hasInputErrors, createdAt]);
+    dealInput, result, gridRates, hasInputErrors, createdAt, brand, version: APP_VERSION + " (" + BUILD_ID + ")",
+  }), [dealInput, result, gridRates, hasInputErrors, createdAt, brand]);
+  // With a saved logo but no name, the logo alone identifies the dealership.
+  const brandLine = snapshot.brand.isCustom ? snapshot.brand.dealershipName : snapshot.brand.name;
   const [status, setStatus] = useState("");
   const [copyFallback, setCopyFallback] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,7 +49,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
     setBusy(true);
     try {
       // The text labels this as a generic calculator link, never a saved quote.
-      await navigator.share({ title: snapshot.dealership + " — " + snapshot.title, text: summaryText() });
+      await navigator.share({ title: snapshot.brand.name + " — " + snapshot.title, text: summaryText() });
       setStatus("Estimate shared.");
     } catch (error) {
       setStatus(error?.name === "AbortError" ? "Sharing canceled." : "Sharing is unavailable. Use Copy summary or Print instead.");
@@ -66,7 +68,8 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
     <><div className="customer-layout">
       <main className="customer-content">
         <header className="proposal-identity">
-          <p className="proposal-dealership">{snapshot.dealership}</p>
+          {snapshot.brand.logo ? <img alt={brandLine ? "" : "Dealership logo"} className="proposal-logo" src={snapshot.brand.logo} /> : null}
+          {brandLine ? <p className="proposal-brand">{brandLine}</p> : null}
           <h2>{snapshot.title}</h2>
           {snapshot.vehicleReference ? <p className="proposal-vehicle">Vehicle / stock: {snapshot.vehicleReference}</p> : null}
           <p className="proposal-meta">Created {snapshot.createdLabel} Eastern time</p>
@@ -129,7 +132,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
           <h2>Estimate assumptions</h2>
           <ul>{snapshot.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>
           <p><strong>{snapshot.qualification}</strong></p>
-          <p className="proposal-meta">{snapshot.dealership} · {snapshot.reference} · App {snapshot.version}</p>
+          <p className="proposal-meta">{snapshot.brand.name} · {snapshot.reference} · App {snapshot.version}</p>
         </footer>
       </main>
       <ResultsPanel customer dealInput={dealInput} result={result} hasInputErrors={hasInputErrors} />

@@ -1,5 +1,6 @@
 import { calculatePayment, fromCents, toCents } from "./calculations.js";
 import { formatCurrency, formatNumber, formatShortDate } from "./formatters.js";
+import { resolveBrand } from "./brandSettings.js";
 
 export const ESTIMATE_QUALIFICATION = "Estimate only, not a financing approval or contract. Actual payments, taxes, fees, product eligibility, and final figures must be confirmed with the lender and the dealership's approved systems.";
 
@@ -115,7 +116,7 @@ function referenceFor(value) {
   return (hash >>> 0).toString(16).padStart(8, "0").toUpperCase();
 }
 
-export function createProposalSnapshot({ dealInput = {}, result, createdAt = new Date().toISOString(), version = "development", policy = result.policy, hasInputErrors = false, gridRates = {} }) {
+export function createProposalSnapshot({ dealInput = {}, result, createdAt = new Date().toISOString(), version = "development", policy = result.policy, hasInputErrors = false, gridRates = {}, brand = resolveBrand() }) {
   const timestamp = new Date(createdAt);
   if (Number.isNaN(timestamp.getTime())) throw new TypeError("A valid proposal creation date is required.");
   const groups = buildProposalGroups(result);
@@ -147,7 +148,7 @@ export function createProposalSnapshot({ dealInput = {}, result, createdAt = new
   const vehicleReference = String(dealInput.vehicleDescription ?? dealInput.vehicleReference ?? "").trim();
   const isoDate = timestamp.toISOString();
   const snapshot = {
-    dealership: "Bob Maxey Ford",
+    brand: { name: brand.displayName, dealershipName: brand.dealershipName, logo: brand.logo, isCustom: brand.isCustom },
     title: "Vehicle purchase estimate",
     reference: `PD-${isoDate.slice(0, 10).replaceAll("-", "")}-${referenceFor({ isoDate, groups, apr: result.apr, term: result.termMonths, vehicleReference, version, rule })}`,
     createdAt: isoDate,
@@ -167,7 +168,7 @@ export function createProposalSnapshot({ dealInput = {}, result, createdAt = new
 
 export function formatProposalText(snapshot, { calculatorUrl } = {}) {
   const { summary } = snapshot;
-  const lines = [snapshot.dealership, snapshot.title, `Reference: ${snapshot.reference}`, `Created: ${snapshot.createdLabel} (Eastern time)`, `App version: ${snapshot.version}`];
+  const lines = [snapshot.brand.name, snapshot.title, `Reference: ${snapshot.reference}`, `Created: ${snapshot.createdLabel} (Eastern time)`, `App version: ${snapshot.version}`];
   if (snapshot.vehicleReference) lines.push(`Vehicle / stock: ${snapshot.vehicleReference}`);
   if (!summary.canExport) lines.push("INCOMPLETE ESTIMATE", ...summary.reasons);
   lines.push("", `${summary.headline}: ${money(summary.headlineAmount)}${summary.isFinanced ? "/mo" : ""}`);

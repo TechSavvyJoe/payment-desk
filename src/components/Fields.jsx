@@ -75,6 +75,10 @@ export function FieldRow({ label, htmlFor, children, helper, className = '' }) {
 export const SegmentedControl = ({ label, options, value, onChange, className = '' }) => (
   <div aria-label={label} className={`segmented ${className}`} role="group">
     {options.map(option => <button aria-pressed={value === option.value} className={value === option.value ? 'is-selected' : ''}
-      key={option.value} onClick={() => onChange(option.value)} type="button">{option.label}</button>)}
+      key={option.value} onClick={() => onChange(option.value)} type="button">
+      {option.shortLabel
+        ? <><span className="segmented__full">{option.label}</span><span aria-hidden="true" className="segmented__short">{option.shortLabel}</span></>
+        : option.label}
+    </button>)}
   </div>
 );

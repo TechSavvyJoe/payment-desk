@@ -1,6 +1,6 @@
 # Payment Desk interface
 
-The interface keeps the established Ford-blue identity: a navy header and payment summary, raised white cards, bold labels, and clearly editable figures. Refinements should improve this direction rather than replace it with a flat worksheet.
+The interface keeps the established navy-blue identity: a navy header and payment summary, raised white cards, bold labels, and clearly editable figures. Refinements should improve this direction rather than replace it with a flat worksheet.
 
 ## Hierarchy and layout
 
@@ -8,7 +8,7 @@ The interface keeps the established Ford-blue identity: a navy header and paymen
 - Trade and Financing share the left desktop column. Taxes and Products share the right column. Financing stays visible while products are added.
 - The payment is the primary result; amount financed, out-the-door total, and due at signing remain visible together.
 - Compare payments and Set payment target are adjustment paths. Review customer estimate is the primary next action. Edit deal returns to the existing figures.
-- The compact mobile summary keeps all key totals visible while leaving the first input within the opening screen at 390 × 844. Existing sticky shortcuts remain available.
+- The compact mobile summary stays slim, showing the payment and its actions; the totals open with Details. This leaves the first input within the opening screen at 390 × 844. Existing sticky shortcuts remain available.
 - Target adjustments use separate bordered cards on a tinted grid. The title, adjustment amount, and Apply action share a compact header; the resulting payment and three financial totals sit below. Keep qualification notes visible and omit repeated result sentences. Desktop compares cards side by side; mobile stacks them.
 
 ## Shared visual rules
@@ -26,7 +26,8 @@ The interface keeps the established Ford-blue identity: a navy header and paymen
 
 ## Component states and behavior
 
-- **Empty estimate:** explanatory text and Enter selling price replace a misleading zero payment and initial error alert. The payment grid provides the same starting action.
+- **Empty estimate:** explanatory text and Enter selling price replace a misleading zero payment and initial error alert. The payment grid provides the same starting action. On phones (≤800px) the dealer worksheet opens at the inputs: the page heading is visually hidden (kept for screen readers and focus), the start card is omitted, and the bottom bar offers Enter selling price.
+- **Phone payment card:** once a price exists, the card shows the payment line, any warnings, and Details plus Review customer estimate. Totals and the itemized breakdown open with Details, so the Trade section stays on the first screen.
 - **Invalid input:** retain the user's draft and last valid calculation; show the error and focus its field before moving to a customer estimate.
 - **Section disclosure:** the header is a button with expanded state. Hidden inputs leave the keyboard order. A section shortcut focuses the header so Enter or Space can reopen it.
 - **Field instructions:** helper text and validation messages both remain associated with the input.
@@ -34,6 +35,7 @@ The interface keeps the established Ford-blue identity: a navy header and paymen
 - **Product choices:** Service Contract, Gap, and Other retain the same amounts and explicit tax-treatment rules.
 - **Motion:** focus navigation respects reduced-motion preferences. Color is never the only status indication.
 - **Print:** use the dedicated Letter-page customer composition: branded masthead, navy payment panel, numbered purchase/settlement sections, green trade-tax savings, itemized products, and outlined payment options. The print portal is separate from the responsive screen layout. Preserve all financial figures, full product names, tax treatment, and qualifications; never hide or truncate them to fit.
+- **Dealership identity:** an optional saved name and logo replace the PAYMENT DESK wordmark, with a small PAYMENT DESK credit. Logos sit on a white chip in the navy header so dark artwork stays visible; on phones (≤440px) the header shows the chip and credit without the name text. Below 375px the view toggle shows short labels (Dealer / Customer; screen readers keep the full names), the header buttons narrow, and the wordmark, logo and credit shrink or wrap to fit rather than clip. The printout uses the logo in place of the PD icon. With nothing saved, the default wordmark and PD icon remain.
 
 ## Validation and references
 

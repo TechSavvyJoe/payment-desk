@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
+import { clearBrandSettings, loadBrandSettings, resolveBrand, saveBrandSettings } from './lib/brandSettings.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
@@ -13,6 +14,7 @@ import ResultsPanel from './components/ResultsPanel.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
 import { ValidationContext } from './components/ValidationContext.jsx';
 import EstimateDateField from './components/EstimateDateField.jsx';
+import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
@@ -26,6 +28,14 @@ const focusDestination = id => requestAnimationFrame(() => {
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
   const { deal: dealInput, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
+  const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
+  const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsButtonRef = useRef(null);
+  // Even when the browser refuses to store them, the settings apply for this visit.
+  const saveBrand = next => { const outcome = saveBrandSettings(next); setBrandSettings(outcome.settings); return outcome; };
+  const clearBrand = () => { const outcome = clearBrandSettings(); setBrandSettings(outcome.settings); return outcome; };
+  const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState('payment');
   const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
   const [solverExpanded, setSolverExpanded] = useState(false);
@@ -127,7 +137,8 @@ export default function App() {
     <ValidationContext.Provider value={reportError}>
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
-        <ViewToggle onReset={resetDeal} onViewChange={changeView} view={view} />
+        <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
+        {settingsOpen ? <DealershipSettingsDialog settings={brandSettings} onClear={clearBrand} onClose={closeSettings} onSave={saveBrand} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
@@ -137,7 +148,7 @@ export default function App() {
             <div className="calculator-layout">
               <div className="calculator-left">
                 <div className="page-intro"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
-                <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} /></div>
+                <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
                 <details className="deal-details" open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)}>
                 <summary><strong>Deal details</strong><span>{dealInput.vehicleDescription || 'Vehicle reference & estimate date'}</span><time dateTime={dealInput.dealDate}>{formatShortDate(dealInput.dealDate)}</time></summary>
@@ -156,7 +167,7 @@ export default function App() {
             {result.isFinanced ? <button className="grid-jump" onClick={scrollToGrid} type="button"><span>Payment grid</span><strong>Compare terms, rates, and down payments</strong></button> : null}
           </> : <>
             <div className="page-intro page-intro--customer"><h1 id="customer-heading" tabIndex={-1}>Your purchase estimate</h1><p>The selected vehicle, products, and payment — together in one place.</p></div>
-            <CustomerView dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} />
+            <CustomerView brand={brand} dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} />
           </>}
         </div>
         {view === 'dealer' && result.isFinanced ? <PaymentGrid key={`grid-${resetCount}`} dealInput={dealInput} downPayments={gridDownPayments}
@@ -169,7 +180,7 @@ export default function App() {
           <p>Figures stay in this browser unless you share or print. Refreshing clears the deal.</p>
           <p>Michigan purchase estimates · v{APP_VERSION} · {BUILD_ID}</p>
         </footer>
-        {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}
+        {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { if (!(result.salePrice > 0)) { summaryProps.onStartEstimate(); return; } dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}
       </div>
     </ValidationContext.Provider>
   );
