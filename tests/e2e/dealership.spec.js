@@ -29,8 +29,8 @@ test.describe('dealership header', () => {
     await expect(home.locator('img.brand__logo')).toHaveAttribute('alt', '');
     const name = home.locator('.brand__name');
     await expect(name).toHaveText('Lakeside Motors');
-    // Phones (≤440px) show the logo chip without the name text.
-    if (page.viewportSize().width <= 440) await expect(name).toBeHidden();
+    // Below 600px the header shows the logo chip without the name text.
+    if (page.viewportSize().width < 600) await expect(name).toBeHidden();
     else await expect(name).toBeVisible();
   });
 
@@ -50,13 +50,16 @@ test.describe('dealership header', () => {
     await expect(home.locator('img')).toHaveCount(0);
   });
 
-  for (const width of [375, 360, 320]) {
+  // Phones, then the tablet band up to the 800px breakpoint, where the header keeps
+  // its full-size view toggle and 42px icon buttons beside the brand.
+  for (const width of [375, 360, 320, 441, 470, 600, 768, 800]) {
     for (const [label, value] of [
       ['default wordmark', null],
       ['60-character unbroken name with a logo', { name: 'W'.repeat(60), logo: LOGO }],
+      ['short name with a logo', { name: 'Lakeside Motors', logo: LOGO }],
       ['long name only', { name: 'Superior Chevrolet Buick GMC of Southwest Michigan Lakeshore' }],
     ]) {
-      test(`header fits a ${width}px phone: ${label}`, async ({ page }) => {
+      test(`header fits a ${width}px screen: ${label}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 812 });
         if (value) await seedBrand(page, value);
         await page.goto('/');
@@ -79,6 +82,7 @@ test.describe('dealership header', () => {
             brandPastActions: Math.round(brand.right - actions.left),
             clipped,
             toggleOverflow,
+            iconButtonWidths: [...header.querySelectorAll('.header-actions .reset-button')].map(button => button.getBoundingClientRect().width),
           };
         });
         expect(layout.pageOverflow).toBeLessThanOrEqual(0);
@@ -86,6 +90,11 @@ test.describe('dealership header', () => {
         expect(layout.brandPastActions).toBeLessThanOrEqual(0);
         expect(layout.clipped).toEqual([]);
         expect(layout.toggleOverflow).toBe(false);
+        // Settings and Reset deal keep their set width (42px up to 800px, 38px on phones,
+        // never below 34px); a long brand must not squeeze them.
+        const iconButtonWidth = width > 440 ? 42 : width >= 375 ? 38 : 34;
+        expect(layout.iconButtonWidths).toHaveLength(2);
+        expect(Math.min(...layout.iconButtonWidths)).toBeGreaterThanOrEqual(iconButtonWidth - 0.5);
         // Screen readers keep the full view names at every width.
         await expect(page.getByRole('button', { name: 'Dealer view', exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Customer view', exact: true })).toBeVisible();
