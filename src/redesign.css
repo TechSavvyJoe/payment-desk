@@ -2925,10 +2925,19 @@ input[type="checkbox"] { flex:0 0 auto; }
 .settings-dialog h2 { margin: 0; font-size: 1.2rem; font-weight: 800; color: var(--navy); }
 .settings-dialog__note, .settings-dialog__hint { margin: 0; font-size: 0.8rem; color: var(--muted); }
 .settings-dialog__field { display: grid; gap: 6px; }
-.settings-dialog__field label, .settings-dialog__logo legend { font-weight: 700; color: var(--ink-soft); }
+.settings-dialog__field label, :is(.settings-dialog__logo, .settings-dialog__fees) legend { font-weight: 700; color: var(--ink-soft); }
 .settings-dialog__field label span, .settings-dialog__logo legend span { font-size: 0.78rem; font-weight: 500; color: var(--muted); }
-.settings-dialog__logo { display: grid; gap: 10px; margin: 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); }
-.settings-dialog__logo legend { padding: 0 4px; }
+:is(.settings-dialog__logo, .settings-dialog__fees) { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); }
+:is(.settings-dialog__logo, .settings-dialog__fees) legend { padding: 0 4px; }
+/* Each fee: label and helper on the left, the money input on the right, and any
+   error across the full width below. */
+.settings-dialog__fee { display: grid; grid-template-columns: minmax(0, 1fr) 8rem; column-gap: 12px; row-gap: 2px; align-items: center; }
+.settings-dialog__fee > label { grid-area: 1 / 1; font-weight: 700; color: var(--ink-soft); }
+.settings-dialog__fee > .settings-dialog__hint { grid-area: 2 / 1; align-self: start; }
+.settings-dialog__fee .input-wrapper { display: contents; }
+.settings-dialog__fee .money-input { grid-area: 1 / 2 / 3 / 3; }
+.settings-dialog__fee .field-error { grid-column: 1 / -1; grid-row: 3; margin-top: 4px; }
+.settings-dialog__fees:disabled .money-input { opacity: 0.7; }
 .settings-dialog__preview { display: flex; align-items: center; min-height: 52px; padding: 8px; border-radius: 8px; background: var(--navy); color: #d6ddff; font-size: 0.8rem; }
 .settings-dialog__logo-actions, .settings-dialog__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .settings-dialog__actions { justify-content: space-between; }

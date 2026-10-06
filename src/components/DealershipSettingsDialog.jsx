@@ -1,21 +1,59 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { MAX_DEALERSHIP_NAME_LENGTH } from "../lib/brandSettings.js";
+import { CRV_FEE_MAXIMUM, DOCUMENT_FEE_MAXIMUM, FEE_DEFAULTS } from "../lib/feeSettings.js";
+import { formatCurrency, formatNumber } from "../lib/formatters.js";
 import { LogoError, prepareLogo } from "../lib/logoImage.js";
+import { POLICY_CONFIG } from "../lib/policy.js";
+import { MoneyInput } from "./Fields.jsx";
+import { ValidationContext } from "./ValidationContext.jsx";
 
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.png,.jpg,.jpeg,.webp,.gif,.svg";
-const SAVE_FAILED = "Couldn't save on this device — storage is blocked or full. The dealership will show until this page is closed.";
-const CLEAR_FAILED = "Couldn't remove the saved dealership on this device. It is hidden until this page is closed.";
+const SAVE_FAILED = "Couldn't save on this device — storage is blocked or full. These settings apply until this page is closed.";
+const CLEAR_FAILED = "Couldn't remove the saved settings on this device. Payment Desk and the default fees apply until this page is closed.";
+const FEES_INVALID = "Correct the highlighted fee before saving.";
+const DOCUMENT_FEE_HELP = `Michigan maximum ${formatCurrency(DOCUMENT_FEE_MAXIMUM)}; never more than ${POLICY_CONFIG.documentFeeSalePricePercent}% of the selling price`;
+const CRV_FEE_HELP = "Taxable dealer fee";
+const orBlank = (amount) => amount ?? "";
+const orNull = (amount) => amount === "" || amount === undefined ? null : amount;
 
-/** Edits a draft of the dealership name and logo. Nothing changes until Save. */
-export default function DealershipSettingsDialog({ settings, onSave, onClear, onClose }) {
+function FeeField({ label, helper, max, placeholder, value, onChange }) {
+  const id = useId();
+  const helpId = `${id}-help`;
+  return (
+    <div className="settings-dialog__fee">
+      <label htmlFor={id}>{label}</label>
+      <span className="settings-dialog__hint" id={helpId}>{helper}</span>
+      <MoneyInput aria-describedby={helpId} id={id} max={max} onChange={onChange} placeholder={placeholder} value={value} />
+    </div>
+  );
+}
+
+/** Edits a draft of the dealership name, logo and fees. Nothing changes until Save. */
+export default function DealershipSettingsDialog({ settings, feeSettings, onSave, onClear, onClose }) {
   const dialogRef = useRef(null);
+  const feesRef = useRef(null);
   const titleId = useId();
   const nameId = useId();
+  const feesHintId = useId();
   const [name, setName] = useState(settings.name);
   const [logo, setLogo] = useState(settings.logo);
+  const [documentFee, setDocumentFee] = useState(() => orBlank(feeSettings.documentFee));
+  const [crvFee, setCrvFee] = useState(() => orBlank(feeSettings.crvFee));
+  // Fee errors stay inside the dialog; the worksheet's validation banner never sees them.
+  const [feeErrors, setFeeErrors] = useState({});
+  const [feeFieldsKey, setFeeFieldsKey] = useState(0);
   const [notice, setNotice] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [finished, setFinished] = useState(false);
+  const reportFeeError = useCallback((id, error) => setFeeErrors((current) => {
+    if ((current[id] ?? null) === error) return current;
+    const next = { ...current };
+    if (error) next[id] = error; else delete next[id];
+    return next;
+  }), []);
+  const hasFeeErrors = Object.keys(feeErrors).length > 0;
+  // The save warning goes away once the fees are corrected.
+  const shownNotice = notice?.text === FEES_INVALID && !hasFeeErrors ? null : notice;
 
   // Mounted only while open; the native modal supplies focus containment and Escape.
   useEffect(() => {
@@ -44,18 +82,27 @@ export default function DealershipSettingsDialog({ settings, onSave, onClear, on
   const save = (event) => {
     event.preventDefault();
     if (processing) return;
-    const outcome = onSave({ name, logo });
+    if (hasFeeErrors) {
+      [...(feesRef.current?.querySelectorAll("input") ?? [])].find((input) => feeErrors[input.id])?.focus();
+      setNotice({ tone: "error", text: FEES_INVALID });
+      return;
+    }
+    const outcome = onSave({ name, logo }, { documentFee: orNull(documentFee), crvFee: orNull(crvFee) });
     if (outcome.ok) { close(); return; }
     setFinished(true);
     setNotice({ tone: "error", text: SAVE_FAILED });
   };
 
   const clear = () => {
-    if (!window.confirm("Clear the dealership name and logo on this device?")) return;
+    if (!window.confirm("Clear the dealership name, logo, and fees on this device? Fees return to the defaults.")) return;
     const outcome = onClear();
     if (outcome.ok) { close(); return; }
     setName("");
     setLogo(null);
+    setDocumentFee("");
+    setCrvFee("");
+    // Remounting the fee fields drops any half-typed or invalid draft.
+    setFeeFieldsKey((key) => key + 1);
     setFinished(true);
     setNotice({ tone: "error", text: CLEAR_FAILED });
   };
@@ -91,7 +138,17 @@ export default function DealershipSettingsDialog({ settings, onSave, onClear, on
           </div>
           <p className="settings-dialog__hint">PNG, JPG, WebP, GIF, or SVG up to 10 MB. Large logos are resized to fit 600 × 200 pixels.</p>
         </fieldset>
-        <p aria-live="polite" className={"settings-dialog__notice" + (notice?.tone === "error" ? " is-error" : "")} role="status">{notice?.text ?? ""}</p>
+        <ValidationContext.Provider value={reportFeeError}>
+          <fieldset aria-describedby={feesHintId} className="settings-dialog__fees" disabled={finished} key={feeFieldsKey} ref={feesRef}>
+            <legend>Fees</legend>
+            <FeeField helper={DOCUMENT_FEE_HELP} label="Document fee" max={DOCUMENT_FEE_MAXIMUM} onChange={setDocumentFee}
+              placeholder={formatNumber(FEE_DEFAULTS.documentFee)} value={documentFee} />
+            <FeeField helper={CRV_FEE_HELP} label="CRV dealer fee" max={CRV_FEE_MAXIMUM} onChange={setCrvFee}
+              placeholder={formatNumber(FEE_DEFAULTS.crvFee)} value={crvFee} />
+            <p className="settings-dialog__hint" id={feesHintId}>Leave a fee blank to use the default shown.</p>
+          </fieldset>
+        </ValidationContext.Provider>
+        <p aria-live="polite" className={"settings-dialog__notice" + (shownNotice?.tone === "error" ? " is-error" : "")} role="status">{shownNotice?.text ?? ""}</p>
         <div className="settings-dialog__actions">
           {!finished ? <button className="settings-dialog__button settings-dialog__button--danger" disabled={processing} onClick={clear} type="button">Clear dealership settings</button> : null}
           <span>

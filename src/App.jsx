@@ -3,6 +3,7 @@ import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
 import { clearBrandSettings, loadBrandSettings, resolveBrand, saveBrandSettings } from './lib/brandSettings.js';
+import { clearFeeSettings, loadFeeSettings, resolveFees, saveFeeSettings } from './lib/feeSettings.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
@@ -27,14 +28,31 @@ const focusDestination = id => requestAnimationFrame(() => {
 
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
-  const { deal: dealInput, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
+  const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
   const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
   const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
+  // The dealership's fees live beside the deal, never in it, so Reset deal and
+  // hasDealEdits ignore them. Every calculation reads them from this one dealInput.
+  const [feeSettings, setFeeSettings] = useState(loadFeeSettings);
+  const dealershipFees = useMemo(() => resolveFees(feeSettings), [feeSettings]);
+  const dealInput = useMemo(() => ({ ...deal, dealershipFees }), [deal, dealershipFees]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef(null);
   // Even when the browser refuses to store them, the settings apply for this visit.
-  const saveBrand = next => { const outcome = saveBrandSettings(next); setBrandSettings(outcome.settings); return outcome; };
-  const clearBrand = () => { const outcome = clearBrandSettings(); setBrandSettings(outcome.settings); return outcome; };
+  const saveSettings = (nextBrand, nextFees) => {
+    const brandOutcome = saveBrandSettings(nextBrand);
+    const feeOutcome = saveFeeSettings(nextFees);
+    setBrandSettings(brandOutcome.settings);
+    setFeeSettings(feeOutcome.settings);
+    return { ok: brandOutcome.ok && feeOutcome.ok };
+  };
+  const clearSettings = () => {
+    const brandOutcome = clearBrandSettings();
+    const feeOutcome = clearFeeSettings();
+    setBrandSettings(brandOutcome.settings);
+    setFeeSettings(feeOutcome.settings);
+    return { ok: brandOutcome.ok && feeOutcome.ok };
+  };
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState('payment');
   const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
@@ -51,8 +69,8 @@ export default function App() {
   }), []);
   const calculation = useMemo(() => {
     try { return { result: calculateDeal(dealInput), error: null }; }
-    catch { return { result: calculateDeal(createDeskState().deal), error: 'These figures exceed the supported calculation range. Reduce the amounts before continuing.' }; }
-  }, [dealInput]);
+    catch { return { result: calculateDeal({ ...createDeskState().deal, dealershipFees }), error: 'These figures exceed the supported calculation range. Reduce the amounts before continuing.' }; }
+  }, [dealInput, dealershipFees]);
   const result = calculation.result;
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
@@ -138,7 +156,7 @@ export default function App() {
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
-        {settingsOpen ? <DealershipSettingsDialog settings={brandSettings} onClear={clearBrand} onClose={closeSettings} onSave={saveBrand} /> : null}
+        {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}

@@ -75,3 +75,16 @@ test('reset and navigation protection cover trade-only, rate and grid edits', ()
   const other = deskReducer(state, { type: 'add-item', preset: { category: 'other', amount: 1000 } });
   assert.equal(other.deal.optionalItems[0].taxTreatmentConfirmed, false);
 });
+
+test('money drafts can carry a lower ceiling with a dollar-range message', () => {
+  assert.deepEqual(parseFinancialInput('280', { max: 280 }), { value: 280 });
+  assert.deepEqual(parseFinancialInput('$199.50', { max: 280 }), { value: 199.5 });
+  assert.deepEqual(parseFinancialInput('0', { max: 280 }), { value: 0 });
+  assert.deepEqual(parseFinancialInput('', { max: 280 }), { value: '' });
+  assert.deepEqual(parseFinancialInput('280.01', { max: 280 }), { error: 'Enter an amount from $0 to $280.00.' });
+  assert.deepEqual(parseFinancialInput('1,000', { max: 999.99 }), { error: 'Enter an amount from $0 to $999.99.' });
+  assert.match(parseFinancialInput('-5', { max: 280 }).error, /negative amounts are not supported/);
+  assert.match(parseFinancialInput('12.345', { max: 280 }).error, /two decimal places/);
+  // Without a ceiling the general money message is unchanged.
+  assert.deepEqual(parseFinancialInput('1000001'), { error: 'Enter a value from 0 to 1,000,000.' });
+});
