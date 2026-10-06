@@ -52,6 +52,9 @@ test.describe('dealership header', () => {
 
   // Phones, then the tablet band up to the 800px breakpoint, where the header keeps
   // its full-size view toggle and 42px icon buttons beside the brand.
+  // The default wordmark has about 5px to spare at 375px and 441px in IBM Plex Sans
+  // and overflows in the fallback font, so these checks only hold once the font loads.
+  const FONT_DELAY_MS = 500;
   for (const width of [375, 360, 320, 441, 470, 600, 768, 800]) {
     for (const [label, value] of [
       ['default wordmark', null],
@@ -61,30 +64,53 @@ test.describe('dealership header', () => {
     ]) {
       test(`header fits a ${width}px screen: ${label}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 812 });
+        // Hold the web font back so the layout is always measured after IBM Plex Sans
+        // swaps in, never against the wider fallback font a slow network shows first.
+        await page.route('**/*.woff2', async route => {
+          await new Promise(resolve => setTimeout(resolve, FONT_DELAY_MS));
+          await route.continue();
+        });
         if (value) await seedBrand(page, value);
         await page.goto('/');
         await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+        expect(await page.evaluate(() => document.fonts.check('800 16px "IBM Plex Sans"', 'PAYMENT DESK'))).toBe(true);
         const layout = await page.evaluate(() => {
           const header = document.querySelector('.app-header');
           const brandNode = header.querySelector('.brand');
           const brand = brandNode.getBoundingClientRect();
           const actions = header.querySelector('.header-actions').getBoundingClientRect();
+          const label = node => node.className || node.tagName;
+          const shown = node => {
+            const box = node.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && node.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+          };
+          const parts = [...brandNode.querySelectorAll(':scope > strong, .brand__chip, .brand__logo, .brand__name, .brand__credit')];
           // The wordmark, logo chip and credit must sit wholly inside the brand box;
           // a long name may only shorten itself with its own ellipsis.
-          const clipped = [...brandNode.querySelectorAll(':scope > strong, .brand__chip, .brand__credit')]
-            .filter(node => node.getBoundingClientRect().width > 0)
+          const clipped = parts
+            .filter(node => !node.matches('.brand__logo, .brand__name') && shown(node))
             .filter(node => node.getBoundingClientRect().right > brand.right + 0.5 || node.scrollWidth > node.clientWidth + 1)
-            .map(node => node.className || node.tagName);
+            .map(label);
           const toggleOverflow = [...header.querySelectorAll('.view-toggle button')].some(button => button.scrollWidth > button.clientWidth + 1);
           return {
             pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
             headerOverflow: header.scrollWidth - header.clientWidth,
             brandPastActions: Math.round(brand.right - actions.left),
+            visibleParts: parts.filter(shown).map(label),
             clipped,
             toggleOverflow,
             iconButtonWidths: [...header.querySelectorAll('.header-actions .reset-button')].map(button => button.getBoundingClientRect().width),
           };
         });
+        // Fitting must never come from hiding part of the lockup: the wordmark, or the
+        // logo chip and credit, always show. Below 600px a logo stands in for the name.
+        const expectedParts = !value ? ['STRONG'] : [
+          ...(value.logo ? ['brand__chip', 'brand__logo'] : []),
+          ...(value.name && (!value.logo || width >= 600) ? ['brand__name'] : []),
+          'brand__credit',
+        ];
+        expect(layout.visibleParts).toEqual(expectedParts);
         expect(layout.pageOverflow).toBeLessThanOrEqual(0);
         expect(layout.headerOverflow).toBeLessThanOrEqual(0);
         expect(layout.brandPastActions).toBeLessThanOrEqual(0);
@@ -338,7 +364,17 @@ test.describe('dealership settings dialog', () => {
   test('an SVG with an empty MIME type is accepted through the file-extension fallback', async ({ page }) => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" viewBox="0 0 300 100"><rect width="300" height="100" fill="#c8102e"/></svg>';
     const dialog = await openSettings(page);
-    await dialog.getByLabel('Choose logo').setInputFiles({ name: 'dealer.svg', mimeType: '', buffer: Buffer.from(svg) });
+    const input = dialog.getByLabel('Choose logo');
+    // setInputFiles fills in a MIME type from the file name, so build a truly untyped
+    // File in the page. Read its type before the change handler empties the input.
+    const type = await input.evaluate((element, markup) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([markup], 'dealer.svg'));
+      element.files = transfer.files;
+      return element.files[0].type;
+    }, svg);
+    expect(type).toBe('');
+    await input.dispatchEvent('change');
     await expect(dialog.getByRole('img', { name: 'Logo preview' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
