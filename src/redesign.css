@@ -2390,7 +2390,7 @@ input[type="checkbox"] { flex:0 0 auto; }
 .proposal-brand { font-weight:800; color:var(--navy); overflow-wrap:anywhere; }
 .proposal-logo { display:block; max-width:240px; max-height:56px; margin:0 0 8px; object-fit:contain; }
 .proposal-vehicle { font-weight:600; }
-.proposal-meta { font-size:.76rem; color:var(--muted); }
+.proposal-meta { font-size:.76rem; color:var(--muted); overflow-wrap:anywhere; }
 .proposal-qualification { font-size:.8rem; line-height:1.5; }
 .proposal-qualification h2 { margin:0 0 8px; font-size:.9rem; color:var(--navy); text-transform:uppercase; font-weight:800; }
 .proposal-qualification p { margin:6px 0; }

@@ -278,6 +278,30 @@ test.describe('dealership on customer estimates', () => {
     await expect(img).toHaveAttribute('src', LOGO);
   });
 
+  test('a 60-character unbroken name stays inside the estimate footer without sideways scrolling', async ({ page }) => {
+    await seedBrand(page, { name: 'W'.repeat(60) });
+    const footerFit = () => page.evaluate(() => {
+      const card = document.querySelector('.proposal-qualification').getBoundingClientRect();
+      const meta = document.querySelector('.proposal-qualification .proposal-meta');
+      const box = meta.getBoundingClientRect();
+      return {
+        pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        metaInsideCard: box.left >= card.left - 0.5 && box.right <= card.right + 0.5,
+        metaOverflow: meta.scrollWidth - meta.clientWidth,
+      };
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openEstimate(page);
+    await expect(page.locator('.proposal-qualification .proposal-meta')).toContainText(`${'W'.repeat(60)} · PD-`);
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const fit = await footerFit();
+      expect(fit.pageOverflow, `${width}px page overflow`).toBeLessThanOrEqual(0);
+      expect(fit.metaInsideCard, `${width}px footer meta inside its card`).toBe(true);
+      expect(fit.metaOverflow, `${width}px footer meta overflow`).toBeLessThanOrEqual(1);
+    }
+  });
+
   test('a 60-character unbroken name wraps inside the printed masthead', async ({ page }) => {
     await seedBrand(page, { name: 'W'.repeat(60), logo: LOGO });
     await openEstimate(page);
