@@ -1,6 +1,7 @@
 import { calculatePayment, fromCents, toCents } from "./calculations.js";
 import { formatCurrency, formatNumber, formatShortDate } from "./formatters.js";
 import { resolveBrand } from "./brandSettings.js";
+import { POLICY_CONFIG } from "./policy.js";
 
 export const ESTIMATE_QUALIFICATION = "Estimate only, not a financing approval or contract. Actual payments, taxes, fees, product eligibility, and final figures must be confirmed with the lender and the dealership's approved systems.";
 
@@ -131,10 +132,14 @@ export function createProposalSnapshot({ dealInput = {}, result, createdAt = new
     reviewedAt: policy.reviewedAt,
     dealDate: policy.dealDate,
   } : { jurisdiction: "Michigan", dealDate: result.dealDate ?? "Not specified" };
+  // The amounts actually charged on this deal, after the legal caps.
+  const fee = (key) => fromCents(result.cents?.fees?.[key] ?? toCents(result.fees?.[key] ?? 0));
+  const feeRules = result.policy ?? POLICY_CONFIG;
   const assumptions = [
     `${rule.jurisdiction ?? "Michigan"} purchase estimate; sales tax ${formatNumber(result.salesTaxRate * 100)}%.`,
     `Trade allowance deducted from taxable price: ${money(result.tradeTaxDeduction)}; sales tax saved: ${money(result.tradeTaxSavings)}. ${rule.year ?? result.policy?.year ?? 'Applicable'} trade deduction limit: ${result.tradeTaxCreditCap === null ? 'no cap' : money(result.tradeTaxCreditCap)}.`,
-    "Product tax treatment and CRV dealer fee must be confirmed for this transaction.",
+    `Document fee ${money(fee("documentFee"))} (dealership setting; never more than ${formatCurrency(feeRules.documentFeeMaximum)} or ${feeRules.documentFeeSalePricePercent}% of the selling price) and CRV dealer fee ${money(fee("crvFee"))} are set by the dealership.`,
+    "Product tax treatment must be confirmed for this transaction.",
   ];
   if (rule.version) assumptions.push(`Rules ${rule.version}; effective ${formatShortDate(rule.effectiveFrom)} through ${formatShortDate(rule.effectiveTo)}; reviewed ${formatShortDate(rule.reviewedAt)}.`);
   if (rule.dealDate) assumptions.push(`Deal date: ${rule.dealDate === "Not specified" ? rule.dealDate : formatShortDate(rule.dealDate)}.`);
