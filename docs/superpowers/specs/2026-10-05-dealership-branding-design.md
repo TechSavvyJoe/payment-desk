@@ -43,7 +43,13 @@ Syncing across devices, per-salesperson profiles, a site-wide built-in default, 
 | Browser tab, install manifest | "Payment Desk" | Unchanged |
 
 - **Reset deal** and the error-boundary reset never clear dealership settings.
-- Narrow phones (≤440px): measured at 375px, the header leaves about 90px for the brand once the gear button is added. Header gaps tighten and the two header buttons become 38px wide. With a logo, the phone header shows the logo chip with the credit beneath it and hides the name text (the name stays in the link's accessible name). Without a logo, the name truncates with an ellipsis above the credit. The default wordmark shrinks slightly so it still fits. The header must not overflow horizontally at 375px.
+- Header widths (as shipped). At every width the view toggle and header buttons keep their size; the brand takes the width they leave and never overflows the header.
+  - **801px and wider:** the toggle, Settings and Reset deal carry text labels, each on one line, and take 534px in Dealer view, which leaves the brand about 200px at 801px. A long name truncates with an ellipsis first; the text column never gets narrower than the PAYMENT DESK credit, so after that a logo chip narrows and its logo scales down.
+  - **441–800px:** full-size toggle and 42px icon-only buttons; a slightly smaller chip (34px) and name.
+  - **Compact lockup, ≤599px:** header gaps tighten and the default wordmark shrinks slightly. With a logo, the header shows the logo chip with the credit beneath it and hides the name text (the name stays in the link's accessible name). Without a logo, the name truncates with an ellipsis above the credit. The chip never outgrows the brand box; a wide logo scales down inside it.
+  - **Phones, ≤440px:** measured at 375px, the header leaves about 90px for the brand once the gear button is added. The two header buttons become 38px wide, and the dialog's logo preview matches the compact header chip (above 440px it uses the desktop chip size).
+  - **≤374px:** the toggle shows short labels (Dealer / Customer, full names kept for screen readers), the buttons narrow to 34px, and the wordmark and credit may wrap rather than clip.
+  - *2026-10-06 note:* the compact lockup originally applied only to narrow phones (≤440px). Measurement then showed that from 441px to 599px the full-size toggle and 42px buttons (306px) leave the brand 97–233px, too little for the 117px wordmark or for a logo chip beside the 92px credit, so the band was widened to ≤599px. The same measurements showed the desktop toggle and Reset deal labels wrapping from 801px to about 1050px, so the rule that keeps the actions at full size now applies at every width.
 - Accessibility: when the name is visible beside the logo, the logo `alt` is empty (decorative); with a logo only, `alt="Dealership logo"`. The header home link's accessible name becomes "<Dealership> Payment Desk home" when a name is set.
 
 ## Data and processing
