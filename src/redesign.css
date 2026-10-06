@@ -2967,3 +2967,24 @@ input[type="checkbox"] { flex:0 0 auto; }
   .mobile-results .estimate-details-toggle:hover { background: rgb(255 255 255 / 12%); }
   .mobile-results .estimate-details[hidden] { display: none; }
 }
+
+/* Compact phones (html.compact-height, set in main.jsx when the browser leaves 800px or less of
+   visible height at load): tighten the header, payment card, Deal details and section rows, and
+   drop the shortcut row, so the trade fields sit about 136px higher. Primary controls (the view
+   toggle, header buttons, Details and Review customer estimate) keep their 44px tap height.
+   Never re-evaluated after load, so the keyboard cannot re-flow the page. */
+@media (max-width: 800px) {
+  .compact-height .app-header { padding-block: 5px; }
+  .compact-height .mobile-results { margin-bottom: 8px; }
+  .compact-height .mobile-results .results-payment { padding-block: 8px; }
+  .compact-height .mobile-results .payment-number { min-height: 34px; margin: 0; }
+  .compact-height .mobile-results .payment-number strong { font-size: 30px; }
+  .compact-height .quick-jump-nav { display: none; }
+  .compact-height .deal-details { margin-bottom: 8px; }
+  .compact-height .deal-details > summary { min-height: 40px; padding-block: 6px; }
+  .compact-height .deal-section__header { min-height: 42px; padding-block: 4px; }
+  .compact-height .field-row { min-height: 52px; padding-block: 4px; }
+  .compact-height .dealer-workspace,
+  .compact-height .deal-grid,
+  .compact-height .deal-column { gap: 8px; }
+}

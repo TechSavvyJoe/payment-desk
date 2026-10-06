@@ -19,6 +19,13 @@ function Root() {
   );
 }
 
+// Compact phone layout, decided once from the height the browser actually leaves visible at load
+// (after its address bar and toolbars). The regular layout needs about 804px to show Trade allowance
+// above the bottom bar, so 800px or less goes compact: iPhones and most Androids inside a browser.
+// It is never re-evaluated, so an on-screen keyboard or a collapsing toolbar cannot re-flow the page
+// while someone types. The CSS only applies it at widths of 800px or less. (CSP forbids inline scripts.)
+if (window.innerHeight <= 800) document.documentElement.classList.add('compact-height');
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <Root />
