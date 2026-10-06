@@ -110,3 +110,38 @@ test('on a phone the reminder keeps Selling price in the top half of the opening
   const bottom = await price(page).evaluate(element => element.getBoundingClientRect().bottom + window.scrollY);
   expect(bottom).toBeLessThanOrEqual(844 * 0.45);
 });
+
+// In December the reminder moves the phone worksheet down by its own height and no more:
+// Selling price and Cash down stay on the first screen; on compact phones Trade allowance
+// becomes a short scroll away.
+for (const [label, width, height] of [['iPhone 14 in Safari', 390, 664], ['Galaxy S23 in Chrome', 360, 668], ['regular phone', 390, 844]]) {
+  test(`${label} (${width}x${height}): the reminder moves the worksheet by its own height only`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+    await page.setViewportSize({ width, height });
+    const measure = async isoDate => {
+      await openOn(page, isoDate);
+      await price(page).fill('30000');
+      await price(page).press('Tab');
+      await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
+      await page.evaluate(() => window.scrollTo(0, 0));
+      return page.evaluate(() => {
+        const bottom = selector => document.querySelector(selector).getBoundingClientRect().bottom + window.scrollY;
+        return {
+          price: bottom('#sale-price'),
+          cash: bottom('#cash-down'),
+          trade: bottom('#trade-allowance'),
+          bar: document.querySelector('.mobile-nav').getBoundingClientRect().top,
+          reminder: document.querySelector('.policy-reminder')?.getBoundingClientRect().height ?? 0,
+        };
+      });
+    };
+    const before = await measure('2026-11-30');
+    const during = await measure('2026-12-01');
+    expect(before.reminder).toBe(0);
+    expect(during.reminder).toBeGreaterThan(0);
+    expect(during.reminder).toBeLessThanOrEqual(48);
+    expect(during.trade - before.trade).toBeCloseTo(during.reminder, 0);
+    expect(during.price).toBeLessThanOrEqual(during.bar);
+    expect(during.cash).toBeLessThanOrEqual(during.bar);
+  });
+}

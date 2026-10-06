@@ -1,4 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
+
+// A fixed September date: from December 1 the rules-review reminder sits under the header and
+// moves the worksheet down by its own height (policy-reminder.spec.js measures that case).
+const REFERENCE_TIME = new Date('2026-09-24T16:00:00Z');
+const test = base.extend({
+  page: async ({ page }, use) => {
+    await page.clock.setFixedTime(REFERENCE_TIME);
+    await use(page);
+  },
+});
 
 // Position within the whole page, so the checks don't depend on the current scroll.
 const pageBox = locator => locator.evaluate(element => {
@@ -201,6 +211,7 @@ test('a tall phone screen with a short browser viewport goes compact', async ({ 
   const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 664 }, screen: { width: 390, height: 844 } });
   try {
     const page = await context.newPage();
+    await page.clock.setFixedTime(REFERENCE_TIME);
     await page.goto('/');
     expect(await page.evaluate(() => [window.screen.height, window.innerHeight])).toEqual([844, 664]);
     await expect(page.locator('html')).toHaveClass(/compact-height/);
