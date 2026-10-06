@@ -50,7 +50,7 @@ test.describe('dealership header', () => {
     await expect(home.locator('img')).toHaveCount(0);
   });
 
-  for (const width of [375, 320]) {
+  for (const width of [375, 360, 320]) {
     for (const [label, value] of [
       ['default wordmark', null],
       ['60-character unbroken name with a logo', { name: 'W'.repeat(60), logo: LOGO }],

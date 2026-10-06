@@ -2847,11 +2847,18 @@ input[type="checkbox"] { flex:0 0 auto; }
 
 .segmented__short { display: none; }
 
-/* Below 360px the full toggle labels, both header buttons and the brand cannot share
-   one row, so the toggle shows short labels (full names stay for screen readers),
-   the header buttons narrow, and the wordmark, logo and credit fit the remaining box. */
-@media (max-width: 359px) {
-  .view-toggle button { padding-inline: 6px; }
+/* The label spans only inherit the button's color. Under the global reduced-motion
+   rule every element gets a 0.01ms transition, and WebKit can still report a span's
+   previous (selected, navy) color right after the view changes, so these spans never
+   transition on their own. */
+.segmented__full,
+.segmented__short { transition-property: none; }
+
+/* Below 375px the full toggle labels, both header buttons and the brand cannot share
+   one row (the nowrap wordmark needs ~90px; at 360px the brand box is only 78px), so
+   the toggle shows short labels (full names stay for screen readers), the header
+   buttons narrow, and the wordmark, logo and credit fit the remaining box. */
+@media (max-width: 374px) {
   .segmented__full {
     position: absolute;
     width: 1px;
