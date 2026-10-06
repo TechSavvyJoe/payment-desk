@@ -179,6 +179,42 @@ test.describe('short phone worksheet (412x732)', () => {
   });
 });
 
+// Current Android flagships (Galaxy S22-S24, many Moto G) report 360x780; many others 360x800. The
+// regular layout leaves Trade allowance under the bottom bar there, so compact mode covers screens up
+// to and including 800px on the long side.
+for (const [width, height] of [[360, 780], [360, 800]]) {
+  test.describe(`short Android worksheet (${width}x${height})`, () => {
+    test.use({ viewport: { width, height }, screen: { width, height } });
+    test('compact mode is on and Trade allowance sits fully above the bottom bar after a price', async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+      await page.goto('/');
+      await enterPrice(page);
+      await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      const { tradeBottom, barTop } = await tradeAndBar(page);
+      expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
+      await expect(page.locator('html')).toHaveClass(/compact-height/);
+      await expect(page.locator('.quick-jump-nav')).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    });
+  });
+}
+
+// Just above the cutoff the regular layout already fits, so it keeps the shortcut row.
+test.describe('regular phone worksheet (375x812)', () => {
+  test.use({ viewport: { width: 375, height: 812 }, screen: { width: 375, height: 812 } });
+  test('compact mode stays off and Trade allowance still sits above the bottom bar', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
+    await page.goto('/');
+    await enterPrice(page);
+    await expect(page.locator('.mobile-results .payment-number strong')).toHaveText('$540.67');
+    await expect(page.locator('html')).not.toHaveClass(/compact-height/);
+    await expect(page.locator('.quick-jump-nav')).toBeVisible();
+    const { tradeBottom, barTop } = await tradeAndBar(page);
+    expect(tradeBottom).toBeLessThanOrEqual(barTop - 6);
+  });
+});
+
 test.describe('keyboard-shrunk viewport on a regular phone screen', () => {
   test('compact mode stays off and the shortcut row stays', async ({ browser, baseURL }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile', 'Phone layout only.');
