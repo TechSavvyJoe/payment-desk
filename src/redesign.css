@@ -2390,7 +2390,7 @@ input[type="checkbox"] { flex:0 0 auto; }
 .proposal-brand { font-weight:800; color:var(--navy); overflow-wrap:anywhere; }
 .proposal-logo { display:block; max-width:240px; max-height:56px; margin:0 0 8px; object-fit:contain; }
 .proposal-vehicle { font-weight:600; }
-.proposal-meta { font-size:.76rem; color:var(--muted); }
+.proposal-meta { font-size:.76rem; color:var(--muted); overflow-wrap:anywhere; }
 .proposal-qualification { font-size:.8rem; line-height:1.5; }
 .proposal-qualification h2 { margin:0 0 8px; font-size:.9rem; color:var(--navy); text-transform:uppercase; font-weight:800; }
 .proposal-qualification p { margin:6px 0; }
@@ -2821,28 +2821,58 @@ input[type="checkbox"] { flex:0 0 auto; }
  .calendar-month select { appearance:none; padding-right:20px; background-image:linear-gradient(45deg,transparent 50%,var(--navy) 50%),linear-gradient(135deg,var(--navy) 50%,transparent 50%); background-position:calc(100% - 12px) 50%,calc(100% - 8px) 50%; background-size:4px 4px; background-repeat:no-repeat; }
 }
 
-/* Dealership lockup on tablets and phones. */
+/* Dealership lockup. At every width the view toggle and header buttons keep their
+   size and one-line labels; the brand shrinks into the width they leave. */
+.header-actions { flex: 0 0 auto; }
+.brand { min-width: 0; overflow: hidden; }
+
+/* From 801px the labelled toggle and buttons take 534px in Dealer view, so at 801px
+   the brand has about 200px: less than a logo chip (up to 166px) beside the 92px
+   credit. The logo lockup is a grid, and the name and credit size its text column
+   through a subgrid: the clipped name adds no minimum, so the column is never
+   narrower than the credit's own width. A long name ellipsizes first; only then
+   does the chip narrow, its logo scaling down inside it. */
+@media (min-width: 801px) {
+  .brand--has-logo { display: grid; grid-template-columns: minmax(0, max-content) minmax(auto, 1fr); }
+  .brand--has-logo .brand__logo { min-width: 0; }
+  .brand--has-logo .brand__text { display: grid; grid-template-columns: subgrid; }
+}
+
+/* Tablets. The chip sizes here and below apply to the header only; the settings
+   dialog keeps the desktop preview until phone widths. */
 @media (max-width: 800px) {
-  .brand__chip { height: 34px; padding: 3px 6px; }
-  .brand__logo { max-width: 120px; max-height: 26px; }
+  .app-header .brand__chip { height: 34px; padding: 3px 6px; }
+  .app-header .brand__logo { max-width: 120px; max-height: 26px; }
   .brand .brand__name { max-width: 200px; font-size: 0.9rem; }
 }
 
-/* At 375px the header leaves about 90px for the brand beside the view toggle and
-   two header buttons, so tighten spacing and show the logo chip without the name. */
-@media (max-width: 440px) {
+/* From 441px the full-size toggle and 42px buttons (306px) leave the brand 97–233px
+   below 578px: too little for the 117px wordmark or for a logo chip (up to 132px)
+   beside the 92px credit. Below 600px, as on phones (about 90px at 375px), tighten
+   spacing, shrink the wordmark, and show the logo chip above the credit without the name. */
+@media (max-width: 599px) {
   .app-header { gap: 8px; }
-  .header-actions { gap: 4px; flex: 0 0 auto; }
-  .header-actions .reset-button { width: 38px; }
-  .brand { min-width: 0; overflow: hidden; }
-  .brand > strong { font-size: 0.72rem; letter-spacing: 0.03em; }
+  /* With IBM Plex the wordmark fits on one line; a wider fallback font (slow or
+     failed font request) wraps it onto two lines instead of being clipped. */
+  .brand > strong { font-size: 0.72rem; letter-spacing: 0.02em; white-space: normal; line-height: 1.05; }
   .brand--custom { flex-direction: column; align-items: flex-start; gap: 2px; }
   .brand__text { max-width: 100%; }
-  .brand__chip { height: 26px; padding: 3px 5px; border-radius: 5px; }
-  .brand__logo { max-width: 90px; max-height: 20px; }
+  /* The chip never outgrows the brand box (a 6:1 logo's 100px chip is wider than it
+     from 375px to 381px); a wide logo scales down inside the chip instead. */
+  .app-header .brand__chip { max-width: 100%; height: 26px; padding: 3px 5px; border-radius: 5px; }
+  .app-header .brand__logo { min-width: 0; max-width: 90px; max-height: 20px; }
   .brand .brand__name { max-width: 100%; font-size: 0.72rem; }
   .brand--has-logo .brand__name { display: none; }
   .brand__credit { font-size: 0.5rem; letter-spacing: 0.14em; }
+}
+
+/* Phones also narrow the header buttons and their gaps, and the dialog's logo
+   preview matches the compact header chip. */
+@media (max-width: 440px) {
+  .header-actions { gap: 4px; }
+  .header-actions .reset-button { width: 38px; }
+  .settings-dialog__preview .brand__chip { height: 26px; padding: 3px 5px; border-radius: 5px; }
+  .settings-dialog__preview .brand__logo { max-width: 90px; max-height: 20px; }
 }
 
 .segmented__short { display: none; }
@@ -2873,8 +2903,8 @@ input[type="checkbox"] { flex:0 0 auto; }
   .segmented__short { display: inline; }
   .header-actions .reset-button { width: 34px; }
   .app-header .brand > strong { white-space: normal; line-height: 1.05; font-size: 0.68rem; }
-  .brand__chip { max-width: 100%; }
-  .brand__logo { max-width: 100%; }
+  :is(.app-header, .settings-dialog__preview) .brand__chip { max-width: 100%; }
+  :is(.app-header, .settings-dialog__preview) .brand__logo { max-width: 100%; }
   .brand__credit { white-space: normal; line-height: 1.1; letter-spacing: 0.1em; }
 }
 

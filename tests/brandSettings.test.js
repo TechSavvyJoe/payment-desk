@@ -91,3 +91,16 @@ test("resolveBrand falls back to Payment Desk and marks any saved name or logo a
   assert.deepEqual(resolveBrand({ logo: LOGO }), { dealershipName: "", logo: LOGO, isCustom: true, displayName: "Payment Desk" });
   assert.deepEqual(resolveBrand({ name: "   ", logo: "javascript:alert(1)" }), { dealershipName: "", logo: null, isCustom: false, displayName: "Payment Desk" });
 });
+
+test("a PNG logo of exactly the maximum length is kept and one character more is rejected", () => {
+  const prefix = "data:image/png;base64,";
+  const exact = prefix + "A".repeat(MAX_LOGO_DATA_URL_LENGTH - prefix.length);
+  assert.equal(exact.length, MAX_LOGO_DATA_URL_LENGTH);
+  assert.equal(normalizeBrandSettings({ logo: exact }).logo, exact);
+  assert.equal(normalizeBrandSettings({ logo: exact + "A" }).logo, null);
+});
+
+test("a stored record with a bad logo keeps the name and drops the logo", () => {
+  const storage = memoryStorage({ [BRAND_STORAGE_KEY]: JSON.stringify({ name: "Lakeside", logo: "javascript:alert(1)" }) });
+  assert.deepEqual(loadBrandSettings(storage), { name: "Lakeside", logo: null });
+});
