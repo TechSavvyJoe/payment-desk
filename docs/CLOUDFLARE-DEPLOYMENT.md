@@ -6,7 +6,22 @@ Published to Cloudflare Pages on September 24, 2026. The selected address **http
 
 The production service is `https://desking.mysoldlog.com/`, hosted by the existing Cloudflare Pages project `mysoldlog-desking`. This is a Direct Upload project: merging GitHub `main` updates GitHub Pages through its workflow, but does not update Cloudflare. For every release, build the reviewed commit and upload only `dist` to the existing project with production branch label `main` and the full source commit in deployment metadata. Verify the custom-domain build identifier against that source after publishing.
 
-The latest exact release commit, successful CI runs, and Cloudflare deployment URL are recorded in [pull request #10](https://github.com/TechSavvyJoe/payment-desk/pull/10) and Cloudflare deployment metadata. The launch identifiers below are historical and must not be treated as the latest release.
+Each release's source commit, CI runs and Cloudflare deployment are recorded in its pull request and in the Cloudflare deployment's source-commit metadata. Example: [pull request #15](https://github.com/TechSavvyJoe/payment-desk/pull/15) was squash-merged as `main` commit `1961d1d`, published on October 6, 2026 as deployment `797afc4a` (`https://797afc4a.mysoldlog-desking.pages.dev`), and served at the custom domain with build `1961d1de`. The launch identifiers below are historical.
+
+## Release procedure
+
+After the release pull request passes CI and is merged, build `main` from a clean checkout so the build ID is the exact commit (a dirty tree produces `<sha>-modified`), then upload only `dist`:
+
+```bash
+git fetch origin
+git worktree add --detach /tmp/payment-desk-release origin/main
+cd /tmp/payment-desk-release
+npm ci
+npm run build
+wrangler pages deploy dist --project-name mysoldlog-desking --branch main --commit-hash "$(git rev-parse HEAD)" --commit-message "$(git log -1 --format=%s)" --commit-dirty=false
+```
+
+`wrangler login` must have granted the Pages scope; without it the API answers `Authentication error [code: 10000]`. To verify, fetch `https://desking.mysoldlog.com/`, open the `assets/index-*.js` file it references, and confirm it contains the first eight characters of the released commit and matches the local `dist` bundle byte for byte. Then remove the worktree (`git worktree remove /tmp/payment-desk-release`).
 
 ## Initial domain launch — historical evidence
 
