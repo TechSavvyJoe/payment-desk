@@ -2821,11 +2821,25 @@ input[type="checkbox"] { flex:0 0 auto; }
  .calendar-month select { appearance:none; padding-right:20px; background-image:linear-gradient(45deg,transparent 50%,var(--navy) 50%),linear-gradient(135deg,var(--navy) 50%,transparent 50%); background-position:calc(100% - 12px) 50%,calc(100% - 8px) 50%; background-size:4px 4px; background-repeat:no-repeat; }
 }
 
-/* Dealership lockup on tablets and phones. The view toggle and header buttons keep
-   their size; the brand shrinks into the width they leave. */
+/* Dealership lockup. At every width the view toggle and header buttons keep their
+   size and one-line labels; the brand shrinks into the width they leave. */
+.header-actions { flex: 0 0 auto; }
+.brand { min-width: 0; overflow: hidden; }
+
+/* From 801px the labelled toggle and buttons take 534px in Dealer view, so at 801px
+   the brand has about 200px: less than a logo chip (up to 166px) beside the 92px
+   credit. The logo lockup is a grid, and the name and credit size its text column
+   through a subgrid: the clipped name adds no minimum, so the column is never
+   narrower than the credit's own width. A long name ellipsizes first; only then
+   does the chip narrow, its logo scaling down inside it. */
+@media (min-width: 801px) {
+  .brand--has-logo { display: grid; grid-template-columns: minmax(0, max-content) minmax(auto, 1fr); }
+  .brand--has-logo .brand__logo { min-width: 0; }
+  .brand--has-logo .brand__text { display: grid; grid-template-columns: subgrid; }
+}
+
+/* Tablets: a smaller logo chip and name. */
 @media (max-width: 800px) {
-  .header-actions { flex: 0 0 auto; }
-  .brand { min-width: 0; overflow: hidden; }
   .brand__chip { height: 34px; padding: 3px 6px; }
   .brand__logo { max-width: 120px; max-height: 26px; }
   .brand .brand__name { max-width: 200px; font-size: 0.9rem; }
@@ -2840,8 +2854,10 @@ input[type="checkbox"] { flex:0 0 auto; }
   .brand > strong { font-size: 0.72rem; letter-spacing: 0.03em; }
   .brand--custom { flex-direction: column; align-items: flex-start; gap: 2px; }
   .brand__text { max-width: 100%; }
-  .brand__chip { height: 26px; padding: 3px 5px; border-radius: 5px; }
-  .brand__logo { max-width: 90px; max-height: 20px; }
+  /* The chip never outgrows the brand box (a 6:1 logo's 100px chip is wider than it
+     from 375px to 381px); a wide logo scales down inside the chip instead. */
+  .brand__chip { max-width: 100%; height: 26px; padding: 3px 5px; border-radius: 5px; }
+  .brand__logo { min-width: 0; max-width: 90px; max-height: 20px; }
   .brand .brand__name { max-width: 100%; font-size: 0.72rem; }
   .brand--has-logo .brand__name { display: none; }
   .brand__credit { font-size: 0.5rem; letter-spacing: 0.14em; }
