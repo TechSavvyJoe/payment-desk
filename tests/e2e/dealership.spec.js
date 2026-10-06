@@ -185,6 +185,27 @@ test.describe('dealership on customer estimates', () => {
     await expect(page.locator('.print-brand span')).toHaveCount(0);
   });
 
+  test('a name-only dealership shows no logo on the card and prints the name with the Payment Desk icon', async ({ page }) => {
+    await seedBrand(page, { name: 'Lakeside Motors' });
+    await openEstimate(page);
+    await expect(page.locator('.proposal-identity .proposal-brand')).toHaveText('Lakeside Motors');
+    await expect(page.locator('.proposal-identity img')).toHaveCount(0);
+    await page.emulateMedia({ media: 'print' });
+    const masthead = page.locator('.print-brand');
+    await expect(masthead.locator('img')).toHaveAttribute('src', './payment-desk-icon.svg');
+    await expect(masthead.locator('strong')).toHaveText('Lakeside Motors');
+    await expect(masthead.locator('span')).toHaveText('PAYMENT DESK');
+  });
+
+  test('a logo-only dealership prints its own logo instead of the Payment Desk icon', async ({ page }) => {
+    await seedBrand(page, { logo: LOGO });
+    await openEstimate(page);
+    await page.emulateMedia({ media: 'print' });
+    const img = page.locator('.print-brand img');
+    await expect(img).toHaveClass(/print-brand__logo/);
+    await expect(img).toHaveAttribute('src', LOGO);
+  });
+
   test('a 60-character unbroken name wraps inside the printed masthead', async ({ page }) => {
     await seedBrand(page, { name: 'W'.repeat(60), logo: LOGO });
     await openEstimate(page);
@@ -303,6 +324,16 @@ test.describe('dealership settings dialog', () => {
       expect(await storedLogoSize(page)).toEqual(expected);
       expect((await page.locator('.app-header').boundingBox()).height).toBeLessThanOrEqual(headerHeight + 1);
     }
+  });
+
+  test('an SVG with an empty MIME type is accepted through the file-extension fallback', async ({ page }) => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" viewBox="0 0 300 100"><rect width="300" height="100" fill="#c8102e"/></svg>';
+    const dialog = await openSettings(page);
+    await dialog.getByLabel('Choose logo').setInputFiles({ name: 'dealer.svg', mimeType: '', buffer: Buffer.from(svg) });
+    await expect(dialog.getByRole('img', { name: 'Logo preview' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+    expect(await storedLogoSize(page)).toEqual({ width: 300, height: 100 });
   });
 
   test('when the browser refuses to save, the dealership still shows for this visit with a warning', async ({ page }) => {
