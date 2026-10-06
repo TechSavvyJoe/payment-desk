@@ -264,6 +264,8 @@ test.describe('dealership on customer estimates', () => {
     await expect(page.locator('.proposal-identity img')).toHaveCount(0);
     await page.emulateMedia({ media: 'print' });
     const masthead = page.locator('.print-brand');
+    await expect(masthead).toBeVisible();
+    await expect(masthead.locator('img')).toBeVisible();
     await expect(masthead.locator('img')).toHaveAttribute('src', './payment-desk-icon.svg');
     await expect(masthead.locator('strong')).toHaveText('Lakeside Motors');
     await expect(masthead.locator('span')).toHaveText('PAYMENT DESK');
@@ -273,7 +275,9 @@ test.describe('dealership on customer estimates', () => {
     await seedBrand(page, { logo: LOGO });
     await openEstimate(page);
     await page.emulateMedia({ media: 'print' });
+    await expect(page.locator('.print-brand')).toBeVisible();
     const img = page.locator('.print-brand img');
+    await expect(img).toBeVisible();
     await expect(img).toHaveClass(/print-brand__logo/);
     await expect(img).toHaveAttribute('src', LOGO);
   });
