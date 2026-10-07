@@ -1,7 +1,11 @@
 import { CALCULATION_LIMITS, fromCents, normalizeApr, toCents } from './calculations.js';
+import { formatCurrency } from './formatters.js';
 
-/** Parse user text without silently removing letters, signs, or malformed separators. */
-export function parseFinancialInput(raw, { kind = 'money', min = 0, required = false } = {}) {
+/**
+ * Parse user text without silently removing letters, signs, or malformed separators.
+ * `max` sets a lower ceiling than the calculation limit, with a dollar-range message.
+ */
+export function parseFinancialInput(raw, { kind = 'money', min = 0, required = false, max: ceiling } = {}) {
   const text = String(raw ?? '').trim();
   if (!text) return required ? { error: 'Enter an amount or rate.' } : { value: '' };
   const source = kind === 'money' ? text.replace(/^\$\s*/, '') : text.replace(/%$/, '').trim();
@@ -12,9 +16,12 @@ export function parseFinancialInput(raw, { kind = 'money', min = 0, required = f
   if (kind === 'money' && (clean.split('.')[1]?.length ?? 0) > 2) {
     return { error: 'Use no more than two decimal places for an amount.' };
   }
-  const max = kind === 'rate' ? CALCULATION_LIMITS.maxApr : CALCULATION_LIMITS.maxAmount;
+  const max = ceiling ?? (kind === 'rate' ? CALCULATION_LIMITS.maxApr : CALCULATION_LIMITS.maxAmount);
   const number = Number(clean);
   if (!Number.isFinite(number) || number < min || number > max) {
+    if (ceiling !== undefined && kind === 'money') {
+      return { error: `Enter an amount from ${formatCurrency(min)} to ${formatCurrency(max, { cents: true })}.` };
+    }
     return { error: `Enter a value from ${min.toLocaleString('en-US')} to ${max.toLocaleString('en-US')}${kind === 'rate' ? '%' : ''}.` };
   }
   try {

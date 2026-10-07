@@ -91,3 +91,47 @@ export function getMichiganPolicy(dealDate) {
     warnings,
   };
 }
+
+const DAY_MS = 86_400_000;
+const REVIEW_REMINDER_DAYS = 30;
+const isIsoDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+};
+const utcFormat = (options) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...options });
+
+// The review end, the following day, and what that day blocks, while the
+// reminder window is open; otherwise null.
+function reviewReminderParts(today, policy) {
+  const end = policy?.effectiveTo;
+  if (!isIsoDate(today) || !isIsoDate(end)) return null;
+  const endTime = Date.parse(`${end}T00:00:00Z`);
+  const start = new Date(endTime - REVIEW_REMINDER_DAYS * DAY_MS).toISOString().slice(0, 10);
+  if (today < start || today > end) return null;
+  const next = new Date(endTime + DAY_MS);
+  const nextDay = utcFormat({ month: 'long', day: 'numeric' }).format(next);
+  return {
+    through: utcFormat({ month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(endTime)),
+    nextDay,
+    blocked: next.getUTCMonth() === 0 && next.getUTCDate() === 1
+      ? `estimates dated ${next.getUTCFullYear()}`
+      : `estimates dated from ${nextDay}, ${next.getUTCFullYear()}`,
+  };
+}
+
+/**
+ * From 30 days before the review window ends through its last day, the text
+ * reminding the dealership to have the rules reviewed; otherwise null.
+ * `today` is an Eastern-time calendar date such as todayDealDate() returns.
+ */
+export function policyReviewReminder(today, policy = POLICY_CONFIG) {
+  const parts = reviewReminderParts(today, policy);
+  return parts && `Tax and fee rules are reviewed through ${parts.through}. Have them reviewed and the app updated before ${parts.nextDay}, or ${parts.blocked} will be blocked.`;
+}
+
+/** The same reminder, short enough for two lines on a 320px phone. */
+export function policyReviewReminderShort(today, policy = POLICY_CONFIG) {
+  const parts = reviewReminderParts(today, policy);
+  return parts && `Rules reviewed through ${parts.through}. Update the app before ${parts.blocked} are blocked.`;
+}

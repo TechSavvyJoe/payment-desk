@@ -32,11 +32,16 @@ export function createDeskState(dealDate = todayDealDate()) {
       dealDate, vehicleDescription: '' },
     gridRates: { ...DEFAULT_APR_BY_TERM }, gridDownPayments: [0, 1000, 2000, 3000],
     view: 'dealer', mobileGridOpen: false, lastRoll: null, nextItemId: 1, resetCount: 0,
+    // The day this desk was started. Edits are measured against a blank desk from
+    // that day, so passing midnight never makes an untouched desk look edited.
+    startDate: dealDate,
+    // Set once someone picks the estimate date; the desk then keeps it until Reset.
+    dateChosen: false,
   };
 }
 
 export function hasDealEdits(state) {
-  const baseline = createDeskState();
+  const baseline = createDeskState(state.startDate);
   return JSON.stringify(state.deal) !== JSON.stringify(baseline.deal)
     || JSON.stringify(state.gridRates) !== JSON.stringify(baseline.gridRates)
     || JSON.stringify(state.gridDownPayments) !== JSON.stringify(baseline.gridDownPayments);
@@ -53,6 +58,7 @@ function withPatch(state, patch, label) {
 export function deskReducer(state, action) {
   switch (action.type) {
     case 'field': {
+      if (action.field === 'dealDate') return { ...withPatch(state, { dealDate: action.value }), dateChosen: true };
       const patch = { [action.field]: action.value };
       if (action.field === 'termMonths') patch.apr = state.gridRates[action.value] ?? state.deal.apr;
       if (action.field === 'dealType' && action.value === 'cash') patch.cashDown = 0;
@@ -86,6 +92,12 @@ export function deskReducer(state, action) {
     case 'view': return { ...state, view: action.view, mobileGridOpen: false };
     case 'grid-visibility': return { ...state, mobileGridOpen: action.open && state.view === 'dealer' && state.deal.dealType === 'finance' };
     case 'reset': return { ...createDeskState(), resetCount: state.resetCount + 1 };
+    // A blank desk left open past midnight moves to the new day, as a fresh page would.
+    // Only forward, because Reset can already be on the new day while the app's clock
+    // still says yesterday. A desk with edits, or a date someone picked, keeps its date.
+    // Only the date changes, so nothing remounts under someone who is typing.
+    case 'new-day': return action.date <= state.startDate || state.dateChosen || hasDealEdits(state) ? state
+      : { ...state, startDate: action.date, deal: { ...state.deal, dealDate: action.date }, lastRoll: null };
     default: return state;
   }
 }

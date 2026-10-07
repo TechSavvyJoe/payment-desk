@@ -75,3 +75,56 @@ test('reset and navigation protection cover trade-only, rate and grid edits', ()
   const other = deskReducer(state, { type: 'add-item', preset: { category: 'other', amount: 1000 } });
   assert.equal(other.deal.optionalItems[0].taxTreatmentConfirmed, false);
 });
+
+test('money drafts can carry a lower ceiling with a dollar-range message', () => {
+  assert.deepEqual(parseFinancialInput('280', { max: 280 }), { value: 280 });
+  assert.deepEqual(parseFinancialInput('$199.50', { max: 280 }), { value: 199.5 });
+  assert.deepEqual(parseFinancialInput('0', { max: 280 }), { value: 0 });
+  assert.deepEqual(parseFinancialInput('', { max: 280 }), { value: '' });
+  assert.deepEqual(parseFinancialInput('280.01', { max: 280 }), { error: 'Enter an amount from $0 to $280.00.' });
+  assert.deepEqual(parseFinancialInput('1,000', { max: 999.99 }), { error: 'Enter an amount from $0 to $999.99.' });
+  assert.match(parseFinancialInput('-5', { max: 280 }).error, /negative amounts are not supported/);
+  assert.match(parseFinancialInput('12.345', { max: 280 }).error, /two decimal places/);
+  // Without a ceiling the general money message is unchanged.
+  assert.deepEqual(parseFinancialInput('1000001'), { error: 'Enter a value from 0 to 1,000,000.' });
+});
+
+test('an untouched desk never looks edited after midnight and rolls over to the new day', () => {
+  const blank = deskReducer(createDeskState('2026-11-30'), { type: 'view', view: 'customer' });
+  // Measured against its own start day, whatever today is.
+  assert.equal(hasDealEdits(blank), false);
+  assert.equal(deskReducer(blank, { type: 'new-day', date: '2026-11-30' }), blank, 'same day changes nothing');
+  const next = deskReducer(blank, { type: 'new-day', date: '2026-12-01' });
+  // Only the date moves; nothing else resets or remounts.
+  assert.deepEqual(next, { ...blank, startDate: '2026-12-01', deal: { ...blank.deal, dealDate: '2026-12-01' } });
+  assert.equal(hasDealEdits(next), false);
+});
+
+test('the new day only moves a desk forward', () => {
+  // Reset already dated the desk with the new day while the app's clock still said yesterday.
+  const reset = createDeskState('2027-01-01');
+  assert.equal(deskReducer(reset, { type: 'new-day', date: '2026-12-31' }), reset);
+});
+
+test('a desk with edits keeps its date at midnight and stays protected', () => {
+  for (const action of [
+    { type: 'field', field: 'salePrice', value: 30000 },
+    { type: 'field', field: 'dealDate', value: '2026-11-15' },
+    { type: 'rate', term: 60, value: 4.9 },
+  ]) {
+    const edited = deskReducer(createDeskState('2026-11-30'), action);
+    assert.equal(deskReducer(edited, { type: 'new-day', date: '2026-12-01' }), edited);
+    assert.equal(hasDealEdits(edited), true);
+  }
+});
+
+test('a date someone picked is kept at midnight, even when it makes the desk blank again', () => {
+  let state = createDeskState('2026-10-06');
+  state = deskReducer(state, { type: 'field', field: 'dealDate', value: '2026-10-05' });
+  state = deskReducer(state, { type: 'field', field: 'dealDate', value: '2026-10-06' });
+  assert.equal(hasDealEdits(state), false);
+  assert.equal(state.dateChosen, true);
+  assert.equal(deskReducer(state, { type: 'new-day', date: '2026-10-07' }), state);
+  // Reset hands the date back to the calendar.
+  assert.equal(deskReducer(state, { type: 'reset' }).dateChosen, false);
+});

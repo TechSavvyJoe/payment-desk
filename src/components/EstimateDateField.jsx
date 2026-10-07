@@ -6,6 +6,13 @@ import { useFieldValidation } from './ValidationContext.jsx';
 export default function EstimateDateField({ value, onChange }) {
   const [draft, setDraft] = useState(() => formatShortDate(value));
   const [error, setError] = useState(null);
+  // A blank desk can move to the new day after midnight. Show the new date in place,
+  // so whoever is on this field keeps focus. A date being typed always matches value.
+  const [shownValue, setShownValue] = useState(value);
+  if (value !== shownValue) {
+    setShownValue(value);
+    if (parseShortDate(draft).value !== value) setDraft(formatShortDate(value));
+  }
   const reportError = useFieldValidation();
   const calendar = useRef(null);
   const trigger = useRef(null);

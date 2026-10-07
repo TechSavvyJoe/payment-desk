@@ -17,6 +17,7 @@ import {
   solveSalePriceForTarget as solveUndatedPrice,
   toCents,
 } from '../src/lib/calculations.js';
+import { createHash } from 'node:crypto';
 import { getMichiganPolicy, POLICY_CONFIG, todayDealDate } from '../src/lib/policy.js';
 
 // Keep historical fixtures deterministic when policy dates roll over.
@@ -608,4 +609,164 @@ test('zero-interest cents and independent amortization fixtures remain stable', 
   assert.equal(calculatePayment({ principal: 32_163.84, apr: 6.5, termMonths: 72 }).payment, 540.67);
   const pennyTax = calculateDeal({ salePrice: 10_000.01, tradeAllowance: 9_000 });
   assert.equal(pennyTax.salesTax, 78.84);
+});
+
+// ---------- Dealership-configurable document and CRV fees ----------
+
+test('a custom document fee below both caps is used as entered and stays taxable', () => {
+  const standard = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60 });
+  const deal = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60, dealershipFees: { documentFee: 199.5, crvFee: 34 } });
+  assert.equal(deal.fees.documentFee, 199.5);
+  assert.equal(deal.fees.crvFee, 34);
+  assert.equal(deal.fees.taxableFixedFees, 233.5);
+  assert.equal(deal.fees.totalFees, 264.5);
+  assert.equal(deal.taxableTotalBeforeCredit, 30_233.5);
+  assert.equal(deal.taxBase, 30_233.5);
+  assert.equal(deal.salesTax, 1_814.01);
+  assert.equal(deal.outTheDoor, 32_078.51);
+  assert.equal(deal.amountFinanced, 32_078.51);
+  assert.equal(deal.payment, 620.17);
+  // $80.50 less fee and the 6% tax on it.
+  assert.equal(standard.cents.outTheDoor - deal.cents.outTheDoor, 8_050 + 483);
+});
+
+test('a custom document fee above the 5% cap or the legal maximum is capped', () => {
+  const low = calculateDeal({ salePrice: 1_000, apr: 0, dealershipFees: { documentFee: 199, crvFee: 34 } });
+  assert.equal(low.fees.documentFee, 50, '5% of $1,000');
+  assert.equal(low.salesTax, 65.04);
+  assert.equal(low.outTheDoor, 1_180.04);
+  const mid = calculateDeal({ salePrice: 3_000, dealershipFees: { documentFee: 199 } });
+  assert.equal(mid.fees.documentFee, 150, '5% of $3,000');
+  assert.equal(calculateDeal({ salePrice: 3_990, dealershipFees: { documentFee: 199.5 } }).fees.documentFee, 199.5, 'exactly at 5%');
+  assert.equal(calculateDeal({ salePrice: 3_989.99, dealershipFees: { documentFee: 199.5 } }).fees.documentFee, 199.49, '5% rounded down to cents');
+  // A bad value that slips past the settings still cannot exceed $280.
+  for (const documentFee of [280.01, 500, '9999', 1_000_000]) {
+    assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { documentFee } }).fees.documentFee, 280, String(documentFee));
+  }
+  assert.equal(calculateDeal({ salePrice: 2_000, dealershipFees: { documentFee: 500 } }).fees.documentFee, 100, 'both caps apply together');
+});
+
+test('a zero document fee and a zero CRV fee remove both charges and their tax', () => {
+  const deal = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60, dealershipFees: { documentFee: 0, crvFee: 0 } });
+  assert.equal(deal.fees.documentFee, 0);
+  assert.equal(deal.fees.crvFee, 0);
+  assert.equal(deal.fees.taxableFixedFees, 0);
+  assert.equal(deal.fees.totalFees, 31);
+  assert.equal(deal.taxBase, 30_000);
+  assert.equal(deal.salesTax, 1_800);
+  assert.equal(deal.outTheDoor, 31_831);
+  const crvOnly = calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 0 } });
+  assert.equal(crvOnly.fees.documentFee, 280);
+  assert.equal(crvOnly.fees.crvFee, 0);
+  assert.equal(crvOnly.taxBase, 30_280);
+});
+
+test('a $125.50 CRV fee is charged in cents and taxed at 6%', () => {
+  const standard = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60 });
+  const deal = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60, dealershipFees: { documentFee: 280, crvFee: 125.5 } });
+  assert.equal(deal.fees.crvFee, 125.5);
+  assert.equal(deal.cents.fees.crvFee, 12_550);
+  assert.equal(deal.fees.taxableFixedFees, 405.5);
+  assert.equal(deal.taxBase, 30_405.5);
+  assert.equal(deal.salesTax, 1_824.33);
+  assert.equal(deal.outTheDoor, 32_260.83);
+  assert.equal(deal.payment, 623.69);
+  assert.equal(deal.cents.salesTax - standard.cents.salesTax, 549, '6% of the extra $91.50');
+  assert.equal(deal.cents.outTheDoor - standard.cents.outTheDoor, 9_150 + 549);
+});
+
+test('the CRV fee is clamped to $0–$999.99 and only charged with a vehicle', () => {
+  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 999.99 } }).fees.crvFee, 999.99);
+  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 1_000 } }).fees.crvFee, 999.99);
+  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 50_000 } }).fees.crvFee, 999.99);
+  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: -5 } }).fees.crvFee, 0);
+  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { documentFee: -5 } }).fees.documentFee, 0);
+  const noVehicle = calculateDeal({ dealershipFees: { documentFee: 199, crvFee: 125.5 } });
+  assert.equal(noVehicle.fees.documentFee, 0);
+  assert.equal(noVehicle.fees.crvFee, 0);
+  assert.equal(noVehicle.outTheDoor, 0);
+});
+
+test('missing or invalid dealership fees fall back to the defaults', () => {
+  const standard = calculateDeal({ salePrice: 30_000 });
+  for (const dealershipFees of [undefined, null, {}, 'custom', 42, { documentFee: null, crvFee: null },
+    { documentFee: '', crvFee: '' }, { documentFee: 'abc', crvFee: '1..2' }, { documentFee: Number.NaN, crvFee: Number.POSITIVE_INFINITY },
+    { documentFee: true, crvFee: {} }]) {
+    const deal = calculateDeal({ salePrice: 30_000, dealershipFees });
+    assert.deepEqual(deal.cents, standard.cents, JSON.stringify(dealershipFees));
+  }
+  const partial = calculateDeal({ salePrice: 30_000, dealershipFees: { documentFee: 'abc', crvFee: 50 } });
+  assert.equal(partial.fees.documentFee, 280);
+  assert.equal(partial.fees.crvFee, 50);
+});
+
+test('custom fees flow through cash deals and trade credit', () => {
+  const fees = { documentFee: 150, crvFee: 99 };
+  const cash = calculateDeal({ dealType: 'cash', salePrice: 20_000, dealershipFees: fees });
+  assert.equal(cash.fees.titleFee, 15);
+  assert.equal(cash.taxBase, 20_249);
+  assert.equal(cash.salesTax, 1_214.94);
+  assert.equal(cash.outTheDoor, 21_493.94);
+  assert.equal(cash.dueAtSigning, 21_493.94);
+  // A large trade credit can absorb the fees' tax entirely.
+  const covered = calculateDeal({ dealType: 'cash', salePrice: 10_000, tradeAllowance: 11_000, dealershipFees: fees });
+  assert.equal(covered.tradeTaxCredit, 11_000);
+  assert.equal(covered.taxableTotalBeforeCredit, 10_249);
+  assert.equal(covered.taxBase, 0);
+  assert.equal(covered.salesTax, 0);
+  assert.equal(covered.tradeTaxDeduction, 10_249);
+  assert.equal(covered.tradeTaxSavings, 614.94);
+  assert.equal(covered.outTheDoor, 10_279);
+  assert.equal(covered.customerCredit, 721);
+  // The $12,000 cap leaves the fees taxable on a financed deal.
+  const capped = calculateDeal({ salePrice: 40_000, tradeAllowance: 15_000, tradePayoff: 7_000, apr: 6.9, termMonths: 72, dealershipFees: fees });
+  assert.equal(capped.tradeTaxCredit, 12_000);
+  assert.equal(capped.taxBase, 28_249);
+  assert.equal(capped.salesTax, 1_694.94);
+  assert.equal(capped.amountFinanced, 33_974.94);
+  assert.equal(capped.payment, 577.61);
+});
+
+test('the rate grid and target solvers use the dealership fees', () => {
+  const fees = { documentFee: 199, crvFee: 125.5 };
+  const grid = calculateRateGrid({ salePrice: 30_000, apr: 6.5, termMonths: 72, dealershipFees: fees });
+  const deal = calculateDeal({ salePrice: 30_000, apr: 6.5, termMonths: 72, dealershipFees: fees });
+  assert.equal(grid.amountBeforeCashDown, deal.amountBeforeCashDown);
+  const cell = grid.rows.find((row) => row.termMonths === 72).cells.find((item) => item.cashDown === 0);
+  assert.equal(cell.payment, deal.payment);
+  assert.notEqual(cell.payment, calculateDeal({ salePrice: 30_000, apr: 6.5, termMonths: 72 }).payment);
+  const solved = solveSalePriceForTarget({ salePrice: 30_000, dealershipFees: fees }, { target: deal.outTheDoor });
+  assert.equal(solved.salePrice, 30_000);
+  assert.equal(solved.exact, true);
+  assert.equal(solved.deal.fees.crvFee, 125.5);
+});
+
+// Digests of calculateDeal output captured from the implementation before
+// dealership fees existed. Without dealershipFees every result stays identical.
+const PRE_FEE_SETTINGS_DIGESTS = {
+  'blank': [{ dealDate: '2026-09-24' }, '71e04ff261b62817a24e980088a6823a043057113676e6d39ff413ec257cd949'],
+  'finance 30k': [{ dealDate: '2026-09-24', salePrice: 30_000, apr: 6, termMonths: 60 }, '7a90bdf32f274989ddbcacccd0cf06e0913f7da2378d56a7c0b3aef3ab120697'],
+  'finance with down 0% apr': [{ dealDate: '2026-09-24', salePrice: 25_000, cashDown: 3_000, apr: 0, termMonths: 60 }, '39a7022884d8b4b40a40cb2499edb8aff335ed3fc71edc76a785ee8bd44b2d3d'],
+  'trade capped credit': [{ dealDate: '2026-09-24', salePrice: 40_000, tradeAllowance: 15_000, tradePayoff: 7_000, apr: 6.9, termMonths: 72 }, '9c0b2cb1593686adac18dfe0c050b0888954c276826931f9962586cd371decdc'],
+  'negative equity upfront': [{ dealDate: '2026-09-24', salePrice: 30_000, cashDown: 2_000, tradeAllowance: 10_000, tradePayoff: 14_000, rollNegativeEquity: false, upfrontAmount: 250 }, '50e03ce7c52399f41c1ac17c38962dbc31ae35cd319f905661adc10aecff6ab2'],
+  'cash credit': [{ dealDate: '2026-09-24', dealType: 'cash', salePrice: 30_000, tradeAllowance: 40_000 }, '715292c157f8de00a05852e7f5a79e48e41a6f0aa9794c7eba266b23eb1b01c3'],
+  'cash low price': [{ dealDate: '2026-09-24', dealType: 'cash', salePrice: 1_000 }, '207355bf87de773aaf7e4521ff6add466e3fea33318e9df69b278d75eb2daecb'],
+  'penny price': [{ dealDate: '2026-09-24', salePrice: 0.01 }, '76e9a40b7eada7c004275cf508b5a82b74917315406e076649069f141095c63d'],
+  'doc fee boundary': [{ dealDate: '2026-09-24', salePrice: 5_599.99 }, 'b644f040936ff5863795eccbdc41ac3fc3169506e98c3adb134d3860dbd0d968'],
+  'products and new plate': [{ dealDate: '2026-09-24', salePrice: 32_500, plateMode: 'new', newPlateAmount: 185, apr: 7.25, termMonths: 84,
+    optionalItems: [{ id: 'a', category: 'service-contract', name: 'Service Contract', amount: 1_995, taxable: false }, { id: 'b', category: 'other', name: 'Tint', amount: 399.99, taxable: true }] },
+  '22526a679eb1aef61dcfd4ea6abafd43c4910494677af8a2b09d44c45a5c6a02'],
+  '2027 review': [{ dealDate: '2027-03-01', salePrice: 30_000, tradeAllowance: 15_000 }, 'a2feee107e5514d9522dbbe6d3c14b03329780b31385aba18229cb19fc245238'],
+  'trade without vehicle': [{ dealDate: '2026-09-24', tradeAllowance: 8_000, tradePayoff: 2_500 }, 'f0362c03869d13000627eb0de37cd2a4bbfb885e1717ab76aaf6866c5a0c0164'],
+};
+
+test('without dealership fees, or with the defaults, every result is byte-identical to before', () => {
+  const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  for (const [name, [input, expected]] of Object.entries(PRE_FEE_SETTINGS_DIGESTS)) {
+    const plain = calculateUndatedDeal(input);
+    assert.equal(digest(plain), expected, name);
+    for (const dealershipFees of [{ documentFee: 280, crvFee: 34 }, { documentFee: '280.00', crvFee: '34' }, {}, null]) {
+      assert.equal(JSON.stringify(calculateUndatedDeal({ ...input, dealershipFees })), JSON.stringify(plain), `${name} with ${JSON.stringify(dealershipFees)}`);
+    }
+  }
 });

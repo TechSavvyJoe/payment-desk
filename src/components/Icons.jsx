@@ -136,3 +136,10 @@ export const SettingsIcon = (props) => (
     <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.9" />
   </Icon>
 );
+
+export const CalendarIcon = (props) => (
+  <Icon {...props}>
+    <rect height="15.5" rx="2.5" stroke="currentColor" strokeWidth="1.9" width="17" x="3.5" y="5" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.9" />
+  </Icon>
+);

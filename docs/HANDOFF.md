@@ -9,7 +9,7 @@ Before handing operation to another company, record actual people and business a
 | Role | Responsibility |
 | --- | --- |
 | Dealership product owner | Supported transactions, proposal wording, staff training, and pilot acceptance |
-| Dealership policy owner | CRV definition, document-fee basis, product taxability, fee exceptions, lender/DMS reference examples, and annual review |
+| Dealership policy owner | CRV definition, document-fee basis, setting both fees in Settings on each device, product taxability, fee exceptions, lender/DMS reference examples, and annual review |
 | Technical maintainer | Repository access, release checks, dependency updates, rollback, support triage, and deployment settings |
 | Business account owner | Repository/domain ownership, approved brand assets and commercial rights, recovery access, and departing-staff access removal |
 
@@ -39,11 +39,13 @@ Keep this small React/Vite application unless agreed requirements justify a serv
 
 ## Policy approval and scope
 
-The policy code contains primary Michigan Treasury, SOS, and DIFS source links. The current fee review window covers 2026. Scheduled later-year trade credits are available for inspection, but policy expiry prevents unqualified proposal export until review.
+The policy code contains primary Michigan Treasury, SOS, and DIFS source links. The current fee review window covers 2026. Scheduled later-year trade credits are available for inspection, but policy expiry prevents unqualified proposal export until review. From 30 days before the window ends (December 1, 2026), Dealer view shows a reminder under the header; have the rules reviewed, extend `policy.js`, and release before January 1, or estimates dated 2027 cannot be exported.
 
-The documentary fee uses selling price as a conservative estimate basis: the lower of $280 or 5%, rounded down to cents, on both purchase modes. This does not certify the dealership's exact statutory cash-price basis. Confirm the approved DMS/contract method with the policy owner before relying on it for low-price transactions.
+**The policy owner sets the document fee and CRV dealer fee in Settings → Fees on each device** (phones, tablets and desk computers each keep their own settings). Blank uses the default ($280 and $34). The settings are stored in each browser (`payment-desk.fees.v1`); a new device, a cleared browser, or **Clear dealership settings** returns to the defaults. Both fees are taxable, and the estimate assumptions state the amounts charged.
 
-Confirm the meaning, amount, and taxability of CRV; the correct treatment of Service Contract, Gap, and each Other product; and registration/title exceptions. Other positive charges require a name and an explicit Taxable or Not taxable selection before proposal export. Mathematical price/trade/rate suggestions are not manager authorization, product consent, or lender approval.
+The documentary fee uses selling price as a conservative estimate basis: whatever fee is set, the fee charged is the lower of that setting, $280, or 5% of the selling price, rounded down to cents, on both purchase modes. The calculation enforces both caps even if a bad value reaches it. This does not certify the dealership's exact statutory cash-price basis. Confirm the approved DMS/contract method with the policy owner before relying on it for low-price transactions.
+
+Confirm the meaning, amount, and taxability of CRV (settable from $0 to $999.99); the correct treatment of Service Contract, Gap, and each Other product; and registration/title exceptions. Other positive charges require a name and an explicit Taxable or Not taxable selection before proposal export. Mathematical price/trade/rate suggestions are not manager authorization, product consent, or lender approval.
 
 Regular monthly amortization excludes odd first periods, daily interest timing, lender-specific charges, and a reconciled final installment. Reported interest/total payments remain analytical estimates. Reconcile representative lender/DMS cases before widening use. Manufacturer rebates need their own after-tax treatment if implemented; never subtract one from the taxable selling price merely to fit the current model.
 
@@ -68,4 +70,4 @@ Identify the last accepted release from its commit and deployment run. Make a ne
 
 For an urgent failure, preserve its build ID and reproducible synthetic case, then stop relying on the affected calculator workflow and use the dealership's approved systems while the fix is reviewed. The browser error boundary can reset a broken deal but is not a recovery store. An agreed owner should receive deployment failures and a simple availability/smoke check; this change does not configure an external monitoring account or recurring automation.
 
-The app saves only the optional dealership name and logo, in each browser's local storage (`payment-desk.dealership.v1`); it never saves deal figures and has no offline worker. On shared devices, **Clear dealership settings** removes them. The refresh/close guard cannot guarantee recovery, especially on mobile. It makes no external font request and has no analytics collector. If saved proposals, offline operation, customer identities, or restricted access are later added, explicitly choose their retention, access, shared-device reset, and support model first.
+The app saves only the optional dealership name and logo (`payment-desk.dealership.v1`) and the dealership's fees (`payment-desk.fees.v1`), in each browser's local storage; it never saves deal figures and has no offline worker. On shared devices, **Clear dealership settings** removes them. The refresh/close guard cannot guarantee recovery, especially on mobile. It makes no external font request and has no analytics collector. If saved proposals, offline operation, customer identities, or restricted access are later added, explicitly choose their retention, access, shared-device reset, and support model first.

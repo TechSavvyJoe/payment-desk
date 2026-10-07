@@ -7,7 +7,7 @@ const isBlank = value => value === '' || value == null;
 
 const FinancialInput = forwardRef(function FinancialInput({
   value, onChange, id, ariaLabel, className = '', disabled = false,
-  min = 0, compact = false, kind = 'money', required = false,
+  min = 0, max, compact = false, kind = 'money', required = false, placeholder,
   savedDraft, onDraftChange, 'aria-describedby': describedBy,
 }, ref) {
   const generatedId = useId();
@@ -24,7 +24,7 @@ const FinancialInput = forwardRef(function FinancialInput({
   }, [inputId, reportError, error]);
 
   const commit = raw => {
-    const parsed = parseFinancialInput(raw, { kind, min, required });
+    const parsed = parseFinancialInput(raw, { kind, min, max, required });
     const message = parsed.error ?? null;
     onDraftChange?.({ raw, error: message });
     setError(message);
@@ -38,7 +38,7 @@ const FinancialInput = forwardRef(function FinancialInput({
       <span className={`${kind === 'money' ? 'money-input' : 'percent-input'} ${compact ? 'money-input--compact' : ''} ${className}`}>
         {kind === 'money' ? <span aria-hidden="true" className="money-input__prefix">$</span> : null}
         <input aria-label={ariaLabel} aria-invalid={error ? true : undefined} aria-describedby={[describedBy, error ? errorId : null].filter(Boolean).join(' ') || undefined}
-          disabled={disabled} id={inputId} inputMode="decimal" min={min} required={required} ref={ref} type="text"
+          disabled={disabled} id={inputId} inputMode="decimal" min={min} placeholder={placeholder} required={required} ref={ref} type="text"
           value={focused || error ? draft : formatted}
           onFocus={event => {
             setFocused(true);

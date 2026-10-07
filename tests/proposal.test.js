@@ -156,3 +156,33 @@ test("estimate identity defaults to Payment Desk and uses a saved dealership", (
   assert.deepEqual({ ...logoOnly.brand }, { name: "Payment Desk", dealershipName: "", logo, isCustom: true });
   assert.equal(formatProposalText(logoOnly).split("\n")[0], "Payment Desk");
 });
+
+test("assumptions state the document and CRV fees actually used and who sets them", () => {
+  const standard = create();
+  assert.ok(standard.assumptions.includes("Document fee $280.00 (dealership setting; never more than $280 or 5% of the selling price) and CRV dealer fee $34.00 are set by the dealership."), standard.assumptions.join("\n"));
+  assert.ok(standard.assumptions.includes("Product tax treatment must be confirmed for this transaction."));
+  assert.equal(standard.assumptions.some((line) => /CRV dealer fee must be confirmed/.test(line)), false);
+
+  const custom = create({ dealershipFees: { documentFee: 199, crvFee: 125.5 } });
+  const text = formatProposalText(custom);
+  assert.match(text, /^Document fee \$199\.00 \(dealership setting; never more than \$280 or 5% of the selling price\) and CRV dealer fee \$125\.50 are set by the dealership\.$/m);
+  // Line labels stay the same; only the amounts change.
+  assert.match(text, /^Document fee \(taxable\): \$199\.00$/m);
+  assert.match(text, /^CRV dealer fee \(taxable\): \$125\.50$/m);
+
+  // A capped fee is reported at the amount charged, not the setting.
+  const capped = create({ salePrice: 3_000, dealershipFees: { documentFee: 199, crvFee: 34 } });
+  assert.ok(capped.assumptions.some((line) => line.startsWith("Document fee $150.00 (dealership setting;")));
+  assert.equal(capped.groups[0].rows.find((item) => item.id === "documentFee").amount, 150);
+
+  const free = create({ dealershipFees: { documentFee: 0, crvFee: 0 } });
+  assert.ok(free.assumptions.some((line) => line.startsWith("Document fee $0.00 (dealership setting;") && line.includes("CRV dealer fee $0.00")));
+  assert.equal(free.groups[0].rows.some((item) => ["documentFee", "crvFee"].includes(item.id)), false);
+});
+
+test("the estimate reference changes with the fees but not with an equivalent default record", () => {
+  const plain = create();
+  assert.equal(create({ dealershipFees: { documentFee: 280, crvFee: 34 } }).reference, plain.reference);
+  assert.notEqual(create({ dealershipFees: { documentFee: 280, crvFee: 50 } }).reference, plain.reference);
+  assert.notEqual(create({ dealershipFees: { documentFee: 199, crvFee: 34 } }).reference, plain.reference);
+});

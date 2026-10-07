@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
-import { clearBrandSettings, loadBrandSettings, resolveBrand, saveBrandSettings } from './lib/brandSettings.js';
+import { loadBrandSettings, resolveBrand } from './lib/brandSettings.js';
+import { loadFeeSettings, resolveFees } from './lib/feeSettings.js';
+import { clearDeviceSettings, saveDeviceSettings } from './lib/deviceSettings.js';
+import { policyReviewReminder, policyReviewReminderShort, todayDealDate } from './lib/policy.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
@@ -15,6 +18,7 @@ import ViewToggle from './components/ViewToggle.jsx';
 import { ValidationContext } from './components/ValidationContext.jsx';
 import EstimateDateField from './components/EstimateDateField.jsx';
 import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
+import PolicyReminder from './components/PolicyReminder.jsx';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
@@ -25,16 +29,46 @@ const focusDestination = id => requestAnimationFrame(() => {
   node.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
 });
 
+// A desk left open overnight must pick up the new Eastern day on its own, so the
+// December reminder appears and leaves on time. Phones pause timers in the
+// background, so returning to the page checks the date straight away too.
+function useEasternToday() {
+  const [today, setToday] = useState(todayDealDate);
+  useEffect(() => {
+    const check = () => setToday(todayDealDate());
+    const timer = setInterval(check, 60_000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+    };
+  }, []);
+  return today;
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
-  const { deal: dealInput, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
+  const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
   const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
   const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
+  // The dealership's fees live beside the deal, never in it, so Reset deal and
+  // hasDealEdits ignore them. Every calculation reads them from this one dealInput.
+  const [feeSettings, setFeeSettings] = useState(loadFeeSettings);
+  const dealershipFees = useMemo(() => resolveFees(feeSettings), [feeSettings]);
+  const dealInput = useMemo(() => ({ ...deal, dealershipFees }), [deal, dealershipFees]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef(null);
-  // Even when the browser refuses to store them, the settings apply for this visit.
-  const saveBrand = next => { const outcome = saveBrandSettings(next); setBrandSettings(outcome.settings); return outcome; };
-  const clearBrand = () => { const outcome = clearBrandSettings(); setBrandSettings(outcome.settings); return outcome; };
+  // Even when the browser refuses to store them, the settings apply for this visit,
+  // and the device keeps its previous saved settings whole.
+  const applySettings = outcome => {
+    setBrandSettings(outcome.brand);
+    setFeeSettings(outcome.fees);
+    return { ok: outcome.ok };
+  };
+  const saveSettings = (nextBrand, nextFees) => applySettings(saveDeviceSettings(nextBrand, nextFees));
+  const clearSettings = () => applySettings(clearDeviceSettings());
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState('payment');
   const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
@@ -51,12 +85,17 @@ export default function App() {
   }), []);
   const calculation = useMemo(() => {
     try { return { result: calculateDeal(dealInput), error: null }; }
-    catch { return { result: calculateDeal(createDeskState().deal), error: 'These figures exceed the supported calculation range. Reduce the amounts before continuing.' }; }
-  }, [dealInput]);
+    catch { return { result: calculateDeal({ ...createDeskState().deal, dealershipFees }), error: 'These figures exceed the supported calculation range. Reduce the amounts before continuing.' }; }
+  }, [dealInput, dealershipFees]);
   const result = calculation.result;
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
   const canCompare = getProposalStatus({ dealInput, result, hasInputErrors }).canExport;
+  const today = useEasternToday();
+
+  useEffect(() => {
+    if (!hasDeal) dispatch({ type: 'new-day', date: today });
+  }, [hasDeal, today]);
 
   useEffect(() => {
     if (!hasDeal) return;
@@ -138,7 +177,8 @@ export default function App() {
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
-        {settingsOpen ? <DealershipSettingsDialog settings={brandSettings} onClear={clearBrand} onClose={closeSettings} onSave={saveBrand} /> : null}
+        {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
+        {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
