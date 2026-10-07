@@ -365,6 +365,12 @@ test('production-origin web app searches the companion catalog and reviews vehic
   const refused = await web.evaluate(id => new Promise(resolve => chrome.runtime.sendMessage(id, { target: 'inventory.background', action: 'disconnect' }, result => { const error = chrome.runtime.lastError; resolve({ result, error: Boolean(error) }); })), extensionId);
   expect(refused.result).toBeUndefined();
   expect(await worker.evaluate(async () => (await chrome.storage.local.get('payment-desk.inventory.v1'))['payment-desk.inventory.v1'].config.site)).toBe(site);
+  // A crafted link must not replace the verified connection or break reads.
+  await web.goto(`https://desking.mysoldlog.com/#pd-companion=${'a'.repeat(32)}`);
+  expect(await web.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
+  await web.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await expectVehicles(2);
+  expect(await web.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
 });
 
 test('panel dealership and fees survive Reset deal and reload without saving deal figures', async () => {

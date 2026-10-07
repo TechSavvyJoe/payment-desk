@@ -21,10 +21,10 @@ export function siteOrigins(site) {
   const host = new URL(dealershipSite(site)).hostname.replace(/^www\./, '');
   return [`https://${host}/*`, `https://www.${host}/*`];
 }
-export function inventoryUrl(value, site) {
+export function inventoryUrl(value, site, base = site) {
   if (typeof value !== 'string' || !value.trim()) return null;
   try {
-    const url = new URL(value, site);
+    const url = new URL(value, base);
     dealershipSite(url.href);
     if (!siteOrigins(site).includes(`${url.origin}/*`)) return null;
     url.hash = '';

@@ -64,7 +64,7 @@ export function parseDealerOn(data, task, site, now) {
 }
 
 function discovery(root, url, site) {
-  const candidates = [...root.querySelectorAll('a[href]')].map(a => ({ url: inventoryUrl(a.getAttribute('href'), site), label: text(a) })).filter(item => item.url);
+  const candidates = [...root.querySelectorAll('a[href]')].map(a => ({ url: inventoryUrl(a.getAttribute('href'), site, url), label: text(a) })).filter(item => item.url);
   const find = patterns => candidates.find(item => patterns.some(pattern => pattern.test(new URL(item.url).pathname)) && !/special|certified|under|truck|suv|electric|lease|offer/i.test(new URL(item.url).pathname));
   const newPage = find([/\/searchnew\.aspx$/i, /\/(?:new|new-inventory)(?:\/index\.htm)?\/?$/i, /\/inventory\/new\/?$/i]);
   const usedPage = find([/\/searchused\.aspx$/i, /\/(?:used|used-inventory|pre-owned)(?:\/index\.htm)?\/?$/i, /\/inventory\/used\/?$/i, /used-vehicle-inventory[^/]*\.html$/i]);
@@ -97,6 +97,8 @@ export function parseInventoryHtml(html, task, site, now) {
       const details = cardDetails(card.querySelector('.i18r_description, .i18r_details, .details-list') ?? card);
       const priceRows = card.querySelector('.i18r_customPricing')?.innerHTML ?? '';
       const name = a?.getAttribute('aria-label') || text(a);
+      const href = a?.getAttribute('href') ?? '';
+      const condition = /\/New-/i.test(href) ? 'new' : /\/(?:Used|Certified)-/i.test(href) ? 'used' : task.condition ?? 'unknown';
       return vehicleRecord({ name, url: a?.getAttribute('href'),
         vin: card.querySelector('[data-vin]')?.getAttribute('data-vin') || details.match(/\bVIN\s*:?\s*([A-HJ-NPR-Z0-9]{17})/i)?.[1],
         stock: details.match(/\bStock\s*(?:#|No\.?|Number)?\s*:\s*(\S+)/i)?.[1],
@@ -105,9 +107,9 @@ export function parseInventoryHtml(html, task, site, now) {
         exterior: text(card.querySelector('.i18r_optColor p')).replace(/^Color:\s*/i, ''),
         transmission: text(card.querySelector('.i18r_optTrans p')).replace(/^Transmission:\s*/i, ''),
         features: [...card.querySelectorAll('.i18r_optDrive p, .i18r_optEngine p, .i18r_optFuel p')].map(text),
-        condition: /\/New-/i.test(a?.getAttribute('href') ?? '') ? 'new' : 'used',
+        condition,
         photos: [...card.querySelectorAll('.mainImgWrap img')].map(img => img.getAttribute('data-src') || img.getAttribute('src')),
-        currency: usAddress ? 'USD' : '', ...pricing(priceRows, !/\/New-/i.test(a?.getAttribute('href') ?? '')),
+        currency: usAddress ? 'USD' : '', ...pricing(priceRows, condition === 'used' || condition === 'certified'),
       }, site, now);
     }).filter(Boolean);
     const summary = text(root.querySelector('.pager-summary')).match(/Page:\s*(\d+)\s*of\s*(\d+)\s*\((\d+) vehicles\)/i);

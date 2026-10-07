@@ -47,15 +47,22 @@ async function startRefresh() {
   void pump();
 }
 
-async function getPage(url, site, policy) {
+async function getPage(url, site, policies) {
   let current = inventoryUrl(url, site);
   if (!current || !await chrome.permissions.contains({ origins: [`${new URL(current).origin}/*`] })) throw new Error('Website access is missing. Reconnect the dealership to allow it.');
+  const policy = policies?.[new URL(current).origin];
   if (policy && !robotsAllows(policy, current)) throw new Error('The website excludes this inventory path from automated reads.');
   // Chrome's Fetch API hides Location on manual redirects. Follow ordinary
   // public, cookie-free redirects, then validate the final origin before reading.
   const response = await fetch(current, { credentials: 'omit', redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' });
   current = inventoryUrl(response.url, site);
-  if (!current || policy && !robotsAllows(policy, current)) { await response.body?.cancel(); throw new Error('The website redirected outside this dealership or to an excluded path. Connect the actual inventory website.'); }
+  const finalPolicy = current && policies?.[new URL(current).origin];
+  if (!current || finalPolicy && !robotsAllows(finalPolicy, current)) { await response.body?.cancel(); throw new Error('The website redirected outside this dealership or to an excluded path. Connect the actual inventory website.'); }
+  if (policies && !finalPolicy) {
+    await response.body?.cancel();
+    // Do not read a redirected document until that origin's own policy is known.
+    return { redirect: current };
+  }
   if (response.status === 404 && new URL(current).pathname === '/robots.txt') { await response.body?.cancel(); return { body: '', url: current }; }
   if (!response.ok) { await response.body?.cancel(); throw new Error(`The website refused the inventory request (${response.status}). The previous catalog was kept.`); }
   if (Number(response.headers.get('content-length')) > 4_000_000) { await response.body?.cancel(); throw new Error('The inventory response is too large.'); }
@@ -108,13 +115,20 @@ async function processBatch() {
     const fresh = await read();
     if (fresh.job?.id !== job.id) continue;
     const fetchUrl = task.kind === 'robots' ? new URL('/robots.txt', task.url).href : task.url;
+    const origin = new URL(fetchUrl).origin;
+    if (task.kind !== 'robots' && !job.policies[origin]) {
+      await transaction(async current => {
+        if (current.job?.id !== job.id) return;
+        current.job.queue.unshift({ url: `${origin}/robots.txt`, kind: 'robots' });
+        await write(current);
+      });
+      continue;
+    }
     let result;
     try {
-      const policy = job.policies[new URL(fetchUrl).origin];
-      // Both apex/www hosts use the same site's policy when a canonical redirect occurs.
-      const applicable = policy ?? Object.values(job.policies)[0];
-      const fetched = await getPage(fetchUrl, state.config.site, task.kind === 'robots' ? null : applicable);
-      if (task.kind === 'robots') {
+      const fetched = await getPage(fetchUrl, state.config.site, task.kind === 'robots' ? null : job.policies);
+      if (fetched.redirect) result = { redirect: fetched.redirect };
+      else if (task.kind === 'robots') {
         if (fetched.body && !/user-agent\s*:/i.test(fetched.body)) throw new Error('The website returned an unexpected robots policy.');
         result = { policy: robotsPolicy(fetched.body), origin: new URL(fetched.url).origin, url: fetched.url };
       } else {
@@ -137,7 +151,11 @@ async function processBatch() {
         next.warnings.push(result.failure);
         // A denied robots read means no subsequent source requests.
         if (task.kind === 'robots') next.queue = [];
-      } else if (result.policy) next.policies[result.origin] = result.policy;
+      } else if (result.policy) {
+        // A robots redirect delegates the requested origin to the returned policy.
+        next.policies[origin] = result.policy;
+        next.policies[result.origin] = result.policy;
+      } else if (result.redirect) next.queue.unshift({ ...task, url: result.redirect });
       else {
         if (result.provider) next.provider = result.provider;
         const known = new Set([...next.visited, ...next.queue.map(item => item.url)]);

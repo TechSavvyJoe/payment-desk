@@ -95,6 +95,41 @@ test('separate DealerCarSearch new and used feeds verify their own totals', asyn
   expect(requests).toContain(`${site}inventory/used?page=2`);
 });
 
+test('each discovered origin gets its own robots policy before an inventory request', async () => {
+  const www = 'https://www.dealer.example.com/';
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="${www}searchnew.aspx">New inventory</a>` }));
+  await context.route(`${www}**`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nDisallow: /' }));
+  await panel.locator('#dealership-site').fill(site);
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('error');
+  expect(requests).toContain(`${site}robots.txt`);
+  expect(requests).toContain(`${www}robots.txt`);
+  expect(requests).not.toContain(`${www}searchnew.aspx`);
+  expect((await saved()).error).toContain('excludes this inventory path');
+});
+
+test('a canonical robots redirect delegates the policy without repeating robots requests', async () => {
+  const www = 'https://www.dealer.example.com/';
+  await context.route(`${site}robots.txt`, route => route.fulfill({ status: 302, headers: { location: `${www}robots.txt` } }));
+  await context.route(`${www}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /' }));
+  await connect();
+  expect((await saved()).vehicles).toHaveLength(3);
+  expect(requests.filter(url => url.endsWith('/robots.txt'))).toEqual([`${site}robots.txt`, `${www}robots.txt`]);
+});
+
+test('discovery uses the fetched document URL and neutral vehicle URLs retain the feed condition', async () => {
+  const results = await panel.evaluate(async () => {
+    const { parseInventoryHtml } = await import('./inventoryParser.js');
+    const site = 'https://dealer.example.com/inventory/used/';
+    const links = parseInventoryHtml('<a href="searchnew.aspx">New</a><a href="searchused.aspx">Used</a><a href="https://outside.example.com/inventory">Outside</a>', { url: 'https://dealer.example.com/', kind: 'html' }, site, 123);
+    const html = '<span class="LabelCityStateZip1">Roseville, MI 48066</span><span class="pager-summary">Page: 1 of 1 (1 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/vdp/123/2024-Ford-Explorer">2024 Ford Explorer</a></h4><div class="i18r_customPricing"><div class="price"><label class="price-label">Retail Price</label><span class="price-price">$24,995</span></div></div></div>';
+    return { links: links.tasks.map(task => task.url), newVehicle: parseInventoryHtml(html, { url: 'https://dealer.example.com/inventory/new', kind: 'html', condition: 'new' }, site, 123).vehicles[0], usedVehicle: parseInventoryHtml(html, { url: site, kind: 'html', condition: 'used' }, site, 123).vehicles[0] };
+  });
+  expect(results.links).toEqual([`${site}searchnew.aspx`, `${site}searchused.aspx`]);
+  expect(results.newVehicle).toMatchObject({ condition: 'new', price: null });
+  expect(results.usedVehicle).toMatchObject({ condition: 'used', price: 24995 });
+});
+
 test('connects both inventories, follows all pages, shows data, and reviews without clearing a deal', async () => {
   await connect();
   const state = await saved();
