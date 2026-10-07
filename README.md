@@ -20,12 +20,12 @@ npm run check:release
 - `check`: lint, unit/regression tests, and production build.
 - `check:release`: the same checks plus Playwright against the built site.
 - `test:e2e`: browser tests only; run `build` first if the output is stale.
-- `test:extension`: loads the unpacked Chrome companion in a separate Chromium profile and verifies capture and handoff.
+- `test:extension`: builds the unpacked Chrome companion, loads it in a separate Chromium profile, and verifies its native side panel, offline worksheet, capture and reviewed import.
 - Browser projects: desktop Chromium, mobile Chromium, and desktop WebKit. Linux CI installs their OS dependencies with `playwright install --with-deps`.
 
 ## Workflow
 
-**Chrome companion.** [Install Payment Desk Companion](extensions/payment-desk-companion/README.md) to capture an advertised selling price and vehicle/stock reference from a listing, review them, and start a new estimate. Manual entry remains available for unsupported listings. Run `npm run extension:package` to create the installable ZIP in `extension-dist`. The handoff carries only price/reference in a URL fragment; the app removes it and asks for confirmation before applying it.
+**Chrome companion.** [Install Payment Desk Companion](extensions/payment-desk-companion/README.md) to use the full worksheet in Chrome's side panel beside a listing, with offline calculations and optional capture of selling price and vehicle/stock reference. Capture is reviewed before replacing a deal. Dealership settings are local to the extension and separate from the website. Run `npm run extension:package` to build the worksheet and create the installable ZIP in `extension-dist`.
 
 Enter a selling price, date, optional vehicle/stock reference, trade allowance/payoff, and down payment. Select finance or cash and transfer or new plates. Enter new-registration cost when required.
 

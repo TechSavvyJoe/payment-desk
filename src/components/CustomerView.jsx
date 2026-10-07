@@ -6,6 +6,7 @@ import { EditIcon, PrintIcon, ShareIcon } from "./Icons.jsx";
 import ResultsPanel from "./ResultsPanel.jsx";
 import TradeTaxBreakdown from "./TradeTaxBreakdown.jsx";
 import CustomerPrintout from "./CustomerPrintout.jsx";
+import { PAYMENT_DESK_URL } from '../../extensions/payment-desk-companion/vehicleHandoff.js';
 
 const money = (value) => formatCurrency(value, { cents: true });
 const LedgerRow = ({ item, total = false }) => (
@@ -26,7 +27,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
   const [busy, setBusy] = useState(false);
   const warningId = useId();
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-  const summaryText = () => formatProposalText(snapshot, { calculatorUrl: window.location.href });
+  const summaryText = () => formatProposalText(snapshot, { calculatorUrl: window.location.protocol === 'chrome-extension:' ? PAYMENT_DESK_URL : window.location.href });
 
   const handleCopy = async () => {
     if (!snapshot.summary.canExport || busy) return;

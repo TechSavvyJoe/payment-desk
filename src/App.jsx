@@ -73,8 +73,10 @@ export default function App() {
       setVehicleImport(parseVehicleHandoff(window.location.hash));
       scrubFragment();
     };
-    scrubFragment();
     window.addEventListener('hashchange', receiveVehicle);
+    // A side-panel capture can arrive between the first render and this effect.
+    // Read it before clearing the fragment, as well as handling later captures.
+    receiveVehicle();
     return () => window.removeEventListener('hashchange', receiveVehicle);
   }, []);
   const settingsButtonRef = useRef(null);
@@ -216,7 +218,7 @@ export default function App() {
           {view === 'dealer' ? <>
             <div className="calculator-layout">
               <div className="calculator-left">
-                <div className="page-intro"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
+                <div className="page-intro" role="region" aria-label="Worksheet introduction"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
                 <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
                 <details className="deal-details" open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)}>
