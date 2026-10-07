@@ -50,7 +50,10 @@ test('monthly and down-payment labels do not become the selling price', async ({
   ]) expect((await capture(page, unstructured(html))).price).toBeNull();
 });
 test('malformed widgets, hidden prices and arbitrary articles require manual entry', async ({ page }) => {
-  expect((await capture(page, '<h1>Dealership news</h1><p>Sale price: $10</p><script type="application/ld+json">{oops</script>')).price).toBeNull();
+  const article = await capture(page, '<h1>2026 dealership news</h1><p>Sale price: $10</p><script type="application/ld+json">{oops</script>');
+  expect(article).toMatchObject({ name: '', stock: '', price: null });
+  const part = await capture(page, structured({ '@type': 'Product', name: '2024 Explorer brake pads', category: 'Car parts', offers: car.offers }));
+  expect(part.price).toBeNull();
   expect((await capture(page, unstructured('<span hidden class="internet-price">$10</span>'))).price).toBeNull();
   expect((await capture(page, unstructured('<script type="application/ld+json">{oops</script><p>Internet price: $29,995</p>'))).price).toBe(29995);
 });

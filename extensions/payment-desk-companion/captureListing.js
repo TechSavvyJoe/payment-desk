@@ -11,7 +11,7 @@ export function captureListing() {
   };
   const types = node => [node?.['@type']].flat().map(type => String(type).split('/').at(-1));
   const isVehicle = node => types(node).some(type => type === 'Car' || type === 'Vehicle')
-    || (types(node).includes('Product') && /\b(?:19|20)\d{2}\b/.test(String(node.name)) && Boolean(node.vehicleIdentificationNumber || node.vehicleModelDate || /vehicle|automotive|car|truck/i.test(String(node.category))));
+    || (types(node).includes('Product') && /\b(?:19|20)\d{2}\b/.test(String(node.name)) && Boolean(node.vehicleIdentificationNumber || node.vehicleModelDate || /^(?:vehicles?|cars?|trucks?|suvs?|automobiles?)$/i.test(String(node.category).trim())));
   const entities = [];
   let visited = 0;
   const visit = (node, depth = 0) => {
@@ -87,7 +87,7 @@ export function captureListing() {
         uniquePrices.add(price);
       }
     }
-  } else if (headings.length === 1 && /\b(?:19|20)\d{2}\b/.test(headings[0])) {
+  } else if (primaryScope && headings.length === 1 && /\b(?:19|20)\d{2}\b/.test(headings[0])) {
     result.name = headings[0];
     result.stock = uniqueStock;
   } else {
