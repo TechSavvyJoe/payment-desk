@@ -64,6 +64,51 @@ for (const [label, before, shownAfter] of [
   });
 }
 
+// 11:59:30 PM Eastern on October 6. Ninety seconds later it is October 7.
+const BEFORE_MIDNIGHT = new Date('2026-10-07T03:59:30Z');
+const estimateDate = page => page.getByRole('textbox', { name: 'Estimate date' });
+
+test('a blank desk left open overnight moves to the new day and still resets and closes without a prompt', async ({ page }) => {
+  const dialogs = [];
+  page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+  await page.clock.install({ time: BEFORE_MIDNIGHT });
+  await page.goto('/');
+  await page.locator('details.deal-details > summary').click();
+  await expect(estimateDate(page)).toHaveValue('10/06/26');
+  // A click gives the page the user activation browsers require before warning on leave.
+  await price(page).click();
+  await price(page).blur();
+  await page.clock.runFor(90_000);
+  await expect(estimateDate(page)).toHaveValue('10/07/26');
+  await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  // Reset closes Deal details.
+  await page.locator('details.deal-details > summary').click();
+  await expect(estimateDate(page)).toHaveValue('10/07/26');
+  // No "Leave site?" prompt: the page closes (or, in WebKit, stays put) without asking.
+  const closing = page.close({ runBeforeUnload: true });
+  const prompt = await page.waitForEvent('dialog', { timeout: 3_000 }).then(dialog => dialog.type(), () => null);
+  await closing;
+  expect(prompt).toBeNull();
+  expect(dialogs).toEqual([]);
+});
+
+test('a desk with a deal keeps its date overnight and still asks before Reset and leaving', async ({ page }) => {
+  const dialogs = [];
+  page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+  await page.clock.install({ time: BEFORE_MIDNIGHT });
+  await page.goto('/');
+  await page.locator('details.deal-details > summary').click();
+  await price(page).fill('30000');
+  await price(page).press('Tab');
+  await page.clock.runFor(90_000);
+  await expect(estimateDate(page)).toHaveValue('10/06/26');
+  await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  await expect.poll(() => dialogs).toEqual(['confirm']);
+  await expect(price(page)).toHaveValue('30,000');
+  await page.close({ runBeforeUnload: true });
+  await expect.poll(() => dialogs).toEqual(['confirm', 'beforeunload']);
+});
+
 test('on January 2, 2027 the reminder is gone and the per-deal review warning takes over', async ({ page }) => {
   await openOn(page, '2027-01-02');
   await expect(reminder(page)).toHaveCount(0);

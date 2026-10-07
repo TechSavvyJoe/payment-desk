@@ -32,11 +32,14 @@ export function createDeskState(dealDate = todayDealDate()) {
       dealDate, vehicleDescription: '' },
     gridRates: { ...DEFAULT_APR_BY_TERM }, gridDownPayments: [0, 1000, 2000, 3000],
     view: 'dealer', mobileGridOpen: false, lastRoll: null, nextItemId: 1, resetCount: 0,
+    // The day this desk was started. Edits are measured against a blank desk from
+    // that day, so passing midnight never makes an untouched desk look edited.
+    startDate: dealDate,
   };
 }
 
 export function hasDealEdits(state) {
-  const baseline = createDeskState();
+  const baseline = createDeskState(state.startDate);
   return JSON.stringify(state.deal) !== JSON.stringify(baseline.deal)
     || JSON.stringify(state.gridRates) !== JSON.stringify(baseline.gridRates)
     || JSON.stringify(state.gridDownPayments) !== JSON.stringify(baseline.gridDownPayments);
@@ -86,6 +89,10 @@ export function deskReducer(state, action) {
     case 'view': return { ...state, view: action.view, mobileGridOpen: false };
     case 'grid-visibility': return { ...state, mobileGridOpen: action.open && state.view === 'dealer' && state.deal.dealType === 'finance' };
     case 'reset': return { ...createDeskState(), resetCount: state.resetCount + 1 };
+    // A blank desk left open past midnight starts the new day, as a fresh page would.
+    // A desk with edits keeps its date. resetCount remounts the fields to show the new date.
+    case 'new-day': return state.startDate === action.date || hasDealEdits(state) ? state
+      : { ...createDeskState(action.date), view: state.view, mobileGridOpen: state.mobileGridOpen, resetCount: state.resetCount + 1 };
     default: return state;
   }
 }

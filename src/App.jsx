@@ -94,6 +94,10 @@ export default function App() {
   const today = useEasternToday();
 
   useEffect(() => {
+    if (!hasDeal) dispatch({ type: 'new-day', date: today });
+  }, [hasDeal, today]);
+
+  useEffect(() => {
     if (!hasDeal) return;
     const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warnBeforeLeaving);
