@@ -144,6 +144,31 @@ test('clearing a deal kept overnight moves it to the new day without interruptin
   await expect(estimateDate(page)).toHaveValue('10/07/26');
 });
 
+test('a date picked on a desk kept overnight stays picked, and the date field keeps focus', async ({ page }) => {
+  await page.clock.install({ time: BEFORE_MIDNIGHT });
+  await page.goto('/');
+  await page.locator('details.deal-details > summary').click();
+  await estimateDate(page).fill('10/05/26');
+  await page.clock.runFor(90_000);
+  // Choosing the desk's first day again makes it blank; the choice must still stand.
+  await estimateDate(page).click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('10/06/26');
+  await page.clock.runFor(90_000);
+  await expect(estimateDate(page)).toHaveValue('10/06/26');
+  await expect(estimateDate(page)).toBeFocused();
+});
+
+test('a blank desk moves to the new day without taking focus from the date field', async ({ page }) => {
+  await page.clock.install({ time: BEFORE_MIDNIGHT });
+  await page.goto('/');
+  await page.locator('details.deal-details > summary').click();
+  await estimateDate(page).click();
+  await page.clock.runFor(90_000);
+  await expect(estimateDate(page)).toHaveValue('10/07/26');
+  await expect(estimateDate(page)).toBeFocused();
+});
+
 test('on January 2, 2027 the reminder is gone and the per-deal review warning takes over', async ({ page }) => {
   await openOn(page, '2027-01-02');
   await expect(reminder(page)).toHaveCount(0);

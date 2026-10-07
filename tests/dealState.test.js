@@ -117,3 +117,14 @@ test('a desk with edits keeps its date at midnight and stays protected', () => {
     assert.equal(hasDealEdits(edited), true);
   }
 });
+
+test('a date someone picked is kept at midnight, even when it makes the desk blank again', () => {
+  let state = createDeskState('2026-10-06');
+  state = deskReducer(state, { type: 'field', field: 'dealDate', value: '2026-10-05' });
+  state = deskReducer(state, { type: 'field', field: 'dealDate', value: '2026-10-06' });
+  assert.equal(hasDealEdits(state), false);
+  assert.equal(state.dateChosen, true);
+  assert.equal(deskReducer(state, { type: 'new-day', date: '2026-10-07' }), state);
+  // Reset hands the date back to the calendar.
+  assert.equal(deskReducer(state, { type: 'reset' }).dateChosen, false);
+});

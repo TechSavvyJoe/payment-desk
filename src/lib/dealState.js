@@ -35,6 +35,8 @@ export function createDeskState(dealDate = todayDealDate()) {
     // The day this desk was started. Edits are measured against a blank desk from
     // that day, so passing midnight never makes an untouched desk look edited.
     startDate: dealDate,
+    // Set once someone picks the estimate date; the desk then keeps it until Reset.
+    dateChosen: false,
   };
 }
 
@@ -56,6 +58,7 @@ function withPatch(state, patch, label) {
 export function deskReducer(state, action) {
   switch (action.type) {
     case 'field': {
+      if (action.field === 'dealDate') return { ...withPatch(state, { dealDate: action.value }), dateChosen: true };
       const patch = { [action.field]: action.value };
       if (action.field === 'termMonths') patch.apr = state.gridRates[action.value] ?? state.deal.apr;
       if (action.field === 'dealType' && action.value === 'cash') patch.cashDown = 0;
@@ -91,9 +94,9 @@ export function deskReducer(state, action) {
     case 'reset': return { ...createDeskState(), resetCount: state.resetCount + 1 };
     // A blank desk left open past midnight moves to the new day, as a fresh page would.
     // Only forward, because Reset can already be on the new day while the app's clock
-    // still says yesterday. A desk with edits keeps its date. Only the date changes,
-    // so nothing remounts under someone who is typing.
-    case 'new-day': return action.date <= state.startDate || hasDealEdits(state) ? state
+    // still says yesterday. A desk with edits, or a date someone picked, keeps its date.
+    // Only the date changes, so nothing remounts under someone who is typing.
+    case 'new-day': return action.date <= state.startDate || state.dateChosen || hasDealEdits(state) ? state
       : { ...state, startDate: action.date, deal: { ...state.deal, dealDate: action.date }, lastRoll: null };
     default: return state;
   }
