@@ -1,0 +1,60 @@
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { HANDOFF_PREFIX } from '../../extensions/payment-desk-companion/vehicleHandoff.js';
+
+const fragment = value => HANDOFF_PREFIX + encodeURIComponent(JSON.stringify({ version: 1, salePrice: 29995, vehicleDescription: '2024 Explorer · Stock H12345', ...value }));
+test('captured vehicle is reviewed before applying, and its fragment is removed', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/' + fragment());
+  const dialog = page.getByRole('dialog', { name: 'Review captured vehicle' });
+  await expect(dialog).toContainText('$29,995');
+  await expect(dialog).toContainText('Stock H12345');
+  await expect(page.getByRole('textbox', { name: 'Selling price' })).toHaveValue('');
+  expect(new URL(page.url()).hash).toBe('');
+  expect((await new AxeBuilder({ page }).include('.vehicle-import').analyze()).violations).toEqual([]);
+  await dialog.getByRole('button', { name: 'Start new estimate' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Selling price' })).toHaveValue('29,995');
+  await expect(page.locator('#vehicle-reference')).toHaveValue('2024 Explorer · Stock H12345');
+  await expect(page.locator('#sale-price')).toBeFocused();
+  expect(errors).toEqual([]);
+});
+test('cancelling or escaping a handoff leaves the worksheet blank', async ({ page }) => {
+  await page.goto('/' + fragment());
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#sale-price')).toHaveValue('');
+  await page.evaluate(hash => { location.hash = hash; }, fragment());
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#sale-price')).toHaveValue('');
+});
+test('replacing an existing deal requires review and preserves device settings', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('payment-desk.dealership.v1', JSON.stringify({ name: 'Lakeside Motors', logo: null })));
+  await page.goto('/');
+  await page.locator('#sale-price').fill('40000');
+  await page.locator('#cash-down').fill('2000');
+  await page.evaluate(hash => { location.hash = hash; }, fragment({ apr: 0, tradeAllowance: 10000 }));
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('clear the current deal figures');
+  await expect(page.locator('#sale-price')).toHaveValue('40,000');
+  await dialog.getByRole('button', { name: 'Start new estimate' }).click();
+  await expect(page.locator('#cash-down')).toHaveValue('0');
+  await expect(page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' })).toBeVisible();
+  await expect(page.locator('#apr')).toHaveValue('6.50');
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['payment-desk.dealership.v1']);
+});
+test('bad imported data cannot apply a price, and reference-only imports remain usable', async ({ page }) => {
+  await page.goto('/' + fragment({ salePrice: 1_000_001 }));
+  await expect(page.getByRole('dialog')).toContainText('could not be imported');
+  await expect(page.getByRole('button', { name: 'Start new estimate' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.locator('#sale-price')).toHaveValue('');
+  await page.evaluate(hash => { location.hash = hash; }, fragment({ salePrice: null }));
+  await expect(page.getByRole('dialog')).toContainText('Not provided — enter it in the worksheet');
+  await page.getByRole('button', { name: 'Start new estimate' }).click();
+  await expect(page.locator('#vehicle-reference')).toHaveValue('2024 Explorer · Stock H12345');
+  await expect(page.locator('#sale-price')).toHaveValue('');
+});
