@@ -11,6 +11,7 @@
   .quick-jump-nav { display: none; }
   .compact-height .mobile-results,
   .mobile-results { margin-bottom: 6px; }
+  .compact-height .mobile-results .results-payment,
   .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 6px 10px; }
   .mobile-results .results-payment__label-row { grid-column: 1; grid-row: 1; }
   .compact-height .mobile-results .payment-number,

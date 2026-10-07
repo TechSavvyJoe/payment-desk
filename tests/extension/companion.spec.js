@@ -21,9 +21,9 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => { if (context) await context.close(); });
 
-const openPanelDocument = async (width = 390) => {
+const openPanelDocument = async (width = 390, height = 850) => {
   const page = await context.newPage();
-  await page.setViewportSize({ width, height: 850 });
+  await page.setViewportSize({ width, height });
   await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await expect(page.frameLocator('#desk').locator('#sale-price')).toBeVisible();
   await expect(page.locator('#start-estimate')).toBeEnabled();
@@ -74,8 +74,7 @@ test('a worksheet startup failure offers retry and recovers without losing a loa
 
 test('laptop panel shows selling price and trade fields above its fixed payment bar', async ({ browserName }, testInfo) => {
   expect(browserName).toBe('chromium');
-  const page = await openPanelDocument();
-  await page.setViewportSize({ width: 390, height: 650 });
+  const page = await openPanelDocument(390, 650);
   const desk = page.frameLocator('#desk');
   await desk.locator('#sale-price').fill('30000');
   const frame = page.frames().find(frame => frame.url().endsWith('/desk/index.html'));
