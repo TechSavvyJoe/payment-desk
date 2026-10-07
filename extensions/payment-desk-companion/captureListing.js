@@ -109,9 +109,11 @@ export function captureListing() {
         const price = priceFor(node.content || node.textContent);
         if (price !== null) uniquePrices.add(price);
       }
-      const labeled = [...bodyText.matchAll(/(?:selling|sale|internet|our) price\s*[:\n]?\s*(\$\s*[\d,]+(?:\.\d{1,2})?)([^\n]{0,30})/gi)];
-      for (const match of labeled) {
-        if (/month|monthly|\/mo|lease|down payment|deposit|MSRP|list price/i.test(match[2])) continue;
+      for (const row of primaryScope.querySelectorAll('p, li, dd')) {
+        if (!belongsToVehicle(row) || !row.getClientRects().length) continue;
+        // Read the whole rendered row so qualifiers split across spans cannot disappear.
+        const match = clean(row.innerText, 300).match(/^(?:selling|sale|internet|our) price\s*:?\s*(\$?\s*[\d,]+(?:\.\d{1,2})?)(?:\s+USD)?$/i);
+        if (!match) continue;
         const price = priceFor(match[1]);
         if (price !== null) uniquePrices.add(price);
       }

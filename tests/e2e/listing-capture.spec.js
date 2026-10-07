@@ -89,3 +89,7 @@ test('prices outside the primary vehicle scope or in related widgets stay blank'
     '<meta property="product:price:currency" content="USD"><h1>2024 Ford Explorer</h1><div class="internet-price">$999</div>',
   ]) expect((await capture(page, html)).price).toBeNull();
 });
+test('monthly qualifiers split across price spans cannot become a selling price', async ({ page }) => {
+  const result = await capture(page, unstructured('<p>Internet price: <span class="internet-price">$399</span><span>/mo</span></p>'));
+  expect(result.price).toBeNull();
+});
