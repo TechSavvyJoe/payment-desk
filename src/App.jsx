@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
-import { clearBrandSettings, loadBrandSettings, resolveBrand, saveBrandSettings } from './lib/brandSettings.js';
-import { clearFeeSettings, loadFeeSettings, resolveFees, saveFeeSettings } from './lib/feeSettings.js';
+import { loadBrandSettings, resolveBrand } from './lib/brandSettings.js';
+import { loadFeeSettings, resolveFees } from './lib/feeSettings.js';
+import { clearDeviceSettings, saveDeviceSettings } from './lib/deviceSettings.js';
 import { policyReviewReminder, policyReviewReminderShort, todayDealDate } from './lib/policy.js';
 import { getProposalStatus } from './lib/proposal.js';
 import { formatShortDate } from './lib/formatters.js';
@@ -28,6 +29,25 @@ const focusDestination = id => requestAnimationFrame(() => {
   node.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
 });
 
+// A desk left open overnight must pick up the new Eastern day on its own, so the
+// December reminder appears and leaves on time. Phones pause timers in the
+// background, so returning to the page checks the date straight away too.
+function useEasternToday() {
+  const [today, setToday] = useState(todayDealDate);
+  useEffect(() => {
+    const check = () => setToday(todayDealDate());
+    const timer = setInterval(check, 60_000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+    };
+  }, []);
+  return today;
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
   const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
@@ -40,21 +60,15 @@ export default function App() {
   const dealInput = useMemo(() => ({ ...deal, dealershipFees }), [deal, dealershipFees]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef(null);
-  // Even when the browser refuses to store them, the settings apply for this visit.
-  const saveSettings = (nextBrand, nextFees) => {
-    const brandOutcome = saveBrandSettings(nextBrand);
-    const feeOutcome = saveFeeSettings(nextFees);
-    setBrandSettings(brandOutcome.settings);
-    setFeeSettings(feeOutcome.settings);
-    return { ok: brandOutcome.ok && feeOutcome.ok };
+  // Even when the browser refuses to store them, the settings apply for this visit,
+  // and the device keeps its previous saved settings whole.
+  const applySettings = outcome => {
+    setBrandSettings(outcome.brand);
+    setFeeSettings(outcome.fees);
+    return { ok: outcome.ok };
   };
-  const clearSettings = () => {
-    const brandOutcome = clearBrandSettings();
-    const feeOutcome = clearFeeSettings();
-    setBrandSettings(brandOutcome.settings);
-    setFeeSettings(feeOutcome.settings);
-    return { ok: brandOutcome.ok && feeOutcome.ok };
-  };
+  const saveSettings = (nextBrand, nextFees) => applySettings(saveDeviceSettings(nextBrand, nextFees));
+  const clearSettings = () => applySettings(clearDeviceSettings());
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState('payment');
   const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
@@ -77,8 +91,7 @@ export default function App() {
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
   const canCompare = getProposalStatus({ dealInput, result, hasInputErrors }).canExport;
-  // Read on every render so a desk left open overnight picks up the new day.
-  const today = todayDealDate();
+  const today = useEasternToday();
 
   useEffect(() => {
     if (!hasDeal) return;

@@ -49,6 +49,21 @@ for (const isoDate of ['2026-12-01', '2026-12-31']) {
   });
 }
 
+// A desk left open across Eastern midnight updates without anyone touching it.
+for (const [label, before, shownAfter] of [
+  ['appears at midnight on December 1', '2026-12-01T04:59:30Z', true],
+  ['leaves at midnight on January 1', '2027-01-01T04:59:30Z', false],
+]) {
+  test(`with the page left open, the reminder ${label}`, async ({ page }) => {
+    await page.clock.install({ time: new Date(before) });
+    await page.goto('/');
+    await expect(price(page)).toBeVisible();
+    await expect(reminder(page)).toHaveCount(shownAfter ? 0 : 1);
+    await page.clock.runFor(90_000);
+    await expect(reminder(page)).toHaveCount(shownAfter ? 1 : 0);
+  });
+}
+
 test('on January 2, 2027 the reminder is gone and the per-deal review warning takes over', async ({ page }) => {
   await openOn(page, '2027-01-02');
   await expect(reminder(page)).toHaveCount(0);
