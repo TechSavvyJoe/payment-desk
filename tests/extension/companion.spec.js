@@ -82,6 +82,17 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   await expect.poll(() => evaluate('document.getElementById("capture").disabled')).toBe(false);
   await expect.poll(() => evaluate('({price:document.getElementById("price").value,reading:document.getElementById("capture").disabled,notice:document.getElementById("notice").textContent})')).toMatchObject({ price: '29995', reading: false });
   expect(await evaluate('document.getElementById("stock").value')).toBe('H12345');
+  // A failed attempt on a different, unauthorized tab must invalidate listing A.
+  const unauthorized = await context.newPage();
+  await unauthorized.goto('about:blank');
+  await unauthorized.bringToFront();
+  await evaluate('document.getElementById("capture").click()');
+  await expect.poll(() => evaluate('document.getElementById("capture").disabled')).toBe(false);
+  expect(await evaluate('({name:document.getElementById("vehicle-name").value,stock:document.getElementById("stock").value,price:document.getElementById("price").value,source:document.getElementById("source").textContent})')).toEqual({ name: '', stock: '', price: '', source: 'Enter the vehicle details manually.' });
+  expect(await evaluate('document.getElementById("notice").textContent')).toContain('cannot be read');
+  await listing.bringToFront();
+  await evaluate('document.getElementById("capture").click()');
+  await expect.poll(() => evaluate('document.getElementById("price").value')).toBe('29995');
   await evaluate('document.getElementById("start-estimate").click()');
   await expect.poll(() => evaluate('document.getElementById("desk").contentDocument.querySelector("dialog")?.textContent')).toContain('$29,995');
   await evaluate('Array.from(document.getElementById("desk").contentDocument.querySelectorAll("button")).find(b => b.textContent === "Start new estimate").click()');
