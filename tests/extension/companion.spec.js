@@ -1,5 +1,6 @@
 import { test, expect, chromium } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { mkdir, writeFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 
 let context;
@@ -90,7 +91,10 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   expect(context.pages().filter(page => page.url().startsWith('chrome-extension:'))).toHaveLength(0);
   await evaluate('document.getElementById("desk").contentDocument.fonts.ready');
   const screenshot = await call('Page.captureScreenshot');
-  await testInfo.attach('native-side-panel', { body: Buffer.from(screenshot.data, 'base64'), contentType: 'image/png' });
+  await mkdir(testInfo.outputPath(), { recursive: true });
+  const screenshotPath = testInfo.outputPath('native-side-panel.png');
+  await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+  await testInfo.attach('native-side-panel', { path: screenshotPath, contentType: 'image/png' });
   // Global panel remains the same live worksheet when the user changes tabs.
   const another = await context.newPage();
   await another.goto('about:blank');
