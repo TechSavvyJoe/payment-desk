@@ -54,6 +54,8 @@ test('malformed widgets, hidden prices and arbitrary articles require manual ent
   expect(article).toMatchObject({ name: '', stock: '', price: null });
   const part = await capture(page, structured({ '@type': 'Product', name: '2024 Explorer brake pads', category: 'Car parts', offers: car.offers }));
   expect(part.price).toBeNull();
+  const product = await capture(page, '<section itemscope itemtype="https://schema.org/Product"><h1>2024 Explorer brake pads</h1><span itemprop="priceCurrency">USD</span><span itemprop="price">$10</span></section>');
+  expect(product).toMatchObject({ name: '', price: null });
   expect((await capture(page, unstructured('<span hidden class="internet-price">$10</span>'))).price).toBeNull();
   expect((await capture(page, unstructured('<script type="application/ld+json">{oops</script><p>Internet price: $29,995</p>'))).price).toBe(29995);
 });

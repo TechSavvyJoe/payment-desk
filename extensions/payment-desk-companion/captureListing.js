@@ -40,7 +40,7 @@ export function captureListing() {
     grouped.get(identity).push(entity);
   }
   const result = { name: '', stock: '', price: null, sourceHost: location.hostname, notice: '' };
-  const scopeSelector = '[itemscope][itemtype$="/Vehicle"], [itemscope][itemtype$="/Car"], [itemscope][itemtype$="/Product"], [data-vehicle-detail], #vehicle-details, .vehicle-detail, .vehicle-details';
+  const scopeSelector = '[itemscope][itemtype$="/Vehicle"], [itemscope][itemtype$="/Car"], [data-vehicle-detail], #vehicle-details, .vehicle-detail, .vehicle-details';
   const unrelatedSelector = 'aside, nav, footer, .related-vehicles, .related-inventory, [data-related-inventory]';
   const headingNodes = [...document.querySelectorAll('h1')].filter(node => node.getClientRects().length);
   const headings = headingNodes.map(node => clean(node.textContent, 67));
