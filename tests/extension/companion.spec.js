@@ -31,12 +31,6 @@ test('toolbar authorization and real capture transfer a reviewed vehicle into th
   const listing = await context.newPage();
   const listingUrl = 'https://vehicle.example.test/explorer';
   await context.route(listingUrl, route => route.fulfill({ contentType: 'text/html', body: '<h1>2024 Ford Explorer</h1><script type="application/ld+json">{"@type":"Car","name":"2024 Ford Explorer XLT","sku":"H12345","offers":{"@type":"Offer","price":29995,"priceCurrency":"USD"}}</script>' }));
-  // Serve the built app at the fixed destination without changing its navigation fragment.
-  await context.route('https://desking.mysoldlog.com/**', async route => {
-    const url = new URL(route.request().url());
-    const response = await context.request.get(baseURL + url.pathname + url.search);
-    await route.fulfill({ response });
-  });
   await listing.goto(listingUrl);
   const browserSession = await context.browser().newBrowserCDPSession();
   const { targetInfos } = await browserSession.send('Target.getTargets', { filter: [{ type: 'tab', exclude: false }] });
@@ -53,10 +47,21 @@ test('toolbar authorization and real capture transfer a reviewed vehicle into th
   await expect(popup.locator('#source')).toContainText('vehicle.example.test');
   await popup.bringToFront();
   await popup.locator('body').screenshot({ path: testInfo.outputPath('companion-captured.png') });
+  // Keep the real tabs API, but route the intended production handoff to the local
+  // build. Extension-created tabs can send their first request before routing attaches.
+  await popup.evaluate(localDesk => {
+    const createTab = chrome.tabs.create.bind(chrome.tabs);
+    chrome.tabs.create = properties => {
+      const destination = new URL(properties.url);
+      if (destination.origin !== 'https://desking.mysoldlog.com') throw new Error('Unexpected destination');
+      return createTab({ ...properties, url: localDesk + '/' + destination.hash });
+    };
+  }, baseURL);
   const deskReady = context.waitForEvent('page');
   await popup.getByRole('button', { name: 'Start estimate' }).click();
   const desk = await deskReady;
   await desk.bringToFront();
+  await desk.waitForLoadState();
   await expect(desk.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('$29,995');
   await desk.getByRole('button', { name: 'Start new estimate' }).click();
   await expect(desk.locator('#sale-price')).toHaveValue('29,995');
