@@ -34,7 +34,7 @@ const attachNativePanel = async (browserSession, targetId) => {
   let sequence = 0;
   return (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++sequence;
-    const timer = setTimeout(() => { browserSession.off('Target.receivedMessageFromTarget', listener); reject(new Error(`Native panel ${method} timed out`)); }, 15_000);
+    const timer = setTimeout(() => { browserSession.off('Target.receivedMessageFromTarget', listener); reject(new Error(`Native panel ${method} timed out: ${params.expression ?? ''}`)); }, 15_000);
     const listener = event => {
       if (event.sessionId !== sessionId) return;
       const message = JSON.parse(event.message);
@@ -72,7 +72,7 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 800, deviceScaleFactor: 1, mobile: false });
   await call('Page.captureScreenshot');
   const evaluate = async expression => {
-    const result = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, userGesture: true });
+    const result = await call('Runtime.evaluate', { expression, returnByValue: true, userGesture: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
     return result.result.value;
   };
@@ -89,7 +89,6 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   expect(await evaluate('document.getElementById("desk").contentWindow.location.hash')).toBe('');
   expect(listing.url()).toBe(url);
   expect(context.pages().filter(page => page.url().startsWith('chrome-extension:'))).toHaveLength(0);
-  await evaluate('document.getElementById("desk").contentDocument.fonts.ready');
   const screenshot = await call('Page.captureScreenshot');
   await mkdir(testInfo.outputPath(), { recursive: true });
   const screenshotPath = testInfo.outputPath('native-side-panel.png');
