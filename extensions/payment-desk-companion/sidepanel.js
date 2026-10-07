@@ -1,6 +1,8 @@
 import { captureListing } from './captureListing.js';
 import { parseAdvertisedPrice, PAYMENT_DESK_URL, vehicleHandoffUrl } from './vehicleHandoff.js';
 import { installInventoryPanel } from './inventoryPanel.js';
+import { installWorksheet } from './worksheetLoader.js';
+import { COMPANION_PREFIX } from './inventoryWeb.js';
 
 const nameInput = document.getElementById('vehicle-name');
 const stockInput = document.getElementById('stock');
@@ -33,23 +35,17 @@ const inventory = installInventoryPanel(vehicle => {
   showControls(true);
   (vehicle.price === null ? priceInput : nameInput).focus();
 }, () => showControls(false));
-const enableWorksheet = () => {
-  // A cached worksheet may finish loading before this module's imports finish.
-  // Do not mistake the iframe's initial about:blank document for the worksheet.
-  if (desk.contentWindow.location.pathname === '/desk/index.html' && desk.contentDocument.readyState === 'complete') {
-    worksheetReady = true;
-    updateReviewButton();
-  }
-};
-desk.addEventListener('load', enableWorksheet);
-enableWorksheet();
+installWorksheet(() => {
+  worksheetReady = true;
+  updateReviewButton();
+});
 toggleButton.addEventListener('click', () => {
   inventory.close();
   showControls(controls.hidden);
   if (!controls.hidden) nameInput.focus();
 });
 document.getElementById('open-desk').addEventListener('click', async () => {
-  try { await chrome.tabs.create({ url: PAYMENT_DESK_URL }); }
+  try { await chrome.tabs.create({ url: PAYMENT_DESK_URL + COMPANION_PREFIX + chrome.runtime.id }); }
   catch { showControls(true); showNotice('The web app could not be opened. You can continue in the worksheet below.', true); }
 });
 captureButton.addEventListener('click', async () => {

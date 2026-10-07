@@ -108,8 +108,8 @@ export function robotsPolicy(text) {
     }
   }
   groups.push(group);
-  const specific = groups.filter(g => g.agents.some(agent => agent !== '*' && 'paymentdeskcompanion'.startsWith(agent)));
-  const selected = specific.length ? specific : groups.filter(g => g.agents.includes('*'));
+  // Fetch sends Chrome's ordinary user agent, not a named crawler identity.
+  const selected = groups.filter(g => g.agents.includes('*'));
   return { rules: selected.flatMap(g => g.rules), delay: Math.max(1, ...selected.map(g => g.delay)) };
 }
 export function robotsAllows(policy, url) {

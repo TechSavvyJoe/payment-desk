@@ -59,11 +59,41 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => { await context?.close(); await rm(directory, { recursive: true, force: true }); });
 const saved = () => panel.evaluate(async key => (await chrome.storage.local.get(key))[key], KEY);
-async function connect() {
-  await panel.locator('#dealership-site').fill(site);
+async function connect(url = site) {
+  await panel.locator('#dealership-site').fill(url);
   await panel.getByRole('button', { name: 'Connect and refresh' }).click();
   await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('ready');
 }
+
+test('a direct used-inventory page discovers new inventory before reporting completion', async () => {
+  await connect(`${site}searchused.aspx`);
+  const state = await saved();
+  expect(state.vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used', 'used']);
+  expect(requests).toContain(site);
+  expect(requests).toContain(`${site}searchnew.aspx`);
+});
+
+test('separate DealerCarSearch new and used feeds verify their own totals', async () => {
+  await context.route('https://dealer.example.com/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/robots.txt') return route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /' });
+    const navigation = '<a href="/inventory/new">New</a><a href="/inventory/used">Used</a>';
+    if (url.pathname === '/') return route.fulfill({ contentType: 'text/html', body: navigation });
+    const type = url.pathname.endsWith('/new') ? 'new' : 'used';
+    const page = Number(url.searchParams.get('page') || 1);
+    const pages = type === 'new' ? 1 : 2;
+    const number = type === 'new' ? 1 : page + 1;
+    const html = `${navigation}<span class="LabelCityStateZip1">Roseville, MI 48066</span><span class="pager-summary">Page: ${page} of ${pages} (${pages} vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/vdp/${number}/${type === 'new' ? 'New' : 'Used'}-2024-Ford-Explorer">2024 Ford Explorer</a></h4><p>Stock #: S${number}</p></div>`;
+    return route.fulfill({ contentType: 'text/html', body: html });
+  });
+  await connect();
+  const state = await saved();
+  expect(state.vehicles).toHaveLength(3);
+  expect(state.vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used', 'used']);
+  expect(state.error).toBe('');
+  expect(state.lastCompletedAt).toBeGreaterThan(0);
+  expect(requests).toContain(`${site}inventory/used?page=2`);
+});
 
 test('connects both inventories, follows all pages, shows data, and reviews without clearing a deal', async () => {
   await connect();
@@ -80,6 +110,10 @@ test('connects both inventories, follows all pages, shows data, and reviews with
   await panel.locator('.inventory-card summary').click();
   await expect(panel.locator('.inventory-card')).toContainText('1FM5K8D80MGA12342');
   const desk = panel.frameLocator('#desk');
+  await desk.getByRole('button', { name: 'Inventory', exact: true }).click();
+  const picker = desk.getByRole('dialog', { name: 'Dealership inventory' });
+  await expect(picker.locator('article')).toHaveCount(3);
+  await picker.getByRole('button', { name: 'Close', exact: true }).click();
   await desk.locator('#sale-price').fill('40000');
   await panel.getByRole('button', { name: 'Use vehicle' }).click();
   await expect(panel.locator('#price')).toHaveValue('30000');

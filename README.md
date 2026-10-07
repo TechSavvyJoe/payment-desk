@@ -23,9 +23,11 @@ npm run check:release
 - `test:extension`: builds the unpacked Chrome companion, loads it in a separate Chromium profile, and verifies its native side panel, offline worksheet, capture and reviewed import.
 - Browser projects: desktop Chromium, mobile Chromium, and desktop WebKit. Linux CI installs their OS dependencies with `playwright install --with-deps`.
 
+Browser checks start their own preview server. If port 4173 is occupied, use an unused port, for example `PAYMENT_DESK_TEST_PORT=4189 npm run check:release`; the checks never reuse an unrelated project's server.
+
 ## Workflow
 
-**Chrome companion.** [Install Payment Desk Companion](extensions/payment-desk-companion/README.md) to use the full worksheet in Chrome's side panel beside a listing, with offline calculations, optional listing capture, and a saved dealership inventory picker. Supported website connectors can refresh new/used inventory nightly while Chrome is running. Inventory is saved only in the extension on this computer; a vehicle is reviewed before replacing a deal. Dealership settings are local to the extension and separate from the website. See [inventory source coverage](docs/COMPANION-INVENTORY.md). Run `npm run extension:package` to build the worksheet and create the installable ZIP in `extension-dist`.
+**Chrome companion.** [Install Payment Desk Companion](extensions/payment-desk-companion/README.md) to use the full worksheet in Chrome's side panel beside a listing, with offline calculations, optional listing capture, and a saved dealership inventory picker. Supported website connectors can refresh new/used inventory nightly while Chrome is running. Inventory is saved only in the extension on this computer; a vehicle is reviewed before replacing a deal. Open **Web app** from the companion once to connect the web app in that Chrome browser, then select **Inventory** beside **Deal details** to use the same catalog. Dealership settings are local to the extension and separate from the website. See [inventory source coverage](docs/COMPANION-INVENTORY.md). Run `npm run extension:package` to build the worksheet and create the installable ZIP in `extension-dist`.
 
 Enter a selling price, date, optional vehicle/stock reference, trade allowance/payoff, and down payment. Select finance or cash and transfer or new plates. Enter new-registration cost when required.
 
@@ -49,6 +51,6 @@ Leases, nonresident/exempt transactions, special registrations, and manufacturer
 
 ## Data and operation
 
-Entered figures remain in browser memory unless the user copies, shares, or prints them. The only things the app saves are the optional dealership name and logo and the dealership's fees, in this browser's local storage on this device; customer figures are never saved. On a shared device, use **Settings → Clear dealership settings** to remove them. There is no saved-deal backend, analytics SDK, or external font request. Hosting still serves ordinary web requests. Refresh/close can lose the deal; a navigation warning is a convenience, not storage or recovery. Installation metadata does not provide offline availability.
+Entered figures remain in browser memory unless the user copies, shares, or prints them. The app saves the optional dealership name and logo, the dealership's fees, and the public identifier of a connected companion in this browser's local storage on this device; customer figures are never saved. On a shared device, use **Settings → Clear dealership settings** to remove dealership presentation and fees. The optional inventory catalog remains in the companion until disconnected there. There is no saved-deal backend, analytics SDK, or external font request. Hosting still serves ordinary web requests. Refresh/close can lose the deal; a navigation warning is a convenience, not storage or recovery. Installation metadata does not provide offline availability.
 
 [Handoff and release guide](docs/HANDOFF.md) · [Acceptance checklist](docs/ACCEPTANCE.md) · [Review resolution map](docs/REVIEW-RESOLUTION.md)

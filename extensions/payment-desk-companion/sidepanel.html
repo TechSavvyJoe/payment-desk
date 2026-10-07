@@ -8,12 +8,14 @@
     <script type="module" src="sidepanel.js"></script>
   </head>
   <body>
+    <h1 class="sr-only">Payment Desk Companion</h1>
     <header aria-label="Listing tools">
       <button id="capture" class="capture" type="button">Capture listing</button>
       <button id="toggle-vehicle" class="quiet" type="button" aria-expanded="false" aria-controls="vehicle-controls">Enter vehicle</button>
       <button id="toggle-inventory" class="quiet" type="button" aria-expanded="false" aria-controls="inventory-controls">Inventory</button>
       <button id="open-desk" class="quiet" type="button">Web app ↗</button>
     </header>
+    <main class="panel-main">
     <section id="inventory-controls" aria-label="Dealership inventory" hidden>
       <div class="inventory-heading"><h2>Dealership inventory</h2><button id="inventory-close" class="quiet" type="button" aria-label="Close inventory">Close</button></div>
       <details id="inventory-settings" open>
@@ -54,7 +56,12 @@
         <button id="start-estimate" class="primary" type="submit" disabled>Review in worksheet</button>
       </form>
     </section>
-    <iframe id="desk" title="Payment Desk worksheet" src="desk/index.html" allow="clipboard-write"></iframe>
+    <div id="worksheet-loading" role="status" aria-live="polite">
+      <p id="worksheet-loading-message">Opening Payment Desk…</p>
+      <button id="worksheet-retry" class="quiet" type="button" hidden>Try again</button>
+    </div>
+    <iframe id="desk" title="Payment Desk worksheet" allow="clipboard-write"></iframe>
+    </main>
     <noscript>Enable JavaScript to use the worksheet.</noscript>
   </body>
 </html>

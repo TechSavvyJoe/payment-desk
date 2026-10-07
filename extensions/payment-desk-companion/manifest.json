@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Payment Desk Companion",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minimum_chrome_version": "116",
   "description": "Use the Payment Desk worksheet in Chrome's side panel, capture listings, and refresh a dealership's public inventory.",
   "permissions": ["activeTab", "scripting", "sidePanel", "storage", "alarms", "offscreen"],
   "optional_host_permissions": ["https://*/*"],
+  "externally_connectable": { "matches": ["https://desking.mysoldlog.com/*"] },
   "action": {
     "default_title": "Open Payment Desk side panel",
     "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" }

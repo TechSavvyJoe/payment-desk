@@ -2998,6 +2998,28 @@ input[type="checkbox"] { flex:0 0 auto; }
   .compact-height .deal-column { gap: 8px; }
 }
 
+.deal-tools { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 14px; }
+.deal-tools .deal-details { flex: 1; min-width: 0; margin-bottom: 0; }
+.inventory-picker-trigger { flex: none; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: var(--navy); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; min-height: 44px; }
+@media (max-width: 800px) { .compact-height .deal-tools { margin-bottom: 8px; } .compact-height .inventory-picker-trigger { min-height: 40px; padding-block: 6px; } .deal-tools .deal-details > summary { gap: 8px; } }
+.inventory-picker { width: min(720px, calc(100vw - 24px)); }
+.inventory-picker__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.inventory-picker__heading h2 { margin: 0; }
+.inventory-picker__filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr); gap: 10px; }
+.inventory-picker__filters label { display: grid; gap: 5px; font-size: .82rem; font-weight: 600; }
+.inventory-picker__old { display: flex; gap: 8px; align-items: center; min-height: 36px; font-size: .82rem; }
+.inventory-picker__old input { width: 16px; height: 16px; }
+.inventory-picker__vehicle { padding: 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface-alt); }
+.inventory-picker__vehicle-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 10px; }
+.inventory-picker__vehicle h3 { margin: 0; font-size: .92rem; }
+.inventory-picker__vehicle p { margin: 6px 0; font-size: .8rem; overflow-wrap: anywhere; }
+.inventory-picker__vehicle details { font-size: .8rem; }
+.inventory-picker__vehicle summary { cursor: pointer; padding: 5px 0; }
+.inventory-picker__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.inventory-picker__actions a { color: var(--blue-dark); font-size: .82rem; }
+.inventory-picker__warning { color: var(--red); }
+@media (max-width: 440px) { .inventory-picker__filters { grid-template-columns: minmax(0, 1fr); } }
+
 /* ---------- Rules-review reminder ----------
    From 30 days before the tax and fee rules' review window ends, a slim strip under
    the header in Dealer view. Information blue, never the error red, and not

@@ -1,0 +1,52 @@
+/* Companion-only density for a laptop's narrow side panel. The website and
+   printed estimate retain their own layouts; all deal controls stay available. */
+@media screen and (max-width: 800px) {
+  body { padding-bottom: 60px; }
+  .app-header { min-height: 48px; padding: 4px 8px; gap: 6px; }
+  .app-header .view-toggle button,
+  .app-header .reset-button { min-height: 36px; padding-block: 5px; line-height: 1.15; }
+  .view-toggle .segmented__full { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .view-toggle .segmented__short { display: inline; }
+  .calculator-shell { padding: 8px 10px; }
+  .quick-jump-nav { display: none; }
+  .compact-height .mobile-results,
+  .mobile-results { margin-bottom: 6px; }
+  .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 8px 10px; }
+  .mobile-results .results-payment__label-row { grid-column: 1; grid-row: 1; }
+  .compact-height .mobile-results .payment-number,
+  .mobile-results .payment-number { grid-column: 2; grid-row: 1; min-height: 28px; margin: 0; }
+  .compact-height .mobile-results .payment-number strong,
+  .mobile-results .payment-number strong { font-size: 25px; }
+  .mobile-results .results-payment > p { grid-column: 1; grid-row: 2; font-size: .72rem; }
+  .mobile-results .payment-edit-button { grid-column: 2; grid-row: 2; width: auto; min-height: 32px; padding: 4px 6px; }
+  .mobile-results .estimate-actions--compact { gap: 6px; padding: 0 10px 6px; }
+  .mobile-results .estimate-details-toggle,
+  .mobile-results .estimate-review { min-height: 36px; padding-block: 5px; font-size: .75rem; }
+  .compact-height .deal-details,
+  .deal-details { margin-bottom: 6px; }
+  .compact-height .deal-tools,
+  .deal-tools { margin-bottom: 6px; }
+  .deal-tools .deal-details { margin-bottom: 0; }
+  .compact-height .inventory-picker-trigger,
+  .inventory-picker-trigger { min-height: 36px; padding-block: 6px; }
+  .compact-height .deal-details > summary,
+  .deal-details > summary { min-height: 36px; padding: 6px 10px; }
+  .compact-height .deal-section__header,
+  .deal-section__header { min-height: 36px; padding: 5px 10px; }
+  .deal-section__content { padding: 4px 10px 6px; }
+  .compact-height .field-row,
+  .field-row,
+  .choice-row { min-height: 44px; padding-block: 2px; }
+  .field-row__label label,
+  .choice-row > span { font-size: .8rem; }
+  .money-input,
+  .percent-input { min-height: 36px; }
+  .money-input input,
+  .percent-input input { height: 34px; font-size: 1rem; }
+  .choice-row .segmented button { min-height: 36px; }
+  .dealer-workspace,
+  .deal-grid,
+  .deal-column { gap: 6px; }
+  .mobile-nav { bottom: 6px; }
+  .mobile-nav button { min-height: 40px; padding-block: 6px; }
+}

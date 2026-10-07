@@ -20,6 +20,8 @@ import EstimateDateField from './components/EstimateDateField.jsx';
 import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
 import PolicyReminder from './components/PolicyReminder.jsx';
 import VehicleImportDialog from './components/VehicleImportDialog.jsx';
+import InventoryPicker from './components/InventoryPicker.jsx';
+import { rememberCompanion } from './lib/companionInventory.js';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
@@ -61,6 +63,8 @@ export default function App() {
   const dealershipFees = useMemo(() => resolveFees(feeSettings), [feeSettings]);
   const dealInput = useMemo(() => ({ ...deal, dealershipFees }), [deal, dealershipFees]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  useEffect(rememberCompanion, []);
   const [vehicleImport, setVehicleImport] = useState(() => parseVehicleHandoff(window.location.hash));
   useEffect(() => {
     const scrubFragment = () => {
@@ -209,6 +213,7 @@ export default function App() {
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
         {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
         {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
+        {inventoryOpen ? <InventoryPicker onClose={() => { setInventoryOpen(false); requestAnimationFrame(() => document.getElementById('inventory-picker-trigger')?.focus()); }} onChoose={vehicle => { setInventoryOpen(false); setVehicleImport({ vehicle, error: null }); }} /> : null}
         {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDeal={hasDeal} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
@@ -221,6 +226,7 @@ export default function App() {
                 <div className="page-intro" role="region" aria-label="Worksheet introduction"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
                 <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
+                <div className="deal-tools">
                 <details className="deal-details" open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)}>
                 <summary><strong>Deal details</strong><span>{dealInput.vehicleDescription || 'Vehicle reference & estimate date'}</span><time dateTime={dealInput.dealDate}>{formatShortDate(dealInput.dealDate)}</time></summary>
                 <div className="deal-context">
@@ -228,6 +234,8 @@ export default function App() {
                   <EstimateDateField value={dealInput.dealDate} onChange={value => updateField('dealDate', value)} />
                 </div>
                 </details>
+                <button className="inventory-picker-trigger" id="inventory-picker-trigger" onClick={() => setInventoryOpen(true)} type="button">Inventory</button>
+                </div>
                 <DealerView accordions={accordions} addItem={preset => dispatch({ type: 'add-item', preset })} dealInput={dealInput}
                   removeItem={index => dispatch({ type: 'remove-item', index })} result={result} targetProps={targetProps}
                   toggleAccordion={name => setAccordions(current => ({ ...current, [name]: !current[name] }))}

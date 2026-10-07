@@ -1,6 +1,8 @@
 # Chrome companion inventory
 
-Version 1.2 adds one optional dealership website per installed companion, a local inventory catalog, manual refresh and nightly refresh while Chrome is running. Both new and used vehicles are in scope. This is an extension feature; the standalone website has no inventory service or scheduled backend.
+Version 1.2 adds one optional dealership website per installed companion, a local inventory catalog, manual refresh and nightly refresh while Chrome is running. Both new and used vehicles are in scope. Version 1.2.1 also makes that catalog available to the web app in the same Chrome browser. Open **Web app** from the companion once, then use **Inventory** beside **Deal details** on the website. The standalone website has no inventory service or scheduled backend; the companion performs the reads and stores the catalog.
+
+The web connection is read-only and restricted to the exact production origin, `https://desking.mysoldlog.com`. Its messages return at most 100 normalized public vehicle records at a time, with source and refresh status. They cannot trigger a scrape, change permissions, clear inventory, or read dealership settings or deal figures. A public extension identifier is kept in the web app's local storage to reconnect later; the inventory itself is not copied into website storage. **Reload catalog** reads the saved catalog again. Browser/device changes require their own companion connection.
 
 ## Source evidence, October 7, 2026
 

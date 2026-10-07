@@ -74,12 +74,20 @@ function discovery(root, url, site) {
 }
 export function parseInventoryHtml(html, task, site, now) {
   const root = markup(html);
+  // A direct inventory URL still needs the dealership's other inventory.
+  // Follow its navigation, or visit the home page when the feed omits it.
+  const discoverMore = () => {
+    if ((task.page ?? 1) !== 1) return [];
+    const siblings = discovery(root, task.url, site);
+    const home = new URL('/', task.url).href;
+    return siblings.length ? siblings : task.url !== home ? [{ url: home, kind: 'html', condition: 'unknown' }] : [];
+  };
   const configNode = root.querySelector('#dlron-srp-model');
   if (configNode) {
     const config = JSON.parse(configNode.textContent);
     if (!Number.isInteger(config.DealerId) || config.DealerId <= 0 || !Number.isInteger(config.PageId) || config.PageId <= 0
       || typeof config.BaseFilter !== 'string' || config.BaseFilter.length > 1000 || !/^[\x20-\x7e]*$/.test(config.BaseFilter)) throw new Error('This inventory configuration is unsupported.');
-    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition: /new/i.test(config.PageVehicleType) ? 'new' : 'used' }], provider: 'DealerOn' };
+    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition: /new/i.test(config.PageVehicleType) ? 'new' : 'used' }, ...discoverMore()], provider: 'DealerOn' };
   }
   const cards = [...root.querySelectorAll('.invMainCell')];
   if (cards.length) {
@@ -109,7 +117,10 @@ export function parseInventoryHtml(html, task, site, now) {
     const nextUrl = new URL(task.url);
     nextUrl.searchParams.set('page', String(page + 1));
     const tasks = page < Number(summary[2]) ? [{ ...task, page: page + 1, url: nextUrl.href }] : [];
-    return { vehicles, tasks, group: 'dealercarsearch', expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
+    const groupUrl = new URL(task.url);
+    groupUrl.searchParams.delete('page');
+    groupUrl.hash = '';
+    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
   }
   const tasks = discovery(root, task.url, site);
   if (!tasks.length) throw new Error('This website needs a different inventory connector. Capture individual listings or enter vehicles manually for now.');

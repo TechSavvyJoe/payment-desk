@@ -74,5 +74,8 @@ test('robots policies respect site exclusions, wildcards, more-specific allows a
   for (const path of ['/private/data', '/rss-usedinventory.aspx', '/resource.axd']) assert.equal(robotsAllows(policy, `https://dealer.example.com${path}`), false);
   for (const path of ['/private/public/data', '/searchused.aspx', '/resource.axd?x=1', '/api/vhcliaa/vehicles']) assert.equal(robotsAllows(policy, `https://dealer.example.com${path}`), true);
   const specific = robotsPolicy('User-agent: *\nAllow: /\nUser-agent: PaymentDeskCompanion\nDisallow: /');
-  assert.equal(robotsAllows(specific, 'https://dealer.example.com/'), false);
+  assert.equal(robotsAllows(specific, 'https://dealer.example.com/'), true);
+  const namedAllow = robotsPolicy('User-agent: *\nDisallow: /\nCrawl-delay: 10\nUser-agent: PaymentDeskCompanion\nAllow: /');
+  assert.equal(robotsAllows(namedAllow, 'https://dealer.example.com/searchused.aspx'), false);
+  assert.equal(namedAllow.delay, 10);
 });
