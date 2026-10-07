@@ -50,7 +50,10 @@ export function installWorksheet(onReady) {
     }, 15_000);
   };
   retry.addEventListener('click', start);
-  const afterPanelLoad = () => requestAnimationFrame(start);
+  // A rAF callback runs before paint. Starting the iframe in that first
+  // callback can put Chrome straight back into its initial frame-loading hold.
+  // Give the panel one complete frame to paint its tools/loading message.
+  const afterPanelLoad = () => requestAnimationFrame(() => requestAnimationFrame(start));
   if (document.readyState === 'complete') afterPanelLoad();
   else window.addEventListener('load', afterPanelLoad, { once: true });
 }

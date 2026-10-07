@@ -11,7 +11,7 @@
   .quick-jump-nav { display: none; }
   .compact-height .mobile-results,
   .mobile-results { margin-bottom: 6px; }
-  .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 8px 10px; }
+  .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 6px 10px; }
   .mobile-results .results-payment__label-row { grid-column: 1; grid-row: 1; }
   .compact-height .mobile-results .payment-number,
   .mobile-results .payment-number { grid-column: 2; grid-row: 1; min-height: 28px; margin: 0; }
@@ -21,7 +21,7 @@
   .mobile-results .payment-edit-button { grid-column: 2; grid-row: 2; width: auto; min-height: 32px; padding: 4px 6px; }
   .mobile-results .estimate-actions--compact { gap: 6px; padding: 0 10px 6px; }
   .mobile-results .estimate-details-toggle,
-  .mobile-results .estimate-review { min-height: 36px; padding-block: 5px; font-size: .75rem; }
+  .mobile-results .estimate-review { min-height: 36px; padding-block: 4px; font-size: .75rem; line-height: 1.15; }
   .compact-height .deal-details,
   .deal-details { margin-bottom: 6px; }
   .compact-height .deal-tools,
