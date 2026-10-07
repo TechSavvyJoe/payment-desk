@@ -31,21 +31,37 @@ export function captureListing() {
     if (vin && sku) vinBySku.set(sku, vinBySku.has(sku) && vinBySku.get(sku) !== vin ? null : vin);
   }
   const grouped = new Map();
-  for (const entity of entities) {
+  for (const [index, entity] of entities.entries()) {
     const vin = clean(entity.vehicleIdentificationNumber, 64).toUpperCase();
     const sku = clean(entity.sku, 64).toUpperCase();
     const linkedVin = vin || vinBySku.get(sku);
-    const identity = linkedVin ? `vin:${linkedVin}` : sku ? `sku:${sku}` : clean(entity['@id'], 200) || clean(entity.name, 100);
+    const identity = linkedVin ? `vin:${linkedVin}` : sku ? `sku:${sku}` : clean(entity['@id'], 200) || `anonymous:${index}`;
     if (!grouped.has(identity)) grouped.set(identity, []);
     grouped.get(identity).push(entity);
   }
   const result = { name: '', stock: '', price: null, sourceHost: location.hostname, notice: '' };
-  const bodyText = (document.body?.innerText ?? '').slice(0, 40_000);
-  const headings = [...document.querySelectorAll('h1')].filter(node => node.getClientRects().length).map(node => clean(node.textContent, 67));
+  const scopeSelector = '[itemscope][itemtype$="/Vehicle"], [itemscope][itemtype$="/Car"], [itemscope][itemtype$="/Product"], [data-vehicle-detail], #vehicle-details, .vehicle-detail, .vehicle-details';
+  const unrelatedSelector = 'aside, nav, footer, .related-vehicles, .related-inventory, [data-related-inventory]';
+  const headingNodes = [...document.querySelectorAll('h1')].filter(node => node.getClientRects().length);
+  const headings = headingNodes.map(node => clean(node.textContent, 67));
+  const primaryScope = headingNodes.length === 1 ? headingNodes[0].closest(scopeSelector) : null;
+  const belongsToVehicle = node => primaryScope && node.closest(scopeSelector) === primaryScope && !node.closest(unrelatedSelector);
+  const walker = primaryScope ? document.createTreeWalker(primaryScope, NodeFilter.SHOW_TEXT) : null;
+  let bodyText = '';
+  let textNode;
+  let textCount = 0;
+  while (walker && (textNode = walker.nextNode()) && ++textCount <= 2000 && bodyText.length < 40_000) {
+    const parent = textNode.parentElement;
+    if (parent && belongsToVehicle(parent) && parent.getClientRects().length && !parent.closest('script, style')) bodyText += textNode.nodeValue + '\n';
+  }
+  bodyText = bodyText.slice(0, 40_000);
   const stockLabels = new Set([...bodyText.matchAll(/\bstock\s*(?:number|no\.?|#|:)\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{1,23})\b/gi)].map(match => match[1].toUpperCase()));
   const uniqueStock = stockLabels.size === 1 ? [...stockLabels][0] : '';
+  const pageCurrencies = new Set([...document.querySelectorAll('meta[property="product:price:currency"], meta[itemprop="priceCurrency"]')].map(node => clean(node.content, 12).toUpperCase()).filter(Boolean));
+  const pageCurrency = pageCurrencies.size === 1 ? [...pageCurrencies][0] : '';
   const uniquePrices = new Set();
   let foreignCurrency = false;
+  let unknownCurrency = false;
   if (grouped.size > 1 || document.querySelectorAll('[itemtype$="/Vehicle"], [itemtype$="/Car"]').length > 1) {
     result.notice = 'Several vehicles are listed. Open one vehicle listing, or enter its details below.';
     return result;
@@ -60,13 +76,15 @@ export function captureListing() {
         if (!offer || typeof offer !== 'object') continue;
         // Ranges and loan/lease installments are not a selling price.
         if (types(offer).includes('AggregateOffer')) continue;
-        const currency = offer.priceCurrency ?? offer.priceSpecification?.priceCurrency;
-        if (currency && String(currency).toUpperCase() !== 'USD') { foreignCurrency = true; continue; }
         const spec = offer.priceSpecification;
         if (offer.billingDuration || spec?.billingDuration || spec?.billingIncrement || spec?.unitCode
-          || /month|lease|installment|\/mo\b|MSRP|list\s*price|suggested\s*retail/i.test([offer.name, offer.description, spec?.name, spec?.unitText, spec?.priceType, offer.priceType].join(' '))) continue;
+          || /month|lease|installment|finance|\bpayment\b|down[\s-]*payment|deposit|\/mo\b|MSRP|list\s*price|suggested\s*retail/i.test([offer.name, offer.description, spec?.name, spec?.unitText, spec?.priceType, offer.priceType].join(' '))) continue;
         const price = priceFor(offer.price ?? spec?.price);
-        if (price !== null) uniquePrices.add(price);
+        if (price === null) continue;
+        const currency = clean(offer.priceCurrency ?? spec?.priceCurrency ?? pageCurrency, 12).toUpperCase();
+        if (!currency) { unknownCurrency = true; continue; }
+        if (currency !== 'USD') { foreignCurrency = true; continue; }
+        uniquePrices.add(price);
       }
     }
   } else if (headings.length === 1 && /\b(?:19|20)\d{2}\b/.test(headings[0])) {
@@ -77,11 +95,14 @@ export function captureListing() {
     return result;
   }
   // Structured data must supply its own price. Never mix an unrelated widget's offer into it.
-  if (!grouped.size) {
-    const currency = document.querySelector('meta[property="product:price:currency"], [itemprop="priceCurrency"]');
-    if (currency && (currency.content || currency.textContent).trim().toUpperCase() !== 'USD') foreignCurrency = true;
-    if (!foreignCurrency) {
-      for (const node of document.querySelectorAll('meta[property="product:price:amount"], [itemprop="price"], .sale-price, .internet-price, .internetPrice, [data-testid="price"]')) {
+  if (!grouped.size && primaryScope) {
+    const scopedCurrencies = new Set([...primaryScope.querySelectorAll('[itemprop="priceCurrency"]')].filter(belongsToVehicle).map(node => clean(node.content || node.textContent, 12).toUpperCase()).filter(Boolean));
+    const currency = scopedCurrencies.size === 1 ? [...scopedCurrencies][0] : pageCurrency;
+    foreignCurrency = Boolean(currency && currency !== 'USD');
+    unknownCurrency = !currency;
+    if (!foreignCurrency && !unknownCurrency) {
+      for (const node of primaryScope.querySelectorAll('[itemprop="price"], .sale-price, .internet-price, .internetPrice, [data-testid="price"]')) {
+        if (!belongsToVehicle(node)) continue;
         if (node.tagName !== 'META' && !node.getClientRects().length) continue;
         const context = clean(node.parentElement?.textContent, 250);
         if (/\b(?:month|monthly|lease|down payment|msrp|list price|suggested retail|was|starting at)\b|\/mo\b/i.test(context)) continue;
@@ -90,14 +111,15 @@ export function captureListing() {
       }
       const labeled = [...bodyText.matchAll(/(?:selling|sale|internet|our) price\s*[:\n]?\s*(\$\s*[\d,]+(?:\.\d{1,2})?)([^\n]{0,30})/gi)];
       for (const match of labeled) {
-        if (/month|monthly|\/mo|lease|down payment/i.test(match[2])) continue;
+        if (/month|monthly|\/mo|lease|down payment|deposit|MSRP|list price/i.test(match[2])) continue;
         const price = priceFor(match[1]);
         if (price !== null) uniquePrices.add(price);
       }
     }
   }
-  if (uniquePrices.size === 1 && !foreignCurrency) result.price = [...uniquePrices][0];
+  if (uniquePrices.size === 1 && !foreignCurrency && !unknownCurrency) result.price = [...uniquePrices][0];
   result.notice = foreignCurrency ? 'Payment Desk uses USD. Enter the verified USD selling price.'
+    : unknownCurrency ? 'Currency could not be confirmed. Enter the verified USD selling price.'
     : uniquePrices.size > 1 ? 'Several prices were found. Enter the confirmed selling price.'
     : result.price === null ? 'Vehicle details found. Enter the confirmed selling price.'
     : 'Details captured. Check the advertised price and any conditions before continuing.';

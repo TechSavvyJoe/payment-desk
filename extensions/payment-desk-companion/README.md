@@ -17,7 +17,7 @@ Open a single vehicle listing, click the extension icon, then **Capture vehicle 
 
 **Open desk** starts a blank estimate. For an optional shortcut, assign **Open a blank Payment Desk estimate** at `chrome://extensions/shortcuts`.
 
-Capture supports single-vehicle Car/Vehicle structured data and common labeled USD selling-price fields. Listing layouts vary. Search/results pages, multiple offers, foreign currencies, missing data and monthly-payment displays can require manual entry. Always verify the actual price and eligibility for advertised discounts with the listing. The extension cannot read Chrome settings, the Web Store, PDFs or other protected pages.
+Capture supports single-vehicle Car/Vehicle structured data and labeled prices inside a recognizable primary vehicle detail section. A price needs explicit USD currency evidence. Stock labels and prices from unrelated widgets are excluded. Listing layouts vary. Search/results pages, multiple offers, unconfirmed currencies, missing data and monthly/down-payment displays can require manual entry. Always verify the actual price and eligibility for advertised discounts with the listing. The extension cannot read Chrome settings, the Web Store, PDFs or other protected pages.
 
 ## Data and permissions
 
