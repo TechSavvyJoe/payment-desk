@@ -4,7 +4,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
 export default [
-  { ignores: ["dist/**", "node_modules/**", "playwright-report/**", "test-results/**"] },
+  { ignores: ["dist/**", "extension-dist/**", "node_modules/**", "playwright-report/**", "test-results/**"] },
   js.configs.recommended,
   {
     files: ["src/**/*.{js,jsx}"],
@@ -35,11 +35,15 @@ export default [
     },
   },
   {
-    files: ["tests/*.js", "tests/e2e/**/*.js", "playwright.config.js", "vite.config.js", "eslint.config.js"],
+    files: ["tests/*.js", "tests/e2e/**/*.js", "tests/extension/**/*.js", "scripts/*.mjs", "playwright*.config.js", "vite.config.js", "eslint.config.js"],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: "module",
       globals: { ...globals.node, ...globals.browser },
     },
+  },
+  {
+    files: ["extensions/**/*.js", "tests/extension/**/*.js"],
+    languageOptions: { globals: { ...globals.browser, chrome: "readonly" } },
   },
 ];

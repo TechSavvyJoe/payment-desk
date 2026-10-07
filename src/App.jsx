@@ -19,6 +19,8 @@ import { ValidationContext } from './components/ValidationContext.jsx';
 import EstimateDateField from './components/EstimateDateField.jsx';
 import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
 import PolicyReminder from './components/PolicyReminder.jsx';
+import VehicleImportDialog from './components/VehicleImportDialog.jsx';
+import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
@@ -59,6 +61,22 @@ export default function App() {
   const dealershipFees = useMemo(() => resolveFees(feeSettings), [feeSettings]);
   const dealInput = useMemo(() => ({ ...deal, dealershipFees }), [deal, dealershipFees]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [vehicleImport, setVehicleImport] = useState(() => parseVehicleHandoff(window.location.hash));
+  useEffect(() => {
+    const scrubFragment = () => {
+      if (window.location.hash.startsWith(HANDOFF_PREFIX)) {
+        window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+      }
+    };
+    const receiveVehicle = () => {
+      if (!window.location.hash.startsWith(HANDOFF_PREFIX)) return;
+      setVehicleImport(parseVehicleHandoff(window.location.hash));
+      scrubFragment();
+    };
+    scrubFragment();
+    window.addEventListener('hashchange', receiveVehicle);
+    return () => window.removeEventListener('hashchange', receiveVehicle);
+  }, []);
   const settingsButtonRef = useRef(null);
   // Even when the browser refuses to store them, the settings apply for this visit,
   // and the device keeps its previous saved settings whole.
@@ -134,12 +152,22 @@ export default function App() {
     if (isMobile()) dispatch({ type: 'grid-visibility', open: true });
     focusDestination('payment-grid-heading');
   };
-  const resetDeal = () => {
-    if (hasDeal && !window.confirm('Reset this deal? All figures, trade, and products will be cleared.')) return;
+  const clearDeal = () => {
     dispatch({ type: 'reset' });
     setTargetType('payment'); setTargetValues({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
     setSolverExpanded(false); setAccordions(allOpen()); setFieldErrors({}); setContextOpen(false);
+  };
+  const resetDeal = () => {
+    if (hasDeal && !window.confirm('Reset this deal? All figures, trade, and products will be cleared.')) return;
+    clearDeal();
     focusDestination('worksheet-heading');
+  };
+  const closeVehicleImport = () => { setVehicleImport({ vehicle: null, error: null }); focusDestination('sale-price'); };
+  const acceptVehicle = vehicle => {
+    clearDeal();
+    dispatch({ type: 'apply', patch: { salePrice: vehicle.salePrice, vehicleDescription: vehicle.vehicleDescription } });
+    setContextOpen(Boolean(vehicle.vehicleDescription));
+    closeVehicleImport();
   };
   const activatePaymentTarget = value => {
     setTargetType('payment');
@@ -179,6 +207,7 @@ export default function App() {
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
         {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
         {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
+        {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDeal={hasDeal} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
