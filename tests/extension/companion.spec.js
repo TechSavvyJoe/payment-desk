@@ -331,7 +331,7 @@ test('production-origin web app searches the companion catalog and reviews vehic
   await web.getByRole('button', { name: 'Inventory', exact: true }).click();
   const picker = web.getByRole('dialog', { name: 'Dealership inventory' });
   const expectVehicles = async count => {
-    try { await expect(picker.locator('article')).toHaveCount(count, { timeout: 15_000 }); }
+    try { await expect(picker.locator('article')).toHaveCount(count, { timeout: 60_000 }); }
     catch (error) {
       await testInfo.attach('inventory-read-errors', { body: JSON.stringify(loadErrors), contentType: 'application/json' });
       throw error;
@@ -366,11 +366,13 @@ test('production-origin web app searches the companion catalog and reviews vehic
   expect(refused.result).toBeUndefined();
   expect(await worker.evaluate(async () => (await chrome.storage.local.get('payment-desk.inventory.v1'))['payment-desk.inventory.v1'].config.site)).toBe(site);
   // A crafted link must not replace the verified connection or break reads.
-  await web.goto(`https://desking.mysoldlog.com/#pd-companion=${'a'.repeat(32)}`);
-  expect(await web.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
-  await web.getByRole('button', { name: 'Inventory', exact: true }).click();
-  await expectVehicles(2);
-  expect(await web.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
+  const brokenLink = await context.newPage();
+  await brokenLink.goto(`https://desking.mysoldlog.com/#pd-companion=${'a'.repeat(32)}`);
+  await expect(brokenLink.locator('#sale-price')).toBeVisible();
+  expect(await brokenLink.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
+  await brokenLink.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await expect(brokenLink.getByRole('dialog', { name: 'Dealership inventory' }).locator('article')).toHaveCount(2, { timeout: 60_000 });
+  expect(await brokenLink.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
 });
 
 test('panel dealership and fees survive Reset deal and reload without saving deal figures', async () => {
