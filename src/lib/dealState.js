@@ -89,10 +89,12 @@ export function deskReducer(state, action) {
     case 'view': return { ...state, view: action.view, mobileGridOpen: false };
     case 'grid-visibility': return { ...state, mobileGridOpen: action.open && state.view === 'dealer' && state.deal.dealType === 'finance' };
     case 'reset': return { ...createDeskState(), resetCount: state.resetCount + 1 };
-    // A blank desk left open past midnight starts the new day, as a fresh page would.
-    // A desk with edits keeps its date. resetCount remounts the fields to show the new date.
-    case 'new-day': return state.startDate === action.date || hasDealEdits(state) ? state
-      : { ...createDeskState(action.date), view: state.view, mobileGridOpen: state.mobileGridOpen, resetCount: state.resetCount + 1 };
+    // A blank desk left open past midnight moves to the new day, as a fresh page would.
+    // Only forward, because Reset can already be on the new day while the app's clock
+    // still says yesterday. A desk with edits keeps its date. Only the date changes,
+    // so nothing remounts under someone who is typing.
+    case 'new-day': return action.date <= state.startDate || hasDealEdits(state) ? state
+      : { ...state, startDate: action.date, deal: { ...state.deal, dealDate: action.date }, lastRoll: null };
     default: return state;
   }
 }

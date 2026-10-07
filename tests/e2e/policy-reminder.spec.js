@@ -109,6 +109,41 @@ test('a desk with a deal keeps its date overnight and still asks before Reset an
   await expect.poll(() => dialogs).toEqual(['confirm', 'beforeunload']);
 });
 
+test('Reset in the first minute after midnight starts the new day, not yesterday', async ({ page }) => {
+  await page.clock.install({ time: BEFORE_MIDNIGHT });
+  await page.goto('/');
+  await price(page).fill('30000');
+  await price(page).press('Tab');
+  // 12:00:10 AM: the new day has begun, but the app's once-a-minute check has not run yet.
+  await page.clock.runFor(40_000);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  await expect(price(page)).toHaveValue('');
+  await page.locator('details.deal-details > summary').click();
+  await expect(estimateDate(page)).toHaveValue('10/07/26');
+  await page.clock.runFor(60_000);
+  await expect(estimateDate(page)).toHaveValue('10/07/26');
+});
+
+test('clearing a deal kept overnight moves it to the new day without interrupting typing', async ({ page }) => {
+  await page.clock.install({ time: BEFORE_MIDNIGHT });
+  await page.goto('/');
+  await page.locator('details.deal-details > summary').click();
+  await price(page).fill('30000');
+  await price(page).press('Tab');
+  await page.clock.runFor(90_000);
+  await expect(estimateDate(page)).toHaveValue('10/06/26');
+  // Clearing the only figure makes the desk blank again, mid-keystroke. Raw key presses
+  // go wherever focus is, as a person's typing does; a remount would swallow them.
+  await price(page).click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('25000');
+  await expect(price(page)).toBeFocused();
+  await expect(price(page)).toHaveValue('25000');
+  await expect(estimateDate(page)).toHaveValue('10/07/26');
+});
+
 test('on January 2, 2027 the reminder is gone and the per-deal review warning takes over', async ({ page }) => {
   await openOn(page, '2027-01-02');
   await expect(reminder(page)).toHaveCount(0);

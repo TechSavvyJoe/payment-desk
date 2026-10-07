@@ -50,7 +50,7 @@ function useEasternToday() {
 
 export default function App() {
   const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
-  const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
+  const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount, startDate } = state;
   const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
   const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
   // The dealership's fees live beside the deal, never in it, so Reset deal and
@@ -194,7 +194,7 @@ export default function App() {
                 <summary><strong>Deal details</strong><span>{dealInput.vehicleDescription || 'Vehicle reference & estimate date'}</span><time dateTime={dealInput.dealDate}>{formatShortDate(dealInput.dealDate)}</time></summary>
                 <div className="deal-context">
                   <label htmlFor="vehicle-reference">Vehicle / stock reference <span>Optional</span><input id="vehicle-reference" className="text-input" type="text" maxLength={100} value={dealInput.vehicleDescription} onChange={e => updateField('vehicleDescription', e.target.value)} placeholder="e.g. 2024 Explorer · H12345" /></label>
-                  <EstimateDateField value={dealInput.dealDate} onChange={value => updateField('dealDate', value)} />
+                  <EstimateDateField key={startDate} value={dealInput.dealDate} onChange={value => updateField('dealDate', value)} />
                 </div>
                 </details>
                 <DealerView accordions={accordions} addItem={preset => dispatch({ type: 'add-item', preset })} dealInput={dealInput}

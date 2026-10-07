@@ -95,11 +95,15 @@ test('an untouched desk never looks edited after midnight and rolls over to the 
   assert.equal(hasDealEdits(blank), false);
   assert.equal(deskReducer(blank, { type: 'new-day', date: '2026-11-30' }), blank, 'same day changes nothing');
   const next = deskReducer(blank, { type: 'new-day', date: '2026-12-01' });
-  assert.equal(next.deal.dealDate, '2026-12-01');
-  assert.equal(next.startDate, '2026-12-01');
-  assert.equal(next.view, 'customer');
-  assert.equal(next.resetCount, blank.resetCount + 1, 'the fields remount to show the new date');
+  // Only the date moves; nothing else resets or remounts.
+  assert.deepEqual(next, { ...blank, startDate: '2026-12-01', deal: { ...blank.deal, dealDate: '2026-12-01' } });
   assert.equal(hasDealEdits(next), false);
+});
+
+test('the new day only moves a desk forward', () => {
+  // Reset already dated the desk with the new day while the app's clock still said yesterday.
+  const reset = createDeskState('2027-01-01');
+  assert.equal(deskReducer(reset, { type: 'new-day', date: '2026-12-31' }), reset);
 });
 
 test('a desk with edits keeps its date at midnight and stays protected', () => {
