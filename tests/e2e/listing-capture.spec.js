@@ -28,6 +28,9 @@ test('foreign currency, range prices and installment specifications stay blank',
     { '@type': 'Offer', price: 399, name: 'Monthly payment' },
     { '@type': 'Offer', priceSpecification: { price: 399, unitText: 'month' } },
     { '@type': 'Offer', priceSpecification: { price: 35000, priceType: 'https://schema.org/MSRP' } },
+    { '@type': 'Offer', price: 35000, name: 'MSRP' },
+    { '@type': 'Offer', price: 35000, description: 'List Price' },
+    { '@type': 'Offer', price: 35000, priceSpecification: { name: 'Manufacturer suggested retail price' } },
     { ...car.offers, price: '$399/month' },
   ]) expect((await capture(page, structured({ ...car, offers }))).price).toBeNull();
 });
@@ -47,4 +50,17 @@ test('monthly and down-payment labels do not become the selling price', async ({
 test('malformed widgets, hidden prices and arbitrary articles require manual entry', async ({ page }) => {
   expect((await capture(page, '<h1>Dealership news</h1><p>Sale price: $10</p><script type="application/ld+json">{oops</script>')).price).toBeNull();
   expect((await capture(page, '<h1>2024 Ford Explorer</h1><span hidden class="internet-price">$10</span>')).price).toBeNull();
+});
+test('duplicate structured records use a shared VIN without requiring matching descriptions', async ({ page }) => {
+  const vin = '1FM5K8GC9RGA12345';
+  const result = await capture(page, structured([ { ...car, vehicleIdentificationNumber: vin }, { '@type': 'Vehicle', vehicleIdentificationNumber: vin, name: 'Ford Explorer', offers: car.offers } ]));
+  expect(result).toMatchObject({ name: car.name, stock: 'H12345', price: 29995 });
+  const skuOnly = await capture(page, structured([ { ...car, vehicleIdentificationNumber: vin }, { ...car, name: 'Ford Explorer', vehicleIdentificationNumber: undefined } ]));
+  expect(skuOnly).toMatchObject({ stock: 'H12345', price: 29995 });
+});
+test('ambiguous unstructured stock labels are not attached to the selected vehicle', async ({ page }) => {
+  const result = await capture(page, '<aside>Stock #: OTHER1</aside>' + structured({ ...car, sku: undefined }) + '<p>Stock #: H12345</p>');
+  expect(result).toMatchObject({ stock: '', price: 29995 });
+  const single = await capture(page, structured({ ...car, sku: undefined }) + '<p>Stock #: H12345</p>');
+  expect(single.stock).toBe('H12345');
 });

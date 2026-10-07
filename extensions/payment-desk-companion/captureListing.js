@@ -24,16 +24,26 @@ export function captureListing() {
     if (script.textContent.length > 128_000) continue;
     try { visit(JSON.parse(script.textContent)); } catch { /* A malformed widget does not block manual entry. */ }
   }
+  const vinBySku = new Map();
+  for (const entity of entities) {
+    const vin = clean(entity.vehicleIdentificationNumber, 64).toUpperCase();
+    const sku = clean(entity.sku, 64).toUpperCase();
+    if (vin && sku) vinBySku.set(sku, vinBySku.has(sku) && vinBySku.get(sku) !== vin ? null : vin);
+  }
   const grouped = new Map();
   for (const entity of entities) {
-    const identity = [entity.vehicleIdentificationNumber, entity.sku, entity.name].map(value => clean(value, 100)).join('|');
+    const vin = clean(entity.vehicleIdentificationNumber, 64).toUpperCase();
+    const sku = clean(entity.sku, 64).toUpperCase();
+    const linkedVin = vin || vinBySku.get(sku);
+    const identity = linkedVin ? `vin:${linkedVin}` : sku ? `sku:${sku}` : clean(entity['@id'], 200) || clean(entity.name, 100);
     if (!grouped.has(identity)) grouped.set(identity, []);
     grouped.get(identity).push(entity);
   }
   const result = { name: '', stock: '', price: null, sourceHost: location.hostname, notice: '' };
   const bodyText = (document.body?.innerText ?? '').slice(0, 40_000);
   const headings = [...document.querySelectorAll('h1')].filter(node => node.getClientRects().length).map(node => clean(node.textContent, 67));
-  const stockMatch = bodyText.match(/\bstock\s*(?:number|no\.?|#|:)\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{1,23})\b/i);
+  const stockLabels = new Set([...bodyText.matchAll(/\bstock\s*(?:number|no\.?|#|:)\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{1,23})\b/gi)].map(match => match[1].toUpperCase()));
+  const uniqueStock = stockLabels.size === 1 ? [...stockLabels][0] : '';
   const uniquePrices = new Set();
   let foreignCurrency = false;
   if (grouped.size > 1 || document.querySelectorAll('[itemtype$="/Vehicle"], [itemtype$="/Car"]').length > 1) {
@@ -42,8 +52,9 @@ export function captureListing() {
   }
   if (grouped.size === 1) {
     const group = [...grouped.values()][0];
-    result.name = clean(group[0].name, 67);
-    result.stock = clean(group[0].sku, 24) || clean(stockMatch?.[1], 24);
+    result.name = group.map(node => clean(node.name, 67)).find(Boolean) || '';
+    const stockNumbers = new Set(group.map(node => clean(node.sku, 24)).filter(Boolean));
+    result.stock = stockNumbers.size === 1 ? [...stockNumbers][0] : stockNumbers.size > 1 ? '' : uniqueStock;
     for (const vehicle of group) {
       for (const offer of [vehicle.offers].flat()) {
         if (!offer || typeof offer !== 'object') continue;
@@ -53,15 +64,14 @@ export function captureListing() {
         if (currency && String(currency).toUpperCase() !== 'USD') { foreignCurrency = true; continue; }
         const spec = offer.priceSpecification;
         if (offer.billingDuration || spec?.billingDuration || spec?.billingIncrement || spec?.unitCode
-          || /month|lease|installment|\/mo\b/i.test([offer.name, offer.description, spec?.name, spec?.unitText].join(' '))
-          || /MSRP|ListPrice/i.test(String(spec?.priceType ?? offer.priceType))) continue;
+          || /month|lease|installment|\/mo\b|MSRP|list\s*price|suggested\s*retail/i.test([offer.name, offer.description, spec?.name, spec?.unitText, spec?.priceType, offer.priceType].join(' '))) continue;
         const price = priceFor(offer.price ?? spec?.price);
         if (price !== null) uniquePrices.add(price);
       }
     }
   } else if (headings.length === 1 && /\b(?:19|20)\d{2}\b/.test(headings[0])) {
     result.name = headings[0];
-    result.stock = clean(stockMatch?.[1], 24);
+    result.stock = uniqueStock;
   } else {
     result.notice = 'No single vehicle was identified. Enter the vehicle and price below.';
     return result;
@@ -74,7 +84,7 @@ export function captureListing() {
       for (const node of document.querySelectorAll('meta[property="product:price:amount"], [itemprop="price"], .sale-price, .internet-price, .internetPrice, [data-testid="price"]')) {
         if (node.tagName !== 'META' && !node.getClientRects().length) continue;
         const context = clean(node.parentElement?.textContent, 250);
-        if (/\b(?:month|monthly|lease|down payment|msrp|was|starting at)\b|\/mo\b/i.test(context)) continue;
+        if (/\b(?:month|monthly|lease|down payment|msrp|list price|suggested retail|was|starting at)\b|\/mo\b/i.test(context)) continue;
         const price = priceFor(node.content || node.textContent);
         if (price !== null) uniquePrices.add(price);
       }
