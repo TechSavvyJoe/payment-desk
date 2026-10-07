@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Payment Desk Companion",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minimum_chrome_version": "116",
-  "description": "Desk a vehicle in Chrome's side panel with the full Payment Desk worksheet and optional listing capture.",
-  "permissions": ["activeTab", "scripting", "sidePanel"],
+  "description": "Use the Payment Desk worksheet in Chrome's side panel, capture listings, and refresh a dealership's public inventory.",
+  "permissions": ["activeTab", "scripting", "sidePanel", "storage", "alarms", "offscreen"],
+  "optional_host_permissions": ["https://*/*"],
   "action": {
     "default_title": "Open Payment Desk side panel",
     "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" }
@@ -13,5 +14,5 @@
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "sidepanel.html" },
   "commands": { "open-payment-desk": { "description": "Open Payment Desk side panel" } },
-  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'self'; connect-src 'none'" }
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'self'; connect-src https:; img-src 'self' data: https:" }
 }

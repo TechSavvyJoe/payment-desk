@@ -25,7 +25,7 @@ npm run check:release
 
 ## Workflow
 
-**Chrome companion.** [Install Payment Desk Companion](extensions/payment-desk-companion/README.md) to use the full worksheet in Chrome's side panel beside a listing, with offline calculations and optional capture of selling price and vehicle/stock reference. Capture is reviewed before replacing a deal. Dealership settings are local to the extension and separate from the website. Run `npm run extension:package` to build the worksheet and create the installable ZIP in `extension-dist`.
+**Chrome companion.** [Install Payment Desk Companion](extensions/payment-desk-companion/README.md) to use the full worksheet in Chrome's side panel beside a listing, with offline calculations, optional listing capture, and a saved dealership inventory picker. Supported website connectors can refresh new/used inventory nightly while Chrome is running. Inventory is saved only in the extension on this computer; a vehicle is reviewed before replacing a deal. Dealership settings are local to the extension and separate from the website. See [inventory source coverage](docs/COMPANION-INVENTORY.md). Run `npm run extension:package` to build the worksheet and create the installable ZIP in `extension-dist`.
 
 Enter a selling price, date, optional vehicle/stock reference, trade allowance/payoff, and down payment. Select finance or cash and transfer or new plates. Enter new-registration cost when required.
 

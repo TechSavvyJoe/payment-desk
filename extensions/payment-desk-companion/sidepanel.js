@@ -1,5 +1,6 @@
 import { captureListing } from './captureListing.js';
 import { parseAdvertisedPrice, PAYMENT_DESK_URL, vehicleHandoffUrl } from './vehicleHandoff.js';
+import { installInventoryPanel } from './inventoryPanel.js';
 
 const nameInput = document.getElementById('vehicle-name');
 const stockInput = document.getElementById('stock');
@@ -21,6 +22,17 @@ const showControls = open => {
   toggleButton.setAttribute('aria-expanded', String(open));
   toggleButton.textContent = open ? 'Hide vehicle' : 'Enter vehicle';
 };
+const inventory = installInventoryPanel(vehicle => {
+  document.getElementById('vehicle-form').reset();
+  priceInput.removeAttribute('aria-invalid');
+  nameInput.value = vehicle.name.slice(0, 67);
+  stockInput.value = vehicle.stock.slice(0, 24);
+  priceInput.value = vehicle.price === null ? '' : String(vehicle.price);
+  document.getElementById('source').textContent = `Saved from ${new URL(vehicle.url).hostname} · Last seen ${new Date(vehicle.lastSeenAt).toLocaleString()}`;
+  showNotice(vehicle.priceNote || 'Confirm the selling price and availability before reviewing in the worksheet.');
+  showControls(true);
+  (vehicle.price === null ? priceInput : nameInput).focus();
+}, () => showControls(false));
 const enableWorksheet = () => {
   // A cached worksheet may finish loading before this module's imports finish.
   // Do not mistake the iframe's initial about:blank document for the worksheet.
@@ -32,6 +44,7 @@ const enableWorksheet = () => {
 desk.addEventListener('load', enableWorksheet);
 enableWorksheet();
 toggleButton.addEventListener('click', () => {
+  inventory.close();
   showControls(controls.hidden);
   if (!controls.hidden) nameInput.focus();
 });
@@ -40,6 +53,7 @@ document.getElementById('open-desk').addEventListener('click', async () => {
   catch { showControls(true); showNotice('The web app could not be opened. You can continue in the worksheet below.', true); }
 });
 captureButton.addEventListener('click', async () => {
+  inventory.close();
   showControls(true);
   captureButton.disabled = true;
   updateReviewButton();

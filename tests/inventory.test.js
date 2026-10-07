@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { dealershipSite, inventoryUrl, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
+
+test('inventory connects only public HTTPS sites and scopes access to apex/www', () => {
+  assert.equal(dealershipSite('dealer.example.com'), 'https://dealer.example.com/');
+  assert.deepEqual(siteOrigins('https://www.dealer.example.com/'), ['https://dealer.example.com/*', 'https://www.dealer.example.com/*']);
+  for (const site of ['http://dealer.example.com', 'https://localhost', 'https://192.168.1.1/', 'https://127.0.0.1/', 'https://user:pass@dealer.example.com/', 'https://dealer.example.com:1234/', 'https://dealer.local/', 'javascript:alert(1)', 'https://dealer.example.test/']) assert.throws(() => dealershipSite(site));
+  assert.equal(inventoryUrl('/searchnew.aspx', 'https://dealer.example.com/'), 'https://dealer.example.com/searchnew.aspx');
+  for (const url of ['https://other.example.com/', 'http://dealer.example.com/', 'https://dealer.example.com.attacker.com/', undefined, '']) assert.equal(inventoryUrl(url, 'https://dealer.example.com/'), null);
+  assert.equal(publicImage('https://images.example.com/photo.jpg', 'https://dealer.example.com/'), 'https://images.example.com/photo.jpg');
+  assert.equal(publicImage('data:image/svg+xml,<svg/>', 'https://dealer.example.com/'), null);
+  assert.equal(publicImage(undefined, 'https://dealer.example.com/'), null);
+});
+
+test('inventory never invents a selling price from payments or non-USD values', () => {
+  assert.equal(usdPrice('$29,995.50'), 29995.5);
+  for (const price of [0, '$299/month', '$2,000 down', '-500', 'Call for price', 1000001, '24.999', NaN]) assert.equal(usdPrice(price), null);
+  const source = { name: '2024 Ford Explorer', url: '/used/123', vin: '1FM5K8D80MGA12345', price: 29995, currency: 'CAD' };
+  assert.equal(vehicleRecord(source, 'https://dealer.example.com', 100).price, null);
+  assert.equal(vehicleRecord({ ...source, currency: 'USD' }, 'https://dealer.example.com', 100).price, 29995);
+});
+
+test('records keep only bounded public vehicle fields, without customer data or executable URLs', () => {
+  const vehicle = vehicleRecord({ name: '2024 Ford Explorer', url: '/used/123', vin: '1FM5K8D80MGA12345', stock: 'H123', mileage: '12,345', photos: ['javascript:alert(1)', '/photo.jpg', '/photo.jpg'], customer: 'Private', downPayment: 1000, features: ['Heated seats'], location: 'Other location', availability: 'Not in stock' }, 'https://dealer.example.com', 100);
+  assert.equal(vehicle.id, '1FM5K8D80MGA12345');
+  assert.equal(vehicle.mileage, 12345);
+  assert.deepEqual(vehicle.photos, ['https://dealer.example.com/photo.jpg']);
+  assert.equal('customer' in vehicle, false);
+  assert.equal('downPayment' in vehicle, false);
+  assert.equal(vehicle.lastSeenAt, 100);
+  for (const mileage of [undefined, null, '', 'Not available', '-5', '12 miles', '2,000,001']) {
+    assert.equal(vehicleRecord({ name: '2024 Ford Explorer', url: '/used/123', mileage }, 'https://dealer.example.com', 100).mileage, null);
+  }
+  assert.equal(vehicleRecord({ name: '2024 Ford Explorer', url: '/used/123', mileage: 0 }, 'https://dealer.example.com', 100).mileage, 0);
+  assert.equal(vehicleRecord({ name: 'Brake parts', url: '/parts' }, 'https://dealer.example.com', 100), null);
+  assert.equal(vehicleRecord({ name: '2024 Ford Explorer' }, 'https://dealer.example.com', 100), null);
+});
+
+test('partial refresh preserves missing vehicles and complete refresh says not listed, never sold', () => {
+  const a = { id: 'A', listed: true, lastSeenAt: 100, price: 10000 };
+  const b = { id: 'B', listed: true, lastSeenAt: 100 };
+  const updated = { ...a, price: 11000, lastSeenAt: 200 };
+  const partial = mergeInventory([a, b], [updated, updated], false);
+  assert.equal(partial.length, 2);
+  assert.equal(partial.find(v => v.id === 'B').listed, true);
+  assert.equal(partial.find(v => v.id === 'A').price, 11000);
+  const complete = mergeInventory([a, b], [updated], true);
+  assert.equal(complete.find(v => v.id === 'B').listed, false);
+  assert.equal(complete.find(v => v.id === 'B').lastSeenAt, 100);
+  assert.equal(complete.some(v => v.sold), false);
+});
+
+test('nightly scheduling uses the next local calendar night and missed-run catch-up', () => {
+  for (const now of [new Date(2026, 9, 7, 1), new Date(2026, 9, 7, 4), new Date(2026, 9, 31, 23), new Date(2026, 2, 7, 23)]) {
+    const night = new Date(nextNightAt(now.getTime()));
+    assert.ok(night > now);
+    assert.equal(night.getMinutes(), 0);
+    assert.ok(night.getHours() === 2 || night.getHours() === 3);
+  }
+  assert.equal(refreshDue({ config: { nightly: true }, nextRefreshAt: 100 }, 200), true);
+  assert.equal(refreshDue({ config: { nightly: false }, nextRefreshAt: 100 }, 200), false);
+  assert.equal(refreshDue({ config: { nightly: true }, nextRefreshAt: 300 }, 200), false);
+  assert.equal(refreshDue({ config: { nightly: true }, job: {}, nextRefreshAt: 100 }, 200), false);
+  // After the spring-forward day has passed 3 AM, tomorrow returns to 2 AM.
+  const spring = new Date(nextNightAt(new Date(2026, 2, 8, 4).getTime()));
+  assert.equal(spring.getDate(), 9);
+  assert.equal(spring.getHours(), 2);
+});
+
+test('robots policies respect site exclusions, wildcards, more-specific allows and crawl delay', () => {
+  const policy = robotsPolicy('User-agent: OtherBot\nDisallow: /\nUser-agent: *\nCrawl-delay: 10\nDisallow: /private/\nDisallow: /*.axd$\nAllow: /private/public\nUser-Agent: *\nDisallow: /rss-usedinventory.aspx');
+  assert.equal(policy.delay, 10);
+  for (const path of ['/private/data', '/rss-usedinventory.aspx', '/resource.axd']) assert.equal(robotsAllows(policy, `https://dealer.example.com${path}`), false);
+  for (const path of ['/private/public/data', '/searchused.aspx', '/resource.axd?x=1', '/api/vhcliaa/vehicles']) assert.equal(robotsAllows(policy, `https://dealer.example.com${path}`), true);
+  const specific = robotsPolicy('User-agent: *\nAllow: /\nUser-agent: PaymentDeskCompanion\nDisallow: /');
+  assert.equal(robotsAllows(specific, 'https://dealer.example.com/'), false);
+});

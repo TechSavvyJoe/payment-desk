@@ -11,7 +11,7 @@ const source = fileURLToPath(new URL('../../extension-dist/payment-desk-companio
 test.beforeEach(async () => {
   context = await chromium.launchPersistentContext('', {
     channel: 'chromium', headless: true,
-    args: [`--disable-extensions-except=${source}`, `--load-extension=${source}`, '--enable-unsafe-extension-debugging'],
+    args: [`--disable-extensions-except=${source}`, `--load-extension=${source}`, '--enable-unsafe-extension-debugging', '--disable-background-mode'],
   });
   [worker] = context.serviceWorkers();
   worker ??= await context.waitForEvent('serviceworker');
@@ -75,7 +75,12 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   // Headless Chrome creates the native panel at 0×0 until its first paint.
   // Give that real panel a visible viewport so the iframe can render normally.
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 800, deviceScaleFactor: 1, mobile: false });
-  await call('Page.captureScreenshot');
+  // The native compositor can lag the renderer on a busy machine. Wait for an
+  // actual painted frame rather than treating the first paint as synchronous.
+  await expect.poll(async () => {
+    try { return Boolean((await call('Page.captureScreenshot')).data); }
+    catch (error) { if (error.message === 'Unable to capture screenshot') return false; throw error; }
+  }, { timeout: 20_000 }).toBe(true);
   const evaluate = async expression => {
     const result = await call('Runtime.evaluate', { expression, returnByValue: true, userGesture: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
@@ -151,7 +156,8 @@ test('unsupported-page fallback and narrow worksheet remain accessible', async (
   await expect(panel.locator('#notice')).toContainText('cannot be read');
   await panel.locator('#vehicle-name').fill('2024 Explorer');
   expect((await new AxeBuilder({ page: panel }).analyze()).violations).toEqual([]);
-  expect(await panel.evaluate(() => chrome.runtime.getManifest().permissions)).toEqual(['activeTab', 'scripting', 'sidePanel']);
+  expect(await panel.evaluate(() => chrome.runtime.getManifest().permissions)).toEqual(['activeTab', 'scripting', 'sidePanel', 'storage', 'alarms', 'offscreen']);
+  expect(await panel.evaluate(() => chrome.runtime.getManifest().optional_host_permissions)).toEqual(['https://*/*']);
   expect(await panel.evaluate(() => chrome.runtime.getManifest().host_permissions)).toBeUndefined();
   await panel.getByRole('button', { name: 'Hide vehicle' }).click();
   await expect(panel.frameLocator('#desk').locator('#sale-price')).toBeVisible();

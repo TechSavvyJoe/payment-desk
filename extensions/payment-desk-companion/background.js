@@ -1,3 +1,7 @@
+import { installInventory } from './inventoryBackground.js';
+
+installInventory();
+
 // An action listener grants activeTab on the selected listing and opens (or
 // keeps open) the global panel. Clicking again on a new tab authorizes that tab
 // without toggling away the live worksheet.
