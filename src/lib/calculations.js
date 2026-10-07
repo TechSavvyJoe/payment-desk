@@ -265,7 +265,6 @@ function normalizeOptionalItems(items) {
 
 // The dealership's own document and CRV fees, in dollars. Missing or unreadable
 // values use the policy default; readable values are clamped to [0, maximum].
-
 function dealershipFeeCents(value, defaultCents, maximumCents) {
   if (value === undefined || value === null || value === '') return defaultCents;
   let cents;
