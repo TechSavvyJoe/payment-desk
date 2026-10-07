@@ -67,6 +67,11 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
     return Boolean(panelTarget);
   }).toBe(true);
   const call = await attachNativePanel(browserSession, panelTarget.targetId);
+  // Playwright may auto-attach this non-tab page in a paused state. Resume its
+  // renderer explicitly; otherwise CDP evaluations can wait forever at startup.
+  await call('Runtime.enable');
+  await call('Page.enable');
+  await call('Runtime.runIfWaitingForDebugger');
   // Headless Chrome creates the native panel at 0×0 until its first paint.
   // Give that real panel a visible viewport so the iframe can render normally.
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 800, deviceScaleFactor: 1, mobile: false });
