@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment Desk side panel</title>
+    <link rel="stylesheet" href="sidepanel.css">
+    <script type="module" src="sidepanel.js"></script>
+  </head>
+  <body>
+    <header aria-label="Listing tools">
+      <button id="capture" class="capture" type="button">Capture listing</button>
+      <button id="toggle-vehicle" class="quiet" type="button" aria-expanded="false" aria-controls="vehicle-controls">Enter vehicle</button>
+      <button id="open-desk" class="quiet" type="button">Web app ↗</button>
+    </header>
+    <section id="vehicle-controls" aria-label="Vehicle capture" hidden>
+      <p id="source" class="source">Read a listing or enter the vehicle details.</p>
+      <form id="vehicle-form" novalidate>
+        <label for="vehicle-name">Vehicle <span>Optional</span></label>
+        <input id="vehicle-name" type="text" maxlength="67" placeholder="e.g. 2024 Ford Explorer" autocomplete="off">
+        <div class="fields">
+          <div><label for="stock">Stock # <span>Optional</span></label><input id="stock" type="text" maxlength="24" placeholder="H12345" autocomplete="off"></div>
+          <div><label for="price">Selling price <span>USD</span></label><input id="price" type="text" inputmode="decimal" placeholder="$29,995" autocomplete="off" aria-describedby="notice"></div>
+        </div>
+        <p id="notice" role="status" aria-live="polite">Review the details before sending them to the worksheet.</p>
+        <button id="start-estimate" class="primary" type="submit" disabled>Review in worksheet</button>
+      </form>
+    </section>
+    <iframe id="desk" title="Payment Desk worksheet" src="desk/index.html" allow="clipboard-write"></iframe>
+    <noscript>Enable JavaScript to use the worksheet.</noscript>
+  </body>
+</html>
