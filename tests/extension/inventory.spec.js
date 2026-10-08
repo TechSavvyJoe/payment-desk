@@ -108,13 +108,27 @@ test('each discovered origin gets its own robots policy before an inventory requ
   expect((await saved()).error).toContain('excludes this inventory path');
 });
 
-test('a canonical robots redirect delegates the policy without repeating robots requests', async () => {
+test('a robots response from a canonical host also applies to the requesting origin', async () => {
   const www = 'https://www.dealer.example.com/';
-  await context.route(`${site}robots.txt`, route => route.fulfill({ status: 302, headers: { location: `${www}robots.txt` } }));
-  await context.route(`${www}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /' }));
-  await connect();
-  expect((await saved()).vehicles).toHaveLength(3);
-  expect(requests.filter(url => url.endsWith('/robots.txt'))).toEqual([`${site}robots.txt`, `${www}robots.txt`]);
+  // Routed synthetic hosts cannot serve a browser-followed redirect chain.
+  // Model only Fetch's final response URL; all inventory reads still use the
+  // real worker, network fixtures, parser, queue and Chrome storage.
+  const [worker] = context.serviceWorkers();
+  await worker.evaluate(({ source, final }) => {
+    const original = fetch;
+    globalThis.fetch = async (...args) => {
+      const response = await original(...args);
+      if (args[0] === source) Object.defineProperty(response, 'url', { value: final });
+      return response;
+    };
+  }, { source: `${site}robots.txt`, final: `${www}robots.txt` });
+  await panel.locator('#dealership-site').fill(site);
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect.poll(async () => ['ready', 'partial', 'error'].includes((await saved())?.status), { timeout: 30_000 }).toBe(true);
+  const state = await saved();
+  expect(state.status, `${state.error}; requests: ${requests.join(', ')}`).toBe('ready');
+  expect(state.vehicles).toHaveLength(3);
+  expect(requests.filter(url => url.endsWith('/robots.txt'))).toEqual([`${site}robots.txt`]);
 });
 
 test('discovery uses the fetched document URL and neutral vehicle URLs retain the feed condition', async () => {
