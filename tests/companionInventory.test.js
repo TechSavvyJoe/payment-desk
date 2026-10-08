@@ -98,6 +98,25 @@ test('a failed concurrent read cannot discard a candidate verified by another re
   assert.deepEqual(await following, page);
 });
 
+for (const savedId of [null, previous]) {
+  test(`a later failed read retries the concurrently confirmed companion with ${savedId ? 'an older connection' : 'no prior connection'}`, async t => {
+    const calls = [];
+    const storage = browser(t, savedId, (_runtime, id, message, callback) => calls.push({ id, message, callback }));
+    const first = readCompanionInventory({ search: 'first' });
+    const second = readCompanionInventory({ search: 'second' });
+    calls[0].callback(page);
+    assert.deepEqual(await first, page);
+    calls[1].callback({ ok: false });
+    await Promise.resolve();
+    assert.equal(calls.length, 3);
+    assert.equal(calls[2].id, candidate);
+    assert.equal(calls[2].message.search, 'second');
+    calls[2].callback(page);
+    assert.deepEqual(await second, page);
+    assert.equal(storage.get(KEY), candidate);
+  });
+}
+
 test('a superseded candidate cannot replace the companion verified by a newer link', async t => {
   const callbacks = [];
   const storage = browser(t, previous, (_runtime, id, _message, callback) => callbacks.push({ id, callback }));

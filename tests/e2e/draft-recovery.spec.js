@@ -43,6 +43,8 @@ for (const restored of [false, true]) {
     page.on('dialog', async dialog => { confirmations.push(dialog.message()); await dialog.dismiss(); });
     await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
     expect(confirmations).toEqual([]);
+    // A blank Reset still confirms its storage write before allowing navigation.
+    await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
     await page.reload();
     await expect(page.locator('#sale-price')).toHaveValue('');
     await expect(page.locator('#target-value')).toHaveValue('');

@@ -46,6 +46,7 @@ function requestCatalog(id, query) {
 
 export async function readCompanionInventory(query) {
   const previous = companionId();
+  let fallback = previous;
   const candidate = pendingConnection;
   if (candidate) {
     candidate.attempts++;
@@ -59,7 +60,9 @@ export async function readCompanionInventory(query) {
       }
       return page;
     } catch (error) {
-      if (!previous || previous === candidate.id) throw error;
+      const confirmed = companionId();
+      if (!confirmed || confirmed === candidate.id && confirmed === previous) throw error;
+      fallback = confirmed;
       // A broken connection link must not disable the saved companion.
     } finally {
       candidate.attempts--;
@@ -67,5 +70,5 @@ export async function readCompanionInventory(query) {
       if (!candidate.attempts && pendingConnection === candidate) pendingConnection = null;
     }
   }
-  return requestCatalog(previous, query);
+  return requestCatalog(fallback, query);
 }

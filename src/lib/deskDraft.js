@@ -56,6 +56,7 @@ export function normalizeDeskDraft(value) {
     }
     if (!Array.isArray(source.gridDownPayments) || source.gridDownPayments.length !== 4 || !source.gridDownPayments.every(money)
       || !terms.every(term => rate(source.gridRates?.[term])) || !targets.includes(value.targetType)
+      || source.gridRates[deal.termMonths] !== deal.apr
       || !Number.isSafeInteger(source.nextItemId) || source.nextItemId < 1 || source.nextItemId > 1_000_000_000
       || source.nextItemId <= Math.max(0, ...optionalItems.map(item => Number(item.id.slice(7))))
       || (deal.dealType === 'cash' ? !['cashDue', 'outTheDoor'].includes(value.targetType) : value.targetType === 'cashDue')

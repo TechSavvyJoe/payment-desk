@@ -127,6 +127,13 @@ test('DealerCarSearch certified listing URLs retain certified condition and reta
   expect(result).toMatchObject({ condition: 'certified', price: 24995 });
 });
 
+test('inventory validation errors are exposed through a live status region', async () => {
+  await panel.locator('#dealership-site').fill('http://dealer.example.com/');
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect(panel.getByRole('status').filter({ hasText: 'Enter a public HTTPS dealership website.' })).toBeVisible();
+  expect((await saved())?.config).toBeFalsy();
+});
+
 for (const provider of ['DealerOn', 'DealerCarSearch']) {
   test(`a direct combined ${provider} feed completes without unsupported homepage discovery`, async () => {
     const feed = `${site}${provider === 'DealerOn' ? 'searchall.aspx' : 'inventory'}`;

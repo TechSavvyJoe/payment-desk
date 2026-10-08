@@ -150,6 +150,19 @@ test('saved APRs require cent precision in both the deal and every grid term', (
   }
 });
 
+test('restored deal APR must match the selected term in the grid', () => {
+  for (const term of [36, 48, 60, 72, 84]) {
+    const value = empty();
+    value.desk.deal.termMonths = term;
+    value.desk.deal.apr = value.desk.gridRates[term];
+    assert.notEqual(normalizeDeskDraft(value), null);
+    value.desk.gridRates[term] += .25;
+    assert.equal(normalizeDeskDraft(value), null);
+    const device = storage(); device.setItem(DESK_DRAFT_KEY, JSON.stringify(value));
+    assert.equal(loadDeskDraft(device), null);
+  }
+});
+
 test('restored date drafts retain invalid entry but discard a valid date that disagrees with the deal', () => {
   const value = empty();
   value.inputDrafts['estimate-date'] = { raw: '10/08/26' };
