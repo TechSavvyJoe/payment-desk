@@ -87,7 +87,7 @@ export default function PaymentGrid({
               <th scope="col">Term</th>
               <th scope="col">APR</th>
               {grid.columns.map((column, columnIndex) => (
-                <th key={column.key} scope="col">
+                <th key={`down-${columnIndex}`} scope="col">
                   <MoneyInput
                     ariaLabel={`Down payment column ${columnIndex + 1}`}
                     savedDraft={draftCache[`down-${columnIndex}`]}
