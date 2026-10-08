@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { catalogPage, isInventoryWebSender, validateCatalogPage } from '../extensions/payment-desk-companion/inventoryWeb.js';
+import { catalogPage, installInventoryWeb, isInventoryWebSender, validateCatalogPage } from '../extensions/payment-desk-companion/inventoryWeb.js';
 
 const site = 'https://dealer.example.com/';
 const vehicle = (number, overrides = {}) => ({ name: '2024 Ford Explorer', url: `${site}vehicle/${number}`, stock: `S${number}`, price: 25000, websitePrice: 26000, condition: 'used', listed: true, lastSeenAt: 1000, features: ['Rear camera'], ...overrides });
@@ -74,4 +74,44 @@ test('an older companion may provide a first page but cannot claim snapshot cons
   delete legacy.revision;
   assert.equal(validateCatalogPage(legacy).revision, null);
   assert.equal(validateCatalogPage({ ...current, revision: 'unbounded-or-invalid' }).revision, null);
+});
+
+test('native catalog callbacks preserve sender checks and report storage failures', async t => {
+  const previous = globalThis.chrome;
+  t.after(() => { globalThis.chrome = previous; });
+  let external, internal, reads = 0, failure = false, throws = false;
+  const state = { config: { site, secret: 'private' }, vehicles: [vehicle(1, { customer: 'private' })] };
+  const runtime = {
+    id: 'companion', getURL: path => `chrome-extension://companion/${path}`,
+    onMessageExternal: { addListener: fn => { external = fn; } },
+    onMessage: { addListener: fn => { internal = fn; } },
+  };
+  globalThis.chrome = { runtime, storage: { local: { get(key, callback) {
+    reads += 1;
+    if (throws) throw new Error('storage unavailable');
+    queueMicrotask(() => {
+      runtime.lastError = failure ? { message: 'storage unavailable' } : undefined;
+      callback({ [key]: state });
+      delete runtime.lastError;
+    });
+  } } } };
+  installInventoryWeb();
+  const message = { target: 'inventory.catalog', action: 'read' };
+  const sender = { url: 'https://desking.mysoldlog.com/', origin: 'https://desking.mysoldlog.com', tab: { id: 1 } };
+  assert.equal(external(message, { ...sender, origin: 'https://evil.example' }, () => assert.fail('untrusted response')), undefined);
+  assert.equal(internal(message, { id: 'another-extension', url: runtime.getURL('desk/') }, () => assert.fail('untrusted response')), undefined);
+  assert.equal(reads, 0);
+  const read = (listener, source) => new Promise(resolve => {
+    assert.equal(listener(message, source, resolve), true);
+  });
+  const response = await read(external, sender);
+  assert.equal(response.vehicles[0].stock, 'S1');
+  assert.match(response.revision, /^[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(response).includes('private'), false);
+  assert.deepEqual(await read(internal, { id: 'companion', url: runtime.getURL('desk/index.html') }), response);
+  failure = true;
+  const failed = { ok: false, error: 'The saved inventory could not be read.' };
+  assert.deepEqual(await read(external, sender), failed);
+  throws = true;
+  assert.deepEqual(await read(external, sender), failed);
 });

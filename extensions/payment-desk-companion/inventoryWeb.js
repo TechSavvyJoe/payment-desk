@@ -71,8 +71,15 @@ export function validateCatalogPage(value) {
 export function installInventoryWeb() {
   const respondToCatalog = (message, respond) => {
     if (message?.target !== 'inventory.catalog' || message.action !== 'read') return;
-    chrome.storage.local.get(INVENTORY_KEY).then(saved => catalogPage(saved[INVENTORY_KEY] ?? {}, message))
-      .then(respond, () => respond({ ok: false, error: 'The saved inventory could not be read.' }));
+    const failed = () => respond({ ok: false, error: 'The saved inventory could not be read.' });
+    // Use the native callback to keep the storage read responsive while an
+    // external message holds the MV3 response channel open.
+    try {
+      chrome.storage.local.get(INVENTORY_KEY, saved => {
+        if (chrome.runtime.lastError) { failed(); return; }
+        catalogPage(saved?.[INVENTORY_KEY] ?? {}, message).then(respond, failed);
+      });
+    } catch { failed(); }
     return true;
   };
   chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
