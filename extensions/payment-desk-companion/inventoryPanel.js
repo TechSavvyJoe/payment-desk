@@ -13,6 +13,7 @@ export function installInventoryPanel(onChoose, onOpen) {
   const money = value => value === null || value === undefined ? 'USD price unavailable' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
   const date = value => value ? new Date(value).toLocaleString() : 'Never';
   let state = {};
+  let permissionWarning;
   let limit = 30;
   let connecting = false;
   let wasConnected = false;
@@ -24,8 +25,13 @@ export function installInventoryPanel(onChoose, onOpen) {
   const command = async value => {
     const result = await chrome.runtime.sendMessage({ target: 'inventory.background', ...value });
     if (!result?.ok) throw new Error(result?.error ?? 'The inventory action could not be completed.');
+    return result;
   };
-  const message = (value, error = false) => { notice.textContent = value; notice.classList.toggle('is-error', error); };
+  const message = (value, error = false) => {
+    const warning = state.permissionWarning || (permissionWarning?.site === state.config?.site ? permissionWarning.text : '');
+    notice.textContent = [warning, value].filter(Boolean).join(' ');
+    notice.classList.toggle('is-error', error || Boolean(warning));
+  };
   const element = (tag, text, className) => {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -115,7 +121,9 @@ export function installInventoryPanel(onChoose, onOpen) {
     try {
       granted = await permission;
       if (!granted) throw new Error('Website access was not granted. The connection was not changed.');
-      await command({ action: 'connect', site: url, nightly: selectedNightly });
+      const result = await command({ action: 'connect', site: url, nightly: selectedNightly });
+      permissionWarning = { site: url, text: result.warning };
+      render();
     } catch (error) {
       if (granted) {
         try {

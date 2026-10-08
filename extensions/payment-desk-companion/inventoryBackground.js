@@ -34,7 +34,9 @@ async function releaseWebsite(site) {
   // optional hosts; explicit required hosts may exist in an enterprise/test build.
   const required = chrome.runtime.getManifest().host_permissions ?? [];
   const origins = siteOrigins(site).filter(origin => !required.includes(origin) && !required.includes('https://*/*') && !required.includes('<all_urls>'));
-  if (origins.length) await chrome.permissions.remove({ origins });
+  const access = await Promise.all(origins.map(origin => chrome.permissions.contains({ origins: [origin] })));
+  const granted = origins.filter((_origin, index) => access[index]);
+  if (granted.length && !await chrome.permissions.remove({ origins: granted })) throw new Error('Website access could not be removed.');
 }
 async function startRefresh() {
   const state = await transaction(async state => {
@@ -247,18 +249,37 @@ async function command(message) {
   if (message.action === 'connect') {
     const site = dealershipSite(message.site);
     if (inventoryFeedUrl(site) && !unfilteredInventoryUrl(site)) throw new Error('Connect an unfiltered inventory page to read the complete dealership inventory.');
-    if (!await chrome.permissions.contains({ origins: siteOrigins(site) })) throw new Error('Allow access to this dealership website to connect it.');
-    let previousSite;
-    const state = await transaction(async previous => {
-      previousSite = previous.config?.site;
+    const warning = await transaction(async previous => {
+      if (!await chrome.permissions.contains({ origins: siteOrigins(site) })) throw new Error('Allow access to this dealership website to connect it.');
+      const previousSite = previous.config?.site;
       const same = previous.config?.site === site;
-      const next = { ...(same ? previous : {}), config: { site, nightly: Boolean(message.nightly) }, job: null, status: 'idle', error: '', nextRefreshAt: nextNightAt() };
-      await write(next);
-      return next;
+      const config = { site, nightly: Boolean(message.nightly) };
+      const next = { ...(same ? previous : {}), config, job: newJob(config), status: 'syncing', error: '', permissionWarning: '', lastAttemptAt: Date.now(), nextRefreshAt: nextNightAt() };
+      // Prepare alarms and the refresh job before replacing the working catalog.
+      // No old website access is withdrawn until this setup has committed.
+      try { await schedule(next); await write(next); }
+      catch (error) {
+        try { await schedule(previous); }
+        catch { throw new Error(`${error.message} The previous catalog was kept, but automatic refresh could not be restored. Try connecting again.`, { cause: error }); }
+        throw error;
+      }
+      let warning = '';
+      if (previousSite && previousSite !== site && !siteOrigins(previousSite).every(origin => siteOrigins(site).includes(origin))) {
+        try { await releaseWebsite(previousSite); }
+        catch {
+          warning = 'Previous website access could not be removed. The new dealership is connected. Remove the previous website in Chrome’s extension settings.';
+          // Cleanup failure does not turn successful setup into a failed connection
+          // (which would cause the panel to withdraw the newly approved website).
+          try { await write({ ...next, permissionWarning: warning }); }
+          catch { /* The command also returns the warning for the current panel. */ }
+        }
+      }
+      // Keep local permission cleanup serialized with connection changes so an
+      // earlier switch cannot withdraw access needed by a later connection.
+      return warning;
     });
-    if (previousSite && previousSite !== site && !siteOrigins(previousSite).every(origin => siteOrigins(site).includes(origin))) await releaseWebsite(previousSite);
-    await schedule(state);
-    await startRefresh();
+    void pump();
+    return { ok: true, warning };
   } else if (message.action === 'refresh') await startRefresh();
   else if (message.action === 'nightly') {
     const state = await transaction(async state => {

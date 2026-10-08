@@ -87,10 +87,10 @@ function discovery(root, url, site) {
 export function parseInventoryHtml(html, task, site, now) {
   const root = markup(html);
   if (inventoryFeedUrl(task.url) && !unfilteredInventoryUrl(task.url, task.page ?? 1)) throw new Error('Connect an unfiltered inventory page to read the complete dealership inventory.');
-  // A direct inventory URL still needs the dealership's other inventory.
-  // Follow its navigation, or visit the home page when the feed omits it.
-  const discoverMore = () => {
-    if ((task.page ?? 1) !== 1) return [];
+  // Separate condition feeds need sibling discovery; combined feeds already
+  // cover both conditions and must not depend on unrelated homepage markup.
+  const discoverMore = (scope = feedConditionFor(task)) => {
+    if ((task.page ?? 1) !== 1 || scope === 'all') return [];
     const siblings = discovery(root, task.url, site);
     const home = new URL('/', task.url).href;
     return siblings.length ? siblings : task.url !== home ? [{ url: home, kind: 'html', condition: 'unknown' }] : [];
@@ -101,7 +101,7 @@ export function parseInventoryHtml(html, task, site, now) {
     if (!Number.isInteger(config.DealerId) || config.DealerId <= 0 || !Number.isInteger(config.PageId) || config.PageId <= 0
       || typeof config.BaseFilter !== 'string' || config.BaseFilter.length > 1000 || !/^[\x20-\x7e]*$/.test(config.BaseFilter)) throw new Error('This inventory configuration is unsupported.');
     const condition = /new/i.test(config.PageVehicleType) ? 'new' : /used|certified/i.test(config.PageVehicleType) ? 'used' : /^all$/i.test(config.PageVehicleType) ? 'all' : feedConditionFor(task);
-    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition }, ...discoverMore()], provider: 'DealerOn' };
+    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition }, ...discoverMore(condition)], provider: 'DealerOn' };
   }
   const cards = [...root.querySelectorAll('.invMainCell')];
   const summary = text(root.querySelector('.pager-summary')).match(/Page:\s*(\d+)\s*of\s*(\d+)\s*\((\d+) vehicles\)/i);

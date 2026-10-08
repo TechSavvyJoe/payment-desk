@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
+import { NIGHT_ALARM, WORK_ALARM } from '../../extensions/payment-desk-companion/inventoryModel.js';
 
 const KEY = 'payment-desk.inventory.v1';
 const site = 'https://dealer.example.com/';
@@ -72,6 +73,86 @@ test('a direct used-inventory page discovers new inventory before reporting comp
   expect(requests).toContain(site);
   expect(requests).toContain(`${site}searchnew.aspx`);
 });
+
+for (const provider of ['DealerOn', 'DealerCarSearch']) {
+  test(`a direct combined ${provider} feed completes without unsupported homepage discovery`, async () => {
+    const feed = `${site}${provider === 'DealerOn' ? 'searchall.aspx' : 'inventory'}`;
+    await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<h1>Dealer homepage without inventory navigation</h1>' }));
+    if (provider === 'DealerOn') {
+      await context.route(feed, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, BaseFilter: '', PageVehicleType: 'All' })}</script>` }));
+      await context.route(`${site}api/vhcliaa/**/30?*`, route => route.fulfill({ json: { DisplayCards: [card('new', 1), card('used', 2)], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 1, TotalCount: 2 } } } }));
+    } else await context.route(`${feed}*`, route => {
+      const page = Number(new URL(route.request().url()).searchParams.get('page') || 1);
+      return route.fulfill({ contentType: 'text/html', body: `<span class="pager-summary">Page: ${page} of 2 (2 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/vdp/${page}/${page === 1 ? 'New' : 'Used'}-2024-Ford-Explorer">2024 Ford Explorer</a></h4><p>Stock #: S${page}</p></div>` });
+    });
+    await panel.locator('#dealership-site').fill(feed);
+    await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+    await expect.poll(async () => ['ready', 'partial', 'error'].includes((await saved())?.status), { timeout: 30_000 }).toBe(true);
+    const state = await saved();
+    expect(state.status, state.error).toBe('ready');
+    expect(state.error).toBe('');
+    expect(state.lastCompletedAt).toBeGreaterThan(0);
+    expect(state.vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used']);
+    expect(requests).not.toContain(site);
+  });
+}
+
+for (const failure of ['night', 'work', 'cleanup']) {
+  test(`switching dealerships handles a ${failure} setup failure without losing a working connection`, async () => {
+    const [worker] = context.serviceWorkers();
+    await panel.locator('#dealership-site').blur();
+    const previous = await panel.evaluate(async key => {
+      const { vehicleRecord, NIGHT_ALARM } = await import('./inventoryModel.js');
+      const former = 'https://former.example.com/';
+      const state = { config: { site: former, nightly: true }, status: 'ready', error: '', lastCompletedAt: 1000, nextRefreshAt: Date.now() + 3_600_000,
+        vehicles: [vehicleRecord({ name: '2024 Ford Escape', stock: 'OLD1', vin: '1FM5K8D80MGA12345', url: `${former}used/vehicle`, condition: 'used', currency: 'USD', price: 25000 }, former, 1000)] };
+      await chrome.storage.local.set({ [key]: state });
+      await chrome.alarms.create(NIGHT_ALARM, { when: state.nextRefreshAt });
+      return state;
+    }, KEY);
+    expect(previous.vehicles[0]?.price).toBe(25000);
+    await worker.evaluate(({ failure, NIGHT_ALARM, WORK_ALARM }) => {
+      const create = chrome.alarms.create;
+      let injected = false;
+      chrome.alarms.create = async (...args) => {
+        if (!injected && (failure === 'night' && args[0] === NIGHT_ALARM || failure === 'work' && args[0] === WORK_ALARM)) {
+          injected = true;
+          throw new Error(`Injected ${failure} setup failure`);
+        }
+        return create(...args);
+      };
+      globalThis.removedSites = [];
+      const contains = chrome.permissions.contains;
+      chrome.permissions.contains = ({ origins }) => origins.every(origin => origin.includes('former.example.com')) ? Promise.resolve(true) : contains({ origins });
+      chrome.permissions.remove = async ({ origins }) => {
+        globalThis.removedSites.push(origins);
+        if (failure === 'cleanup') throw new Error('Injected cleanup failure');
+        return true;
+      };
+    }, { failure, NIGHT_ALARM, WORK_ALARM });
+    await expect(panel.locator('#dealership-site')).toHaveValue(previous.config.site);
+    await panel.locator('#inventory-settings summary').click();
+    await panel.locator('#dealership-site').fill(site);
+    await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+    if (failure === 'cleanup') {
+      await expect.poll(async () => {
+        const state = await saved();
+        return state?.config?.site === site && ['ready', 'partial', 'error', 'idle'].includes(state.status);
+      }, { timeout: 30_000 }).toBe(true);
+      expect((await saved()).status).toBe('ready');
+      expect((await saved()).config.site).toBe(site);
+      expect((await saved()).vehicles).toHaveLength(3);
+      await expect(panel.locator('#inventory-notice')).toContainText('Previous website access could not be removed');
+    } else {
+      await expect(panel.locator('#inventory-notice')).toContainText(`Injected ${failure} setup failure`);
+      expect(await saved()).toEqual(previous);
+      expect(await worker.evaluate(() => globalThis.removedSites)).toEqual([]);
+      const alarm = await worker.evaluate(name => chrome.alarms.get(name), NIGHT_ALARM);
+      expect(alarm.scheduledTime).toBe(previous.nextRefreshAt);
+      expect(await worker.evaluate(name => chrome.alarms.get(name), WORK_ALARM)).toBeUndefined();
+    }
+  });
+}
 
 for (const provider of ['DealerOn', 'DealerCarSearch']) {
   test(`${provider} verifies duplicate VIN source rows before deduplicating the catalog`, async () => {
