@@ -47,18 +47,47 @@ async function startRefresh() {
   void pump();
 }
 
+async function inventoryResponse(url) {
+  // Fetch deliberately stops at redirects. Chrome's read-only network event
+  // supplies the hidden Location header for this worker's own request only.
+  // No browsing traffic, cookies, or other headers are retained.
+  const event = chrome.webRequest?.onHeadersReceived;
+  let resolveHeaders;
+  const headers = new Promise(resolve => { resolveHeaders = resolve; });
+  const initiator = chrome.runtime.getURL('').replace(/\/$/, '');
+  const observe = details => {
+    if (details.url !== url || details.initiator !== initiator || details.method !== 'GET' || details.tabId !== -1) return;
+    resolveHeaders(details.responseHeaders?.find(header => header.name.toLowerCase() === 'location')?.value ?? null);
+  };
+  event?.addListener(observe, { urls: [`${new URL(url).origin}/*`], types: ['xmlhttprequest'], tabId: -1 }, ['responseHeaders']);
+  let timer;
+  try {
+    const response = await fetch(url, { credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' });
+    if (response.type === 'opaqueredirect' || [301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location') ?? (event ? await Promise.race([headers, new Promise(resolve => { timer = setTimeout(() => resolve(null), 1000); })]) : null);
+      await response.body?.cancel();
+      return { location };
+    }
+    return { response };
+  } finally {
+    clearTimeout(timer);
+    event?.removeListener(observe);
+  }
+}
+
 async function getPage(url, site, policies) {
   let current = inventoryUrl(url, site);
   if (!current || !await chrome.permissions.contains({ origins: [`${new URL(current).origin}/*`] })) throw new Error('Website access is missing. Reconnect the dealership to allow it.');
   const policy = policies?.[new URL(current).origin];
   if (policy && !robotsAllows(policy, current)) throw new Error('The website excludes this inventory path from automated reads.');
-  // Robots files may delegate their policy. Inventory redirects must not issue
-  // an unchecked destination request; Chrome hides Location on manual redirects.
-  const response = await fetch(current, { credentials: 'omit', redirect: policies ? 'manual' : 'follow', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' });
-  if (policies && (response.type === 'opaqueredirect' || response.status >= 300 && response.status < 400)) {
-    await response.body?.cancel();
-    throw new Error('The inventory URL redirects. Open it in Chrome and connect the final inventory address. The previous catalog was kept.');
+  const fetched = policies ? await inventoryResponse(current) : { response: await fetch(current, { credentials: 'omit', redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' }) };
+  if ('location' in fetched) {
+    if (!fetched.location) throw new Error(`The inventory URL redirects (${new URL(current).pathname}), but its final address could not be read. Open it in Chrome and connect the final inventory address. The previous catalog was kept.`);
+    const redirect = inventoryUrl(fetched.location, site, current);
+    if (!redirect) throw new Error('The inventory URL redirects outside this dealership. Connect the actual inventory website. The previous catalog was kept.');
+    return { redirect };
   }
+  const response = fetched.response;
   current = inventoryUrl(response.url, site);
   const finalPolicy = current && policies?.[new URL(current).origin];
   if (!current || finalPolicy && !robotsAllows(finalPolicy, current)) { await response.body?.cancel(); throw new Error('The website redirected outside this dealership or to an excluded path. Connect the actual inventory website.'); }
@@ -98,7 +127,7 @@ async function finish(jobId, error = '') {
       return vehicle.listed && !seen.has(vehicle.id) && ['new', 'used'].includes(condition) && !scopes.has('all') && !scopes.has(condition);
     });
     const complete = !error && !job.warnings.length && countsMatch && !missingScope && Object.keys(job.groups).length > 0;
-    const errors = [error, ...job.warnings, !countsMatch && 'The website page counts did not match the vehicles received.', missingScope && 'A cached inventory condition was not verified. The previous vehicles were kept.'].filter(Boolean);
+    const errors = [...new Set([error, ...job.warnings, !countsMatch && 'The website page counts did not match the vehicles received.', missingScope && 'A cached inventory condition was not verified. The previous vehicles were kept.'].filter(Boolean))];
     const next = { ...state, job: null, vehicles: mergeInventory(state.vehicles ?? [], job.vehicles, complete), provider: job.provider,
       status: complete ? 'ready' : job.vehicles.length ? 'partial' : 'error', error: errors.join(' ') || (complete ? '' : 'The inventory could not be verified.'),
       lastCompletedAt: complete ? Date.now() : state.lastCompletedAt, lastUpdatedAt: job.vehicles.length ? Date.now() : state.lastUpdatedAt };
@@ -166,7 +195,11 @@ async function processBatch() {
         // A robots redirect delegates the requested origin to the returned policy.
         next.policies[origin] = result.policy;
         next.policies[result.origin] = result.policy;
-      } else if (result.redirect) next.queue.unshift({ ...task, url: result.redirect });
+      } else if (result.redirect) {
+        const trail = [...(task.redirectTrail ?? []), fetchUrl];
+        if (trail.includes(result.redirect) || trail.length > 5) next.warnings.push('The inventory redirect chain loops or exceeds five steps. The previous catalog was kept.');
+        else if (!next.visited.includes(result.redirect) && !next.queue.some(item => item.url === result.redirect)) next.queue.unshift({ ...task, url: result.redirect, redirectTrail: trail });
+      }
       else {
         if (result.provider) next.provider = result.provider;
         const known = new Set([...next.visited, ...next.queue.map(item => item.url)]);

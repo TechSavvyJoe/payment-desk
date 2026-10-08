@@ -231,7 +231,7 @@ test('unsupported-page fallback and narrow worksheet remain accessible', async (
   await expect(panel.locator('#notice')).toContainText('cannot be read');
   await panel.locator('#vehicle-name').fill('2024 Explorer');
   expect((await new AxeBuilder({ page: panel }).analyze()).violations).toEqual([]);
-  expect(await panel.evaluate(() => chrome.runtime.getManifest().permissions)).toEqual(['activeTab', 'scripting', 'sidePanel', 'storage', 'alarms', 'offscreen']);
+  expect(await panel.evaluate(() => chrome.runtime.getManifest().permissions)).toEqual(['activeTab', 'scripting', 'sidePanel', 'storage', 'alarms', 'offscreen', 'webRequest']);
   expect(await panel.evaluate(() => chrome.runtime.getManifest().optional_host_permissions)).toEqual(['https://*/*']);
   expect(await panel.evaluate(() => chrome.runtime.getManifest().host_permissions)).toBeUndefined();
   await panel.getByRole('button', { name: 'Hide vehicle' }).click();

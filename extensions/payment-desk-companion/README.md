@@ -1,6 +1,6 @@
 # Payment Desk Companion
 
-Chrome extension, version 1.2.1, for Chrome 116 or later. The toolbar icon opens the full Payment Desk worksheet in Chrome's side panel so you can desk beside a vehicle listing. The worksheet, calculations and fonts are bundled with the extension and work offline. Listing capture requires an open listing. Optional dealership inventory connects a website and keeps a public vehicle catalog on this computer.
+Chrome extension, version 1.2.2, for Chrome 116 or later. The toolbar icon opens the full Payment Desk worksheet in Chrome's side panel so you can desk beside a vehicle listing. The worksheet, calculations and fonts are bundled with the extension and work offline. Listing capture requires an open listing. Optional dealership inventory connects a website and keeps a public vehicle catalog on this computer.
 
 ## Install in Chrome
 
@@ -31,7 +31,7 @@ Capture supports single-vehicle Car/Vehicle structured data and labeled prices i
 
 `sidePanel` provides the worksheet beside your page. `activeTab` and `scripting` allow capture from the tab you explicitly invoke. `storage`, `alarms` and `offscreen` support the optional saved inventory catalog, scheduled refreshes and inert HTML parsing. Website access is optional: **Connect and refresh** asks Chrome for the chosen dealership's apex/www hosts. The optional manifest pattern permits choosing different dealers; it does not grant access to every site. Disconnect clears the catalog and withdraws that site's optional grant. There are no remote scripts or analytics. The worksheet draft and dealership presentation/fees use separate localStorage keys; public inventory and its source/schedule use chrome.storage.local, not cloud sync. The website's catalog connection cannot read the companion draft.
 
-Price/reference are passed in a fragment to the bundled worksheet and removed before review. Chrome can retain navigation history. Capture on a newly selected tab may need another toolbar click to grant access. Inventory reads public pages without login cookies, checks robots exclusions and crawl delays, and parses detached markup without executing website scripts. It does not open dealership tabs, submit forms or bypass access challenges.
+Price/reference are passed in a fragment to the bundled worksheet and removed before review. Chrome can retain navigation history. Capture on a newly selected tab may need another toolbar click to grant access. Inventory reads public pages without login cookies, checks robots exclusions and crawl delays, and parses detached markup without executing website scripts. The read-only `webRequest` permission supplies redirect addresses for the worker's own inventory requests on the connected dealership; no browsing traffic, cookies or unrelated headers are saved. Each destination is checked before its request. It does not open dealership tabs, submit forms or bypass access challenges.
 
 ## Dealership inventory
 

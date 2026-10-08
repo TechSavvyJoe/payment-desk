@@ -274,7 +274,51 @@ test('inventory redirects never request an excluded destination and preserve the
   expect(requests.slice(before)).not.toContain(`${site}private/new`);
   expect((await saved()).lastCompletedAt).toBe(previous.lastCompletedAt);
   expect((await saved()).vehicles.every(vehicle => vehicle.listed)).toBe(true);
-  expect((await saved()).error).toContain('URL redirects');
+  expect((await saved()).error).toContain('excludes this inventory path');
+});
+
+test('legacy inventory links redirect to checked canonical feeds and do not reread the connected feed', async () => {
+  const used = `${site}used-vehicle-inventory-howell-mi.html`;
+  const fresh = `${site}new-ford-inventory-howell-mi.html`;
+  for (const [legacy, canonical, type] of [['searchused.aspx', used, 'used'], ['searchnew.aspx', fresh, 'new']]) {
+    await context.route(`${site}${legacy}`, route => route.fulfill({ status: 301, headers: { location: new URL(canonical).pathname } }));
+    await context.route(canonical, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model" type="application/json">${JSON.stringify(config(type))}</script><a href="/searchnew.aspx">New</a><a href="/searchused.aspx">Used</a>` }));
+  }
+  await connect(used);
+  const state = await saved();
+  expect(state.error).toBe('');
+  expect(state.vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used', 'used']);
+  expect(requests).toContain(fresh);
+  expect(requests.filter(url => url === used)).toHaveLength(1);
+  expect(requests.filter(url => url.includes('/20') && url.includes('pt=1'))).toHaveLength(1);
+});
+
+test('redirect destinations need their own robots policy and outside hosts or loops keep the old catalog', async () => {
+  await connect();
+  const previous = await saved();
+  const www = 'https://www.dealer.example.com/';
+  await context.route(`${www}**`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nDisallow: /' }));
+  await context.route(`${site}searchnew.aspx`, route => route.fulfill({ status: 302, headers: { location: `${www}new-canonical` } }));
+  let before = requests.length;
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  expect(requests.slice(before)).toContain(`${www}robots.txt`);
+  expect(requests.slice(before)).not.toContain(`${www}new-canonical`);
+  expect((await saved()).error).toContain('excludes this inventory path');
+  await context.route(`${site}searchnew.aspx`, route => route.fulfill({ status: 302, headers: { location: 'https://outside.example.com/inventory' } }));
+  before = requests.length;
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  expect(requests.slice(before).some(url => url.startsWith('https://outside.example.com/'))).toBe(false);
+  expect((await saved()).error).toContain('outside this dealership');
+  await context.route(`${site}searchnew.aspx`, route => route.fulfill({ status: 302, headers: { location: '/redirect-again' } }));
+  await context.route(`${site}redirect-again`, route => route.fulfill({ status: 302, headers: { location: '/searchnew.aspx' } }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  const state = await saved();
+  expect(state.error).toContain('redirect chain loops');
+  expect(state.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(state.vehicles.every(vehicle => vehicle.listed)).toBe(true);
 });
 
 test('filtered navigation is skipped and relative listing links use the fetched feed', async () => {
