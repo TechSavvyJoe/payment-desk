@@ -199,7 +199,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     setSolverExpanded(false); setAccordions(allOpen()); setFieldErrors({}); setContextOpen(false);
   };
   const resetDeal = () => {
-    if (hasDeal && !window.confirm('Reset this deal? All figures, trade, and products will be cleared.')) return;
+    if (hasDraftEdits && !window.confirm('Reset this deal? All figures, trade, products, targets and the selected date will be cleared.')) return;
     clearDeal();
     focusDestination('worksheet-heading');
   };

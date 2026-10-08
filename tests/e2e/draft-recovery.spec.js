@@ -108,6 +108,30 @@ test('blocked draft storage gives an honest warning while the current worksheet 
   await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled();
 });
 
+for (const edit of ['target', 'date']) {
+  test(`Reset confirms ${edit}-only work; Cancel keeps it and confirmation clears its saved draft`, async ({ page }) => {
+    const field = page.locator(edit === 'target' ? '#target-value' : '#estimate-date');
+    if (edit === 'date') await page.locator('details.deal-details > summary').click();
+    const value = edit === 'target' ? '450' : '10/06/26';
+    await field.fill(value);
+    await field.blur();
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).not.toBeNull();
+    let confirmations = 0;
+    page.once('dialog', async dialog => { confirmations++; expect(dialog.message()).toContain('targets and the selected date'); await dialog.dismiss(); });
+    await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+    expect(confirmations).toBe(1);
+    await expect(field).toHaveValue(value);
+    expect(await page.evaluate(key => localStorage.getItem(key), KEY)).not.toBeNull();
+    page.once('dialog', async dialog => { confirmations++; await dialog.accept(); });
+    await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+    expect(confirmations).toBe(2);
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+    await page.reload();
+    await expect(page.locator('#target-value')).toHaveValue('');
+    await expect(page.locator('#estimate-date')).toHaveValue('10/07/26');
+  });
+}
+
 for (const blockedRemoval of [false, true]) {
   test(`crash recovery starts a blank worksheet when draft removal is ${blockedRemoval ? 'blocked' : 'available'}`, async ({ page }) => {
     await page.locator('#sale-price').fill('30000');

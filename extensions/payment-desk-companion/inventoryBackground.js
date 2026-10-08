@@ -173,7 +173,9 @@ async function processBatch() {
       const fetched = await getPage(fetchUrl, state.config.site, task.kind === 'robots' ? null : job.policies);
       if (fetched.redirect) result = { redirect: fetched.redirect };
       else if (task.kind === 'robots') {
-        if (/<(?:!doctype|html|body|script)\b/i.test(fetched.body)) throw new Error('The website returned HTML instead of a robots policy.');
+        // Robots comments have no policy meaning, even when they mention HTML.
+        const policyText = fetched.body.replace(/#.*$/gm, '');
+        if (/<(?:!doctype|html|body|script)\b/i.test(policyText)) throw new Error('The website returned HTML instead of a robots policy.');
         result = { policy: robotsPolicy(fetched.body), origin: new URL(fetched.url).origin, url: fetched.url };
       } else {
         await ensureParser();

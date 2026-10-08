@@ -1,4 +1,4 @@
-import { cloneElement, forwardRef, isValidElement, useEffect, useId, useState } from 'react';
+import { cloneElement, forwardRef, isValidElement, useEffect, useId, useRef, useState } from 'react';
 import { parseFinancialInput } from '../lib/inputValidation.js';
 import { useFieldValidation } from './ValidationContext.jsx';
 import { useInputDrafts } from './DraftContext.jsx';
@@ -17,6 +17,7 @@ const FinancialInput = forwardRef(function FinancialInput({
   const inputDrafts = useInputDrafts();
   const initialDraft = savedDraft ?? inputDrafts?.values[inputId];
   const [focused, setFocused] = useState(false);
+  const editedWhileFocused = useRef(false);
   const [draft, setDraft] = useState(() => initialDraft?.raw ?? '');
   const [error, setError] = useState(() => initialDraft ? parseFinancialInput(initialDraft.raw, { kind, min, max, required }).error ?? null : null);
   const reportError = useFieldValidation();
@@ -45,12 +46,19 @@ const FinancialInput = forwardRef(function FinancialInput({
           disabled={disabled} id={inputId} inputMode="decimal" min={min} placeholder={placeholder} required={required} ref={ref} type="text"
           value={focused || error ? draft : formatted}
           onFocus={event => {
+            editedWhileFocused.current = false;
             setFocused(true);
             if (!error) setDraft(event.target.value);
             event.target.select();
           }}
-          onChange={event => { setDraft(event.target.value); commit(event.target.value); }}
-          onBlur={event => { const parsed = commit(event.target.value); if (!parsed.error) setDraft(String(parsed.value)); setFocused(false); }}
+          onChange={event => { editedWhileFocused.current = true; setDraft(event.target.value); commit(event.target.value); }}
+          onBlur={event => {
+            const parsed = parseFinancialInput(event.target.value, { kind, min, max, required });
+            // Moving through an unchanged valid field must not create a saved edit.
+            if (editedWhileFocused.current || parsed.error) commit(event.target.value);
+            if (!parsed.error) setDraft(String(parsed.value));
+            setFocused(false);
+          }}
         />
         {kind === 'rate' ? <span aria-hidden="true" className="percent-input__suffix">%</span> : null}
       </span>

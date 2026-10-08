@@ -362,8 +362,8 @@ for (const condition of ['new', 'used']) {
   });
 }
 
-test('robots files containing only global records or comments permit inventory refreshes', async () => {
-  for (const body of ['Sitemap: https://dealer.example.com/sitemap.xml', '# No exclusions configured']) {
+test('robots comments containing HTML permit refreshes while actual HTML responses are rejected', async () => {
+  for (const body of ['Sitemap: https://dealer.example.com/sitemap.xml', '# No exclusions configured', '# generated from <html><body><script> template\nUser-agent: *\nAllow: /']) {
     await context.route(`${site}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body }));
     const previous = (await saved())?.lastCompletedAt;
     if (!previous) await connect();
@@ -374,6 +374,14 @@ test('robots files containing only global records or comments permit inventory r
     expect((await saved()).status).toBe('ready');
     expect((await saved()).vehicles).toHaveLength(3);
   }
+  const previous = await saved();
+  await context.route(`${site}robots.txt`, route => route.fulfill({ contentType: 'text/html', body: '# generated from <html> template\n<!doctype html><html><body>Access challenge</body></html>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('error');
+  const rejected = await saved();
+  expect(rejected.error).toContain('HTML instead of a robots policy');
+  expect(rejected.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(rejected.vehicles).toEqual(previous.vehicles);
 });
 
 test('global robots records preserve a shared exclusion and encoded inventory paths are not requested', async () => {
