@@ -3006,6 +3006,7 @@ input[type="checkbox"] { flex:0 0 auto; }
   .compact-height .dealer-workspace,
   .compact-height .deal-grid,
   .compact-height .deal-column { gap: 8px; }
+  .compact-height .deal-column { row-gap: 4px; }
 }
 
 .deal-tools { --deal-toolbar-height: 44px; --inventory-action-width: 84px; position: relative; margin-bottom: 14px; }
@@ -3110,7 +3111,7 @@ input[type="checkbox"] { flex:0 0 auto; }
   .calculator-shell { padding-top: 0; }
   .deal-tools { margin-bottom: 6px; }
   .compact-height .deal-tools { margin-bottom: 0; }
-  .compact-height .mobile-results { margin-bottom: 2px; }
+  .compact-height .mobile-results { margin-bottom: 0; }
   .app-frame.has-mobile-grid-open:has(.payment-grid-section.is-mobile-open) .coverage-note { display: none; }
 }
 .coverage-description {
