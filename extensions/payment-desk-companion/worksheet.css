@@ -7,7 +7,7 @@
   .app-header .reset-button { min-height: 36px; padding-block: 5px; line-height: 1.15; }
   .view-toggle .segmented__full { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .view-toggle .segmented__short { display: inline; }
-  .calculator-shell { padding: 8px 10px; }
+  .calculator-shell { width: 100%; padding: 6px; }
   .quick-jump-nav { display: none; }
   .compact-height .mobile-results,
   .mobile-results { margin-bottom: 6px; }
@@ -45,9 +45,12 @@
   .money-input input,
   .percent-input input { height: 34px; font-size: 1rem; }
   .choice-row .segmented button { min-height: 36px; }
+  .compact-height .dealer-workspace,
+  .compact-height .deal-grid,
+  .compact-height .deal-column,
   .dealer-workspace,
   .deal-grid,
   .deal-column { gap: 6px; }
-  .mobile-nav { bottom: 6px; }
+  .mobile-nav { left: 6px; right: 6px; bottom: 4px; min-height: 52px; padding: 4px; }
   .mobile-nav button { min-height: 40px; padding-block: 6px; }
 }

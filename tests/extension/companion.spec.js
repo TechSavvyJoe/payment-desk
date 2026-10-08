@@ -84,6 +84,8 @@ test('laptop panel shows selling price and trade fields above its fixed payment 
     payment: document.querySelector('.mobile-results .results-panel').getBoundingClientRect().height,
     trade: document.getElementById('trade-allowance').getBoundingClientRect().bottom,
     bar: document.querySelector('.mobile-nav').getBoundingClientRect().top,
+    cardWidth: document.querySelector('.deal-section').getBoundingClientRect().width,
+    viewportWidth: document.documentElement.clientWidth,
     overflow: document.documentElement.scrollWidth > innerWidth,
   }));
   await testInfo.attach('laptop-layout-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
@@ -91,6 +93,7 @@ test('laptop panel shows selling price and trade fields above its fixed payment 
   expect(metrics.header).toBeLessThan(60);
   expect(metrics.payment).toBeLessThan(125);
   expect(metrics.trade).toBeLessThan(metrics.bar);
+  expect(metrics.cardWidth).toBeGreaterThan(metrics.viewportWidth * .95);
   expect(metrics.overflow).toBe(false);
 });
 
