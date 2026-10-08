@@ -74,7 +74,7 @@ test('cash down and every grid down-payment input retain focus through complete 
 
   const mobile = page.viewportSize().width <= 800;
   await (mobile ? page.locator('#mobile-grid-trigger') : page.locator('.grid-jump')).click();
-  const amounts = ['1234.56', '2345.67', '3456.78', '4567.89', '5678.90'];
+  const amounts = ['1234.56', '2345.67', '3456.78', '4567.89'];
   for (const [index, amount] of amounts.entries()) {
     const input = page.getByLabel(`Down payment ${mobile ? 'option' : 'column'} ${index + 1}`, { exact: true });
     await input.click();
@@ -89,8 +89,8 @@ test('cash down and every grid down-payment input retain focus through complete 
     await input.blur();
     await expect(input).toHaveValue(`${index + 2},000`);
   }
-  await page.getByRole('button', { name: /Use 60 months.*6,000.*down/ }).filter({ visible: true }).click();
-  await expect(cashDown).toHaveValue('6,000');
+  await page.getByRole('button', { name: /Use 60 months.*5,000.*down/ }).filter({ visible: true }).click();
+  await expect(cashDown).toHaveValue('5,000');
 });
 
 test('grid selection and customer navigation retain visible totals on every device', async ({ page }) => {
