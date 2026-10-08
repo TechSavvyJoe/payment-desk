@@ -466,3 +466,24 @@ test('the companion draft survives panel reload and reopening until Reset deal',
   await expect(desk.locator('#sale-price')).toHaveValue('');
   await expect(desk.locator('#cash-down')).toHaveValue('0');
 });
+
+test('cold offline packaged companion generates and downloads a current local PDF', async () => {
+  const external = [];
+  context.on('request', request => { if (/^https?:/.test(request.url())) external.push(request.url()); });
+  await context.setOffline(true);
+  const panel = await openPanelDocument(450, 800);
+  const desk = panel.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('25000'); await desk.locator('#sale-price').blur();
+  await desk.getByRole('button', { name: 'Customer view', exact: true }).click();
+  await expect(desk.getByRole('button', { name: 'Download PDF', exact: true })).toBeEnabled();
+  const pending = panel.waitForEvent('download');
+  await desk.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  const download = await pending;
+  const bytes = await readFile(await download.path());
+  const { PDFDocument } = await import('pdf-lib');
+  const pdf = await PDFDocument.load(bytes);
+  expect(pdf.getSubject()).toContain('Vehicle selling price: $25,000.00');
+  expect(pdf.getSubject()).toContain('Estimated payment:');
+  expect(pdf.getSubject()).not.toMatch(/total interest|total of payments/i);
+  expect(external).toEqual([]);
+});

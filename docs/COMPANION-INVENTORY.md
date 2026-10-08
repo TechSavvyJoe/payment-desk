@@ -46,3 +46,7 @@ Inventory browser fixtures use an isolated test package with only the synthetic 
 Live packaged-reader checks on October 7, 2026 completed Brighton's 668 vehicles (527 new, 141 used) and Jenna's 33 used vehicles with verified pagination counts. All Jenna records had prices and mileage. Brighton had 74 separately labeled base selling prices; advertised totals remain distinct, and absent base prices require manual confirmation. These are dated observations, not fixed inventory counts or guarantees for other sites using those platforms.
 
 A packaged 1.2.2 check later that day completed Bob Maxey Ford Howell's legacy inventory address without errors: 774 unique vehicles across 22 checked pages, classified from source data as 558 new, 194 used and 22 with an unspecified condition. The isolated test did not change the user's installed companion catalog.
+
+## Version 1.3 safety refinements
+
+Catalog pages are pinned to a public-catalog revision. A changed catalog stops Next/Previous and requires Reload catalog; an older companion without revisions offers only its first page until updated. Repeated source pages and restrictive/unknown base filters cannot establish completeness or unlist earlier records. Retry-After and robots crawl waits are honored and persisted; robots redirects are checked before following. Used-only websites without verified all-scope declarations remain partial. Previous live counts are historical evidence, not proof of a complete current run under these stricter checks.

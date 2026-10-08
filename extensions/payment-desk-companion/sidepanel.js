@@ -45,6 +45,9 @@ const inventory = installInventoryPanel(vehicle => {
 installWorksheet(() => {
   worksheetReady = true;
   updateReviewButton();
+}, () => {
+  worksheetReady = false;
+  updateReviewButton();
 });
 toggleButton.addEventListener('click', () => {
   inventory.close();

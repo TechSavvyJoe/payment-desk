@@ -39,7 +39,7 @@ export const POLICY_CONFIG = Object.freeze({
     'The $34 taxable CRV charge is a dealership assumption and must be verified; it is not presented as a state-mandated fee.',
     'New registration costs must be supplied. Standard transfer and title amounts do not cover every renewal, replacement or commercial registration case.',
     'Optional product taxability must be verified. Manufacturer rebates are not supported and must not be deducted from the taxable selling price.',
-    'Payments assume equal monthly periods and a two-decimal annual rate. Lender timing, fees, eligibility and final contract figures require separate verification.',
+    'Payments assume equal monthly periods and a two-decimal annual interest rate. Lender APR, credit-specific charges, timing, eligibility and final contract figures require separate verification.',
   ]),
   tradeCreditSchedule: Object.freeze([
     Object.freeze({ effectiveFrom: '2026-01-01', effectiveTo: '2026-12-31', cap: 12_000 }),

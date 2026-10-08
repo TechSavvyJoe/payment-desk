@@ -82,7 +82,7 @@ test('a blank desk left open overnight moves to the new day and still resets and
     await page.locator(`#${id}`).click();
     await page.locator(`#${id}`).blur();
   }
-  expect(await page.evaluate(() => localStorage.getItem('payment-desk.draft.v1'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('payment-desk.draft.v2'))).toBeNull();
   await page.clock.runFor(90_000);
   await expect(estimateDate(page)).toHaveValue('10/07/26');
   await page.getByRole('button', { name: 'Reset deal', exact: true }).click();

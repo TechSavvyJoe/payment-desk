@@ -16,6 +16,9 @@ export function parseFinancialInput(raw, { kind = 'money', min = 0, required = f
   if (kind === 'money' && (clean.split('.')[1]?.length ?? 0) > 2) {
     return { error: 'Use no more than two decimal places for an amount.' };
   }
+  if (kind === 'rate' && (clean.split('.')[1]?.replace(/0+$/, '').length ?? 0) > 2) {
+    return { error: 'Use no more than two decimal places for an interest rate.' };
+  }
   const max = ceiling ?? (kind === 'rate' ? CALCULATION_LIMITS.maxApr : CALCULATION_LIMITS.maxAmount);
   const number = Number(clean);
   if (!Number.isFinite(number) || number < min || number > max) {

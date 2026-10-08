@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-const KEY = 'payment-desk.draft.v1';
+const KEY = 'payment-desk.draft.v2';
+const LEGACY_KEY = 'payment-desk.draft.v1';
+const LOCK_KEY = LEGACY_KEY;
 const openGrid = async page => {
   const jump = page.locator('.grid-jump');
   if (await jump.isVisible()) await jump.click();
@@ -31,7 +33,7 @@ for (const restored of [false, true]) {
       await page.locator('#target-value').fill('');
       await page.locator('#target-value').blur();
     }
-    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
     await expect(page.locator('#sale-price')).toHaveValue('');
     await expect(page.locator('#target-value')).toHaveValue('');
     await page.evaluate(hash => { location.hash = hash; }, '#pd-vehicle=' + encodeURIComponent(JSON.stringify({ version: 1, salePrice: 30000, vehicleDescription: 'Example vehicle' })));
@@ -62,7 +64,7 @@ test('refresh restores the worksheet, products, grid and target; Reset clears th
   await page.locator('#estimate-date').fill('10/06/26');
   await page.getByRole('button', { name: 'Add product', exact: true }).click();
   await page.getByLabel('Product 1 type').selectOption('other');
-  await page.getByLabel('Name for product or add-on 1').fill('Accessories');
+  await page.getByLabel('Product name for add-on 1').fill('Accessories');
   await page.getByLabel('Accessories amount').fill('750');
   await page.getByLabel('Tax treatment for Accessories').selectOption('not-taxable');
   await openGrid(page);
@@ -90,7 +92,7 @@ test('refresh restores the worksheet, products, grid and target; Reset clears th
   await page.getByRole('button', { name: 'Back to calculator', exact: true }).click();
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
-  await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
   await page.reload();
   await expect(page.locator('#sale-price')).toHaveValue('');
   await expect(page.locator('#cash-down')).toHaveValue('0');
@@ -154,7 +156,7 @@ for (const raw of ['750', 'invalid']) {
     await page.getByLabel('Service Contract amount', { exact: true }).fill(raw);
     await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.inputDrafts['product-add-on-1-amount']?.raw, KEY)).toBe(raw);
     await page.getByRole('button', { name: 'Remove Service Contract', exact: true }).click();
-    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
     await expect(page.locator('.validation-banner')).toBeHidden();
     await page.evaluate(hash => { location.hash = hash; }, '#pd-vehicle=' + encodeURIComponent(JSON.stringify({ version: 1, salePrice: 30000, vehicleDescription: 'Example vehicle' })));
     const review = page.getByRole('dialog', { name: 'Review captured vehicle' });
@@ -185,7 +187,7 @@ for (const edit of ['target', 'date']) {
     page.once('dialog', async dialog => { confirmations++; await dialog.accept(); });
     await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
     expect(confirmations).toBe(2);
-    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
     await page.reload();
     await expect(page.locator('#target-value')).toHaveValue('');
     await expect(page.locator('#estimate-date')).toHaveValue('10/07/26');
@@ -197,7 +199,7 @@ for (const blockedRemoval of [false, true]) {
     await page.locator('#sale-price').fill('30000');
     await page.locator('#sale-price').blur();
     await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.desk.deal.salePrice, KEY)).toBe(30000);
-    await page.addInitScript(({ key, blockedRemoval }) => {
+    await page.addInitScript(({ key, legacyKey, blockedRemoval }) => {
       // A deterministic render fault tied to the saved deal exercises the real
       // React boundary. A new blank deal must recover with this fault still active.
       const descriptor = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, 'format');
@@ -211,13 +213,15 @@ for (const blockedRemoval of [false, true]) {
         },
       });
       if (blockedRemoval) {
+        const saved = JSON.parse(localStorage.getItem(key));
+        if (saved?.desk) localStorage.setItem(legacyKey, JSON.stringify({ ...saved, version: 1 }));
         const remove = Storage.prototype.removeItem;
         Storage.prototype.removeItem = function (name) {
-          if (name === key) throw new Error('Draft removal blocked');
+          if (name === legacyKey) throw new Error('Legacy draft removal blocked');
           return remove.call(this, name);
         };
       }
-    }, { key: KEY, blockedRemoval });
+    }, { key: KEY, legacyKey: LEGACY_KEY, blockedRemoval });
     await page.reload();
     await expect(page.getByRole('alert')).toContainText('Something went wrong');
     await expect(page.getByRole('alert')).toContainText('A worksheet draft may be saved on this device');
@@ -226,9 +230,10 @@ for (const blockedRemoval of [false, true]) {
     await expect(page.getByRole('alert')).toHaveCount(0);
     if (blockedRemoval) {
       await expect(page.locator('.app-footer')).toContainText('Draft could not be saved');
-      expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.salePrice, KEY)).toBe(30000);
+      expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.salePrice, LEGACY_KEY)).toBe(30000);
+      expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).discarded, KEY)).toBe(true);
     } else {
-      await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+      await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
       await page.reload();
       await expect(page.locator('#sale-price')).toHaveValue('');
     }
@@ -326,16 +331,23 @@ for (const reason of ['queued', 'blocked']) {
           await new Promise(resolve => { window.releaseDraftLock = resolve; });
         });
         await ready;
-      }, KEY);
+      }, LOCK_KEY);
       await page.locator('#cash-down').fill('2500');
       await page.locator('#cash-down').blur();
-    } else await page.evaluate(key => {
-      const remove = Storage.prototype.removeItem;
-      Storage.prototype.removeItem = function (name) {
-        if (name === key) throw new Error('Draft removal blocked');
-        return remove.call(this, name);
-      };
-    }, KEY);
+    } else {
+      await page.evaluate(({ key, legacyKey }) => {
+        const saved = JSON.parse(localStorage.getItem(key));
+        localStorage.setItem(legacyKey, JSON.stringify({ ...saved, version: 1 }));
+      }, { key: KEY, legacyKey: LEGACY_KEY });
+      await page.reload();
+      await page.evaluate(legacyKey => {
+        const remove = Storage.prototype.removeItem;
+        Storage.prototype.removeItem = function (name) {
+          if (name === legacyKey) throw new Error('Legacy draft removal blocked');
+          return remove.call(this, name);
+        };
+      }, LEGACY_KEY);
+    }
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
     await expect(page.locator('#sale-price')).toHaveValue('');
@@ -348,7 +360,7 @@ for (const reason of ['queued', 'blocked']) {
     await dialog.dismiss();
     if (reason === 'queued') {
       await page.evaluate(() => window.releaseDraftLock());
-      await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+      await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
       await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
       await page.reload();
       await expect(page.locator('#sale-price')).toHaveValue('');

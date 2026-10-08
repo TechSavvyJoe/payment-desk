@@ -1,6 +1,7 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { formatCurrency, formatNumber } from "../lib/formatters.js";
 import { createProposalSnapshot, formatProposalText } from "../lib/proposal.js";
+import { generateProposalPdf, canShareProposalPdf } from "../lib/proposalPdf.js";
 import { APP_VERSION, BUILD_ID } from "../lib/release.js";
 import { EditIcon, PrintIcon, ShareIcon } from "./Icons.jsx";
 import ResultsPanel from "./ResultsPanel.jsx";
@@ -26,7 +27,27 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
   const [copyFallback, setCopyFallback] = useState(false);
   const [busy, setBusy] = useState(false);
   const warningId = useId();
-  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const [prepared, setPrepared] = useState(null);
+  const [pdfError, setPdfError] = useState(null);
+  const [pdfAttempt, setPdfAttempt] = useState(0);
+  // Identity comparison disables exports during render, before effect cleanup runs.
+  const currentPdf = prepared?.snapshot === snapshot ? prepared : null;
+  const currentPdfError = pdfError?.snapshot === snapshot ? pdfError.message : '';
+  const canNativeShare = canShareProposalPdf(currentPdf?.file);
+  useEffect(() => {
+    const controller = new AbortController();
+    let url;
+    if (snapshot.summary.canExport) {
+      generateProposalPdf(snapshot, { signal: controller.signal }).then(file => {
+        if (controller.signal.aborted) return;
+        url = URL.createObjectURL(file);
+        setPrepared({ snapshot, file, url });
+      }).catch(error => {
+        if (!controller.signal.aborted) setPdfError({ snapshot, message: `PDF could not be generated: ${error.message}` });
+      });
+    }
+    return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
+  }, [snapshot, pdfAttempt]);
   const summaryText = () => formatProposalText(snapshot, { calculatorUrl: window.location.protocol === 'chrome-extension:' ? PAYMENT_DESK_URL : window.location.href });
 
   const handleCopy = async () => {
@@ -46,14 +67,14 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
   };
 
   const handleShare = async () => {
-    if (!snapshot.summary.canExport || busy || !canNativeShare) return;
+    if (!snapshot.summary.canExport || busy || !canNativeShare || !currentPdf) return;
     setBusy(true);
     try {
-      // The text labels this as a generic calculator link, never a saved quote.
-      await navigator.share({ title: snapshot.brand.name + " — " + snapshot.title, text: summaryText() });
-      setStatus("Estimate shared.");
+      // Call synchronously in the click handler, before any await or generation.
+      await navigator.share({ title: snapshot.brand.name + " — " + snapshot.title, files: [currentPdf.file] });
+      setStatus("PDF passed to sharing app.");
     } catch (error) {
-      setStatus(error?.name === "AbortError" ? "Sharing canceled." : "Sharing is unavailable. Use Copy summary or Print instead.");
+      setStatus(error?.name === "AbortError" ? "Sharing canceled." : "PDF sharing failed. Use Download PDF to save the file explicitly.");
     } finally {
       setBusy(false);
     }
@@ -81,13 +102,22 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
           <button aria-describedby={!snapshot.summary.canExport ? warningId : undefined} className="share-button" disabled={!snapshot.summary.canExport || busy} onClick={handleCopy} type="button">Copy summary</button>
           {canNativeShare ? (
             <button aria-describedby={!snapshot.summary.canExport ? warningId : undefined} className="share-button" disabled={!snapshot.summary.canExport || busy} onClick={handleShare} type="button">
-              <ShareIcon size={20} />Share
+              <ShareIcon size={20} />Share PDF
             </button>
           ) : null}
+          {currentPdfError ? <button className="share-button" type="button" onClick={() => {
+            setPdfError(null); setPdfAttempt(attempt => attempt + 1);
+          }}>Retry PDF</button> : null}
+          <button className="share-button" disabled={!currentPdf || !snapshot.summary.canExport || busy} type="button" onClick={() => {
+            if (!currentPdf || !snapshot.summary.canExport) return;
+            const link = document.createElement('a');
+            link.href = currentPdf.url; link.download = currentPdf.file.name;
+            link.click();
+          }}>Download PDF</button>
           <button aria-describedby={!snapshot.summary.canExport ? warningId : undefined} className="print-button" disabled={!snapshot.summary.canExport || busy} onClick={handlePrint} type="button">
             <PrintIcon size={19} />Print
           </button>
-          <span className="share-status" role="status">{status}</span>
+          <span className="share-status" role="status">{status} {snapshot.summary.canExport ? (currentPdfError || (!currentPdf ? 'Preparing current PDF…' : !canNativeShare ? 'File sharing is unavailable. Use Download PDF.' : 'Current PDF ready.')) : null}</span>
         </div>
         {!snapshot.summary.canExport ? (
           <section className="proposal-incomplete result-warning" id={warningId}>
@@ -117,7 +147,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
             </div>
             <div className="customer-options__table" role="table" aria-label="Customer payment options">
               <div className="customer-options__row is-header" role="row">
-                <span role="columnheader">Term</span><span role="columnheader">APR</span><span role="columnheader">Monthly payment</span>
+                <span role="columnheader">Term</span><span role="columnheader">Rate</span><span role="columnheader">Monthly payment</span>
               </div>
               {snapshot.comparisonRows.map((option) => (
                 <div className={"customer-options__row" + (option.selected ? " is-selected" : "")} key={option.termMonths} role="row">

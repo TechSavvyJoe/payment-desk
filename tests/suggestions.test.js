@@ -185,3 +185,13 @@ test('price-only partial solutions retain a positive vehicle and the lower doc f
   assert.equal(suggestion.status, 'partial');
   assert.ok(suggestion.remainingGap > 0);
 });
+
+test('suggestion rate labels say interest rate while retaining apr patches', () => {
+  const solution = suggest(initial, 450);
+  const rate = solution.suggestions.find(item => item.id === 'apr');
+  assert.equal(rate.title, 'Interest rate needed');
+  assert.equal(typeof rate.patch.apr, 'number');
+  const term = solution.suggestions.find(item => item.id === 'term');
+  assert.match(term.detail, /annual interest rate assumption/);
+  for (const item of solution.suggestions) assert.doesNotMatch(`${item.title} ${item.detail} ${item.note}`, /\bAPR\b/);
+});

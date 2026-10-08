@@ -50,17 +50,17 @@ test.describe('phone worksheet starts at the inputs', () => {
     expect((await pageBox(card.getByRole('button', { name: 'Review customer estimate', exact: true }))).height).toBeLessThanOrEqual(52);
     const details = card.getByRole('button', { name: 'Details', exact: true });
     await expect(details).toHaveAttribute('aria-expanded', 'false');
-    await expect(card.locator('.result-totals').getByText('Amount financed')).toBeHidden();
+    await expect(card.locator('.result-totals').getByText('Estimated loan balance')).toBeHidden();
     await expect(card.getByRole('button', { name: 'Review customer estimate', exact: true })).toBeVisible();
     const navHeight = (await page.locator('.mobile-nav').boundingBox()).height;
     const trade = page.getByRole('textbox', { name: 'Trade allowance', exact: true });
     expect((await pageBox(trade)).bottom).toBeLessThanOrEqual(page.viewportSize().height - navHeight);
     await details.click();
     await expect(details).toHaveAttribute('aria-expanded', 'true');
-    await expect(card.locator('.result-totals').getByText('Amount financed')).toBeVisible();
+    await expect(card.locator('.result-totals').getByText('Estimated loan balance')).toBeVisible();
     await expect(card.getByText('View itemized deal breakdown')).toBeVisible();
     await details.click();
-    await expect(card.locator('.result-totals').getByText('Amount financed')).toBeHidden();
+    await expect(card.locator('.result-totals').getByText('Estimated loan balance')).toBeHidden();
   });
 
   for (const width of [390, 320]) {

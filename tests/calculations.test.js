@@ -486,7 +486,7 @@ test('payment helper uses full precision and validates term and APR', () => {
   assert.equal(payment.totalOfPayments, 37_309.03);
   assert.throws(
     () => calculatePayment({ principal: 10_000, apr: -1, termMonths: 60 }),
-    /APR cannot be negative/,
+    /Interest rate cannot be negative/,
   );
   assert.throws(
     () => calculatePayment({ principal: 10_000, apr: 5, termMonths: 0 }),
@@ -589,7 +589,7 @@ test('financed versus upfront negative equity produces explicit reconciling amou
 test('invalid and excessive core inputs fail with explicit range errors', () => {
   assert.throws(() => calculateDeal({ salePrice: '30k' }), /Invalid currency/);
   assert.throws(() => calculateDeal({ salePrice: 1_000_001 }), /cannot exceed/);
-  assert.throws(() => calculateDeal({ apr: 50.001 }), /APR cannot exceed/);
+  assert.throws(() => calculateDeal({ apr: 50.001 }), /Interest rate cannot exceed/);
   assert.throws(() => calculatePayment({ principal: 1_000, termMonths: 121 }), /Term cannot exceed/);
   assert.throws(() => calculatePayment({ principal: 1_000, apr: true }), /number/);
   assert.throws(() => calculateDeal({ optionalItems: Array.from({ length: 51 }, () => ({ amount: 1 })) }), /more than 50/);
@@ -760,8 +760,15 @@ const PRE_FEE_SETTINGS_DIGESTS = {
   'trade without vehicle': [{ dealDate: '2026-09-24', tradeAllowance: 8_000, tradePayoff: 2_500 }, 'f0362c03869d13000627eb0de37cd2a4bbfb885e1717ab76aaf6866c5a0c0164'],
 };
 
-test('without dealership fees, or with the defaults, every result is byte-identical to before', () => {
-  const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+test('default-fee regression cases retain their financial results apart from clarified rate wording', () => {
+  const digest = (value) => {
+    const historicWording = structuredClone(value);
+    historicWording.policy.assumptions = historicWording.policy.assumptions.map(text => text.replace(
+      'Payments assume equal monthly periods and a two-decimal annual interest rate. Lender APR, credit-specific charges, timing, eligibility and final contract figures require separate verification.',
+      'Payments assume equal monthly periods and a two-decimal annual rate. Lender timing, fees, eligibility and final contract figures require separate verification.',
+    ));
+    return createHash('sha256').update(JSON.stringify(historicWording)).digest('hex');
+  };
   for (const [name, [input, expected]] of Object.entries(PRE_FEE_SETTINGS_DIGESTS)) {
     const plain = calculateUndatedDeal(input);
     assert.equal(digest(plain), expected, name);

@@ -180,3 +180,7 @@ test('robots matching normalizes encoded unreserved and Unicode paths without de
   const equalRules = robotsPolicy('User-agent: *\nDisallow: /%70rivate/\nAllow: /private/');
   assert.equal(robotsAllows(equalRules, 'https://dealer.example.com/private/list'), true);
 });
+
+test('robots preserves long finite Crawl-delay values instead of capping at 60', () => {
+  for (const delay of [61, 120, 90000]) assert.equal(robotsPolicy(`User-agent: *\nCrawl-delay: ${delay}`).delay, delay);
+});

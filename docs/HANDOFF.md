@@ -2,7 +2,7 @@
 
 ## Purpose and ownership
 
-Payment Desk supports an estimate conversation. It does not approve credit, choose lender eligibility, generate a binding contract, save customer records, or synchronize with a DMS/CRM. Preserve that scope unless a separate requirement defines data access, retention, and approved financial integrations.
+Payment Desk supports an estimate conversation. It does not approve credit, choose lender eligibility, generate a binding contract, collect credit applications, provide a cloud customer database, or synchronize with a DMS/CRM. Preserve that scope unless a separate requirement defines data access, retention, and approved financial integrations.
 
 Before handing operation to another company, record actual people and business accounts for these roles. No unconfirmed owner is assigned here.
 
@@ -31,7 +31,7 @@ flowchart LR
 - `Fields.jsx`, `inputValidation.js`, and `ValidationContext.jsx` separate incomplete/invalid text from committed figures. Invalid drafts preserve the last valid estimate and block proposal actions.
 - `dealState.js` owns deal changes, rate/grid synchronization, view transitions, reset, and one-step undo expiry. Use reducer actions rather than direct component state patches for financial changes.
 - `deskDraft.js` validates and stores the current worksheet locally; `DraftContext.jsx` carries unfinished numeric/date inputs. Restore invalid text as invalid, and keep Reset responsible for clearing the draft. The website and companion have separate storage origins.
-- `calculations.js` uses cent-based money and consistent two-decimal APR normalization. `suggestions.js` evaluates the same normalized patch it presents and applies.
+- `calculations.js` uses cent-based money and exact rational payment-cent rounding and validated two-decimal annual interest-rate entry. `suggestions.js` evaluates the same normalized patch it presents and applies.
 - `policy.js` records rule versions, dates, sources, and supported scope. Extend its review window only after checking the applicable fees/taxes and updating regression fixtures.
 - `proposal.js` creates the reference, date/version, itemized groups, selected figures, and qualifications used for customer export. A generic calculator link opens the recipient's calculator and may restore that device's own draft; it does not transfer a proposal.
 - `release.js` and the Vite build identify the app version and source revision. Include both, the estimate reference/date, browser, and reproduction steps in a defect report. Avoid customer names or unnecessary financial data in diagnostic services.
@@ -63,7 +63,7 @@ Repository settings are separate from workflow files and are **not enabled by th
 3. Keep the `github-pages` environment limited to main. Confirm Pages uses GitHub Actions. Restrict account access to maintainers; retain recovery access for the business owner.
 4. Review Dependabot PRs for npm and Actions. Confirm the pinned Action SHA and version comment remain aligned, then run the same release checks.
 
-A normal release is a reviewed PR merged to main after validation and the applicable acceptance checks. After deployment, verify the displayed build ID, a known estimate, mobile navigation, and one customer export. Record the release URL/run, commit, validation evidence, and any remaining business limitations. No code in this guide automatically performs a deployment or repository-settings change.
+A normal release is a reviewed PR merged to main after validation and the applicable acceptance checks. The GitHub Pages workflow does not update the custom-domain Cloudflare production site. For that site, follow [the Cloudflare deployment guide](CLOUDFLARE-DEPLOYMENT.md), build the accepted main commit and upload to the existing `mysoldlog-desking` Pages project. After deployment, verify the displayed build ID, a known estimate, mobile navigation, and one customer export. Record the release URL/run, commit, validation evidence, and any remaining business limitations. No code in this guide automatically performs a deployment or repository-settings change.
 
 ## Rollback and support
 
@@ -71,6 +71,14 @@ Identify the last accepted release from its commit and deployment run. Make a ne
 
 For an urgent failure, preserve its build ID and reproducible synthetic case, then stop relying on the affected calculator workflow and use the dealership's approved systems while the fix is reviewed. The browser error boundary can reset a broken deal but is not a recovery store. An agreed owner should receive deployment failures and a simple availability/smoke check; this change does not configure an external monitoring account or recurring automation.
 
-The app automatically saves the current worksheet draft (`payment-desk.draft.v1`) in this browser on this device, including figures, products, grid settings, targets and unfinished numeric/date inputs. Refresh restores Dealer view. **Reset deal** clears the draft; reset when finished on shared devices. Website and companion drafts are separate. Storage failures are reported in the footer; keep the page open until the current estimate is copied or printed. Clearing site data or removing the extension can erase its draft. This is one local draft, not a saved-proposal library or cloud synchronization.
+The app automatically saves the current worksheet draft (`payment-desk.draft.v2`) in this browser on this device, including figures, products, grid settings, targets and unfinished numeric/date inputs. Refresh restores Dealer view. **Reset deal** clears the draft; reset when finished on shared devices. Website and companion drafts are separate. Storage failures are reported in the footer; keep the page open until the current estimate is copied or printed. Clearing site data or removing the extension can erase its draft. This is one local draft, not a saved-proposal library or cloud synchronization.
 
 Dealership name/logo (`payment-desk.dealership.v1`), fees (`payment-desk.fees.v1`) and the public identifier of a connected companion (`payment-desk.companion.v1`) are saved separately. **Clear dealership settings** removes presentation and fees. Inventory remains in the Chrome companion until disconnected there; its website bridge cannot read the companion draft. The website has no offline worker, external font request or analytics collector. If a proposal library, customer identities, synchronization or restricted access are later added, explicitly choose their retention, access, shared-device reset and support model first.
+
+## Commercial and national gate
+
+See [ATC requirements](ATC-INTEGRATION-REQUIREMENTS.md) and [coverage acceptance](NATIONWIDE-COVERAGE.md). No provider is connected. Preserve explicit Michigan-only guards until licensed, validated automotive state/local rules are available. Worksheets remain on each device; a future stateless broker is a separate approved computation/data-handling design, not cloud deal storage.
+
+Before a commercial handoff, name the operator and backups, record code/brand/data rights, approve actual privacy and distribution materials, establish private security reporting and staffed support, and verify account/recovery ownership. Do not fill these with invented contacts, legal terms or promises. Runtime license texts ship in `THIRD-PARTY-NOTICES.txt`; regenerate after dependency changes. Technical data handling is documented in the app, but is not an operator-approved business privacy policy.
+
+For local format rollback, v2 takes precedence over legacy v1. Old app versions cannot understand v2; rolling code back does not downgrade or clear it. Preserve bytes and use a compatible release for recovery. Reset writes a figures-free v2 marker and attempts legacy cleanup under the shared lock; unreadable records require explicit discard and failures remain visible.

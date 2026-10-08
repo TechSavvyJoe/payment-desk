@@ -1,13 +1,19 @@
+const currencyFormatters = Array(4);
+const numberFormatters = Array(21);
+
 export const formatCurrency = (value, { cents = false, sign = false } = {}) => {
   const numeric = Number.isFinite(Number(value)) ? Number(value) : 0;
   const hasCents = Math.abs(numeric - Math.round(numeric)) > 0.0001;
-  const formatted = new Intl.NumberFormat("en-US", {
+  const digits = cents || hasCents ? 2 : 0;
+  const key = digits + (sign ? 1 : 0);
+  const formatter = currencyFormatters[key] ??= new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: cents || hasCents ? 2 : 0,
-    maximumFractionDigits: cents || hasCents ? 2 : 0,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
     signDisplay: sign ? "always" : "auto",
-  }).format(numeric);
+  });
+  const formatted = formatter.format(numeric);
 
   return formatted.replace("+$", "+$").replace("-$", "−$");
 };
@@ -15,11 +21,19 @@ export const formatCurrency = (value, { cents = false, sign = false } = {}) => {
 export const formatWholeCurrency = (value, { sign = false } = {}) =>
   formatCurrency(Math.round(Number(value) || 0), { sign });
 
-export const formatNumber = (value, digits = 2) =>
-  new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Number(value) || 0);
+export const formatNumber = (value, digits = 2) => {
+  // Other precisions still go through Intl, preserving coercion and range errors.
+  const cacheable = typeof digits === "number" && Number.isInteger(digits) && digits >= 0 && digits <= 20;
+  let formatter = cacheable ? numberFormatters[digits] : undefined;
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    if (cacheable) numberFormatters[digits] = formatter;
+  }
+  return formatter.format(Number(value) || 0);
+};
 
 const isCalendarDate = value => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;

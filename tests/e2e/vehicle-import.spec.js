@@ -44,7 +44,7 @@ test('replacing an existing deal requires review and preserves device settings',
   await expect(page.locator('#cash-down')).toHaveValue('0');
   await expect(page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' })).toBeVisible();
   await expect(page.locator('#apr')).toHaveValue('6.50');
-  expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.draft.v1']);
+  expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.draft.v2']);
 });
 test('a vehicle import warns before replacing a target-only worksheet and Cancel retains the target', async ({ page }) => {
   await page.goto('/');

@@ -140,7 +140,7 @@ export function robotsPolicy(text, productToken = 'Chrome') {
     } else if (group.agents.length && ['allow', 'disallow', 'crawl-delay'].includes(key)) {
       hadRule = true;
       if ((key === 'allow' || key === 'disallow') && value.startsWith('/')) group.rules.push({ allow: key === 'allow', path: value });
-      if (key === 'crawl-delay' && Number.isFinite(Number(value))) group.delay = Math.min(60, Math.max(1, Number(value)));
+      if (key === 'crawl-delay' && Number.isFinite(Number(value))) group.delay = Math.max(1, Number(value));
     }
   }
   groups.push(group);

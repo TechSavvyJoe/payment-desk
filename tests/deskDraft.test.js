@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { REGISTRATION_STATES, TRANSACTION_SCOPES } from '../src/lib/purchaseScope.js';
 import { createDeskState, deskReducer } from '../src/lib/dealState.js';
-import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, isBaselineDeskInput, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, DESK_DRAFT_LOCK_KEY, LEGACY_DESK_DRAFT_KEY, readDeskDraftRecord, hasDeskDraftEdits, isBaselineDeskInput, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
 
-const empty = () => ({ version: 1, desk: createDeskState('2026-10-07'), targetType: 'payment', targetValues: { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' }, inputDrafts: {} });
+const empty = () => ({ version: 2, desk: createDeskState('2026-10-07'), targetType: 'payment', targetValues: { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' }, inputDrafts: {} });
 const storage = () => {
   const values = new Map();
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
@@ -42,7 +44,7 @@ test('returning financial fields to their baseline removes live and restored raw
   device.setItem(DESK_DRAFT_KEY, JSON.stringify(value));
   assert.deepEqual(loadDeskDraft(device).inputDrafts, {});
   assert.equal(saveDeskDraft(value, device).ok, true);
-  assert.equal(device.getItem(DESK_DRAFT_KEY), null);
+  assert.equal(readDeskDraftRecord(device).kind, 'absent');
 });
 
 test('baseline pruning preserves explicit optional zeros, invalid entries and unfinished decimals', () => {
@@ -69,7 +71,7 @@ test('draft sessions serialize simultaneous writes and refuse stale saves and re
   assert.deepEqual(await b.save(empty()), { ok: false, conflict: true });
   assert.equal(loadDeskDraft(device).desk.deal.salePrice, 30000);
   assert.deepEqual(await a.save(empty()), { ok: true });
-  assert.equal(device.getItem(DESK_DRAFT_KEY), null);
+  assert.equal(readDeskDraftRecord(device).kind, 'absent');
   assert.deepEqual(await b.save(second), { ok: false, conflict: true });
 });
 
@@ -79,7 +81,7 @@ test('draft sessions retain the previous draft when locking or storage is unavai
   const previous = device.getItem(DESK_DRAFT_KEY);
   assert.deepEqual(await createDeskDraftSession(device, null).save(empty()), { ok: false });
   assert.equal(device.getItem(DESK_DRAFT_KEY), previous);
-  device.removeItem = () => { throw new Error('blocked'); };
+  device.setItem = () => { throw new Error('blocked'); };
   assert.deepEqual(await createDeskDraftSession(device, locks()).save(empty()), { ok: false });
   assert.equal(device.getItem(DESK_DRAFT_KEY), previous);
 });
@@ -117,13 +119,13 @@ test('reset removes the draft while leaving other device settings intact', () =>
   assert.equal(saveDeskDraft(edited, device).ok, true);
   assert.notEqual(device.getItem(DESK_DRAFT_KEY), null);
   assert.equal(saveDeskDraft(empty(), device).ok, true);
-  assert.equal(device.getItem(DESK_DRAFT_KEY), null);
+  assert.equal(readDeskDraftRecord(device).kind, 'absent');
   assert.equal(device.getItem('payment-desk.dealership.v1'), 'saved dealership');
 });
 
 test('corrupt, unsupported, oversized and out-of-range drafts are ignored', () => {
   const device = storage();
-  for (const raw of ['{', JSON.stringify({ ...empty(), version: 2 }), ' '.repeat(200001)]) {
+  for (const raw of ['{', JSON.stringify({ ...empty(), version: 3 }), ' '.repeat(200001)]) {
     device.setItem(DESK_DRAFT_KEY, raw); assert.equal(loadDeskDraft(device), null);
   }
   for (const mutate of [
@@ -194,4 +196,240 @@ test('removed product drafts are discarded and restored product IDs are never re
   const restored = normalizeDeskDraft(value);
   assert.deepEqual(restored.inputDrafts, {});
   assert.equal(deskReducer(restored.desk, { type: 'add-item' }).deal.optionalItems[1].id, 'add-on-3');
+});
+
+for (const [reason, raw] of [
+  ['malformed-json', '{'], ['malformed-json', ''],
+  ['unsupported-version', JSON.stringify({ ...empty(), version: 3 })],
+  ['oversized', ' '.repeat(200001)],
+  ['invalid-fields', JSON.stringify({ ...empty(), inputDrafts: { 'sale-price': { raw: 10 } } })],
+  ['invalid-fields', JSON.stringify({ ...empty(), discarded: true, revision: 'synthetic' })],
+]) {
+  test(`rejected ${reason} bytes survive blank and edited autosave until explicit discard`, async () => {
+    const device = storage(); device.setItem(DESK_DRAFT_KEY, raw);
+    const session = createDeskDraftSession(device, locks());
+    assert.equal(session.record.kind, 'rejected');
+    assert.equal(session.record.reason, reason);
+    assert.equal(session.status(), 'rejected');
+    for (const value of [empty(), { ...empty(), targetValues: { ...empty().targetValues, payment: 400 } }]) {
+      assert.equal((await session.save(value)).rejected, true);
+      assert.equal(saveDeskDraft(value, device).rejected, true);
+      assert.equal(device.getItem(DESK_DRAFT_KEY), raw);
+    }
+    assert.deepEqual(await session.discard(), { ok: true });
+    assert.equal(session.status(), 'saved');
+    assert.equal(session.record.kind, 'absent');
+    assert.equal(readDeskDraftRecord(device).kind, 'absent');
+  });
+}
+
+test('absent, valid and unreadable records are distinct and denied reads latch until reload', async () => {
+  const device = storage();
+  assert.equal(readDeskDraftRecord(device).kind, 'absent');
+  assert.equal(readDeskDraftRecord(null).kind, 'unreadable');
+  let denied = true, writes = 0;
+  const blocked = { getItem() { if (denied) throw new Error('denied'); return null; }, setItem() { writes++; } };
+  const session = createDeskDraftSession(blocked, locks());
+  assert.equal(session.record.kind, 'unreadable');
+  denied = false;
+  assert.equal(session.status(), 'error');
+  assert.equal((await session.save(empty())).ok, false);
+  assert.equal((await session.discard()).ok, false);
+  assert.equal(writes, 0);
+  const value = empty(); value.desk.deal.salePrice = 20000;
+  saveDeskDraft(value, device);
+  assert.equal(readDeskDraftRecord(device).kind, 'valid');
+});
+
+test('v2 precedence, rejected legacy preservation and migration do not fall back to stale v1', async () => {
+  const device = storage();
+  const legacy = empty(); legacy.version = 1;
+  delete legacy.desk.deal.registrationState; delete legacy.desk.deal.transactionScope;
+  legacy.desk.deal.salePrice = 10000;
+  const raw = JSON.stringify(legacy); device.setItem(LEGACY_DESK_DRAFT_KEY, raw);
+  const session = createDeskDraftSession(device, locks());
+  assert.equal(session.record.key, LEGACY_DESK_DRAFT_KEY);
+  assert.equal(session.record.raw, raw);
+  assert.equal(session.draft.version, 2);
+  assert.equal(session.draft.desk.deal.registrationState, 'MI');
+  assert.equal(session.draft.desk.deal.transactionScope, 'resident-retail');
+  assert.equal((await session.save(session.draft)).ok, true);
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), raw);
+  assert.equal(JSON.parse(device.getItem(DESK_DRAFT_KEY)).version, 2);
+  device.setItem(DESK_DRAFT_KEY, '{');
+  assert.equal(readDeskDraftRecord(device).kind, 'rejected');
+  assert.equal(loadDeskDraft(device), null);
+  const rejected = createDeskDraftSession(device, locks());
+  assert.equal((await rejected.discard()).ok, true);
+  assert.equal(loadDeskDraft(device), null);
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), null);
+  device.removeItem(DESK_DRAFT_KEY); device.setItem(LEGACY_DESK_DRAFT_KEY, 'bad legacy');
+  const badLegacy = createDeskDraftSession(device, locks());
+  assert.equal((await badLegacy.save(empty())).ok, false);
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), 'bad legacy');
+  assert.equal((await badLegacy.discard()).ok, true);
+  assert.equal(loadDeskDraft(device), null);
+});
+
+test('discard and reset respect locks, failed writes, stale tabs and reset ABA', async () => {
+  const device = storage(), coordinator = locks();
+  device.setItem(DESK_DRAFT_KEY, '{');
+  const a = createDeskDraftSession(device, coordinator), b = createDeskDraftSession(device, coordinator);
+  const outcomes = await Promise.all([a.discard(), b.discard()]);
+  assert.deepEqual(outcomes, [{ ok: true }, { ok: false, conflict: true }]);
+  const old = createDeskDraftSession(device, coordinator);
+  const value = empty(); value.desk.deal.salePrice = 20000;
+  assert.equal((await a.save(value)).ok, true);
+  assert.equal((await a.save(empty())).ok, true);
+  assert.equal((await old.save(value)).conflict, true);
+  const before = device.getItem(DESK_DRAFT_KEY);
+  assert.equal((await createDeskDraftSession(device, null).discard()).ok, false);
+  device.setItem = () => { throw new Error('quota'); };
+  assert.equal((await a.discard()).ok, false);
+  assert.equal(device.getItem(DESK_DRAFT_KEY), before);
+});
+
+test('legacy changes before migration conflict; after v2 reset they never resurrect', async () => {
+  const device = storage(), coordinator = locks(), legacy = empty(); legacy.version = 1;
+  legacy.desk.deal.salePrice = 10000;
+  device.setItem(LEGACY_DESK_DRAFT_KEY, JSON.stringify(legacy));
+  const session = createDeskDraftSession(device, coordinator);
+  legacy.desk.deal.salePrice = 20000;
+  device.setItem(LEGACY_DESK_DRAFT_KEY, JSON.stringify(legacy));
+  assert.equal((await session.save(session.draft)).conflict, true);
+  assert.equal((await session.discard()).conflict, true);
+  const fresh = createDeskDraftSession(device, coordinator);
+  assert.equal((await fresh.save(empty())).ok, true);
+  legacy.desk.deal.salePrice = 30000;
+  device.setItem(LEGACY_DESK_DRAFT_KEY, JSON.stringify(legacy));
+  assert.equal(loadDeskDraft(device), null);
+  assert.equal(fresh.status(), 'saved');
+});
+
+test('all scope selections survive v2 normalization; only v1 permits missing scope defaults', () => {
+  for (const state of ['', ...REGISTRATION_STATES.map(s => s.value)]) {
+    for (const scope of ['', ...TRANSACTION_SCOPES.map(s => s.value)]) {
+      const value = empty(); value.desk.deal.registrationState = state; value.desk.deal.transactionScope = scope;
+      const normalized = normalizeDeskDraft(value);
+      assert.equal(normalized.desk.deal.registrationState, state);
+      assert.equal(normalized.desk.deal.transactionScope, scope);
+      assert.deepEqual(normalizeDeskDraft(normalized), normalized);
+    }
+  }
+  for (const field of ['registrationState', 'transactionScope']) {
+    const value = empty(); delete value.desk.deal[field];
+    assert.equal(normalizeDeskDraft(value), null);
+    assert.notEqual(normalizeDeskDraft({ ...value, version: 1 }), null);
+    for (const bad of [null, 1, {}, 'unknown']) {
+      value.desk.deal[field] = bad;
+      assert.equal(normalizeDeskDraft(value), null);
+      assert.equal(normalizeDeskDraft({ ...value, version: 1 }), null);
+    }
+  }
+});
+
+// Load the actual released writer and its released dependencies, not a mock of
+// its projection. Git history is required for this bounded compatibility test.
+const releasedModules = new Map();
+function releasedModule(path) {
+  if (releasedModules.has(path)) return releasedModules.get(path);
+  const source = execFileSync('git', ['show', `4832f6f99882f264977dd9b95369e70fe52828c8:${path}`], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
+  const rewritten = source.replace(/from (['"])(\.\/[^'"]+)\1/g, (_match, _quote, relative) => {
+    const dependency = path.slice(0, path.lastIndexOf('/') + 1) + relative.slice(2);
+    return `from '${releasedModule(dependency)}'`;
+  });
+  const url = `data:text/javascript;base64,${Buffer.from(rewritten).toString('base64')}`;
+  releasedModules.set(path, url);
+  return url;
+}
+
+test('actual released writer cannot overwrite v2 scope or revive v1 after discard', async () => {
+  const released = await import(releasedModule('src/lib/deskDraft.js'));
+  const device = storage(), coordinator = locks();
+  assert.equal(released.DESK_DRAFT_KEY, LEGACY_DESK_DRAFT_KEY);
+  assert.equal(DESK_DRAFT_LOCK_KEY, LEGACY_DESK_DRAFT_KEY);
+  const oldValue = empty(); oldValue.version = 1; oldValue.desk.deal.salePrice = 10000;
+  assert.equal(released.saveDeskDraft(oldValue, device).ok, true);
+  for (const scope of ['nonresident', 'exempt']) {
+    const legacyRaw = device.getItem(LEGACY_DESK_DRAFT_KEY);
+    const current = createDeskDraftSession(device, coordinator);
+    const value = current.draft ?? empty(); value.desk.deal.salePrice = 20000;
+    value.desk.deal.registrationState = 'NY'; value.desk.deal.transactionScope = scope;
+    assert.equal((await current.save(value)).ok, true);
+    assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), legacyRaw);
+    assert.equal(released.loadDeskDraft(device).desk.deal.salePrice, 10000);
+    const oldTab = released.createDeskDraftSession(device, coordinator);
+    oldValue.desk.deal.cashDown += 1000;
+    assert.equal((await oldTab.save(oldValue)).ok, true);
+    assert.equal(JSON.parse(device.getItem(LEGACY_DESK_DRAFT_KEY)).desk.deal.registrationState, undefined);
+    assert.equal(loadDeskDraft(device).desk.deal.registrationState, 'NY');
+    assert.equal(loadDeskDraft(device).desk.deal.transactionScope, scope);
+    assert.equal(current.status(), 'saved');
+  }
+  assert.equal(released.normalizeDeskDraft({ ...empty(), version: 2 }), null);
+  const current = createDeskDraftSession(device, coordinator);
+  const staleOld = released.createDeskDraftSession(device, coordinator);
+  assert.equal((await current.discard()).ok, true);
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), null);
+  assert.equal((await staleOld.save(oldValue)).conflict, true);
+  assert.equal(released.saveDeskDraft(oldValue, device).ok, true);
+  assert.equal(loadDeskDraft(device), null);
+});
+
+test('blank autosave does not rewrite a discarded record or conflict with another blank tab', async () => {
+  const device = storage(), coordinator = locks();
+  assert.equal((await createDeskDraftSession(device, coordinator).discard()).ok, true);
+  const raw = device.getItem(DESK_DRAFT_KEY);
+  const a = createDeskDraftSession(device, coordinator), b = createDeskDraftSession(device, coordinator);
+  assert.equal((await a.save(empty())).ok, true);
+  assert.equal((await b.save(empty())).ok, true);
+  assert.equal(device.getItem(DESK_DRAFT_KEY), raw);
+});
+
+test('existing v2 does not require legacy reads and rejected v2 never replaces metadata', async () => {
+  const device = storage(), value = empty();
+  value.desk.deal.registrationState = 'NY'; value.desk.deal.transactionScope = 'exempt';
+  value.desk.deal.salePrice = 20000;
+  const raw = JSON.stringify({ ...value, version: 3 }); device.setItem(DESK_DRAFT_KEY, raw);
+  const get = device.getItem;
+  device.getItem = key => { if (key === LEGACY_DESK_DRAFT_KEY) throw new Error('legacy denied'); return get(key); };
+  const rejected = createDeskDraftSession(device, locks());
+  assert.equal(rejected.record.kind, 'rejected');
+  assert.equal((await rejected.save(empty())).ok, false);
+  assert.equal(device.getItem(DESK_DRAFT_KEY), raw);
+  device.setItem(DESK_DRAFT_KEY, JSON.stringify(value));
+  assert.equal(loadDeskDraft(device).desk.deal.transactionScope, 'exempt');
+});
+
+test('explicit discard removes legacy figures, reports removal failure and permits a locked retry', async () => {
+  const device = storage(), value = empty(); value.version = 1; value.desk.deal.salePrice = 20000;
+  const raw = JSON.stringify(value); device.setItem(LEGACY_DESK_DRAFT_KEY, raw);
+  const session = createDeskDraftSession(device, locks());
+  const remove = device.removeItem;
+  device.removeItem = () => { throw new Error('cleanup denied'); };
+  assert.deepEqual(await session.discard(), { ok: false, reason: 'legacy-removal-failed' });
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), raw);
+  assert.equal(readDeskDraftRecord(device).kind, 'absent');
+  assert.equal(session.status(), 'error');
+  assert.equal((await session.save(empty())).ok, false);
+  device.removeItem = remove;
+  assert.deepEqual(await session.discard(), { ok: true });
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), null);
+  assert.equal(session.status(), 'saved');
+});
+
+test('valid v2 wins over legacy changes, but explicit cleanup cannot erase a mismatched legacy snapshot', async () => {
+  const device = storage(), value = empty(); value.desk.deal.registrationState = 'NY'; value.desk.deal.salePrice = 20000;
+  saveDeskDraft(value, device);
+  device.setItem(LEGACY_DESK_DRAFT_KEY, 'old raw');
+  const session = createDeskDraftSession(device, locks());
+  device.setItem(LEGACY_DESK_DRAFT_KEY, 'new old-app work');
+  assert.equal(session.status(), 'saved');
+  assert.equal(loadDeskDraft(device).desk.deal.registrationState, 'NY');
+  assert.equal((await session.save(empty())).ok, true);
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), 'new old-app work');
+  assert.deepEqual(await session.discard(), { ok: false, conflict: true });
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), 'new old-app work');
+  assert.equal((await createDeskDraftSession(device, locks()).discard()).ok, true);
+  assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), null);
 });

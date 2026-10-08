@@ -5,11 +5,12 @@ import { parseFinancialInput } from '../src/lib/inputValidation.js';
 import { calculateDeal } from '../src/lib/calculations.js';
 import { buildSuggestions } from '../src/lib/suggestions.js';
 
-test('numeric drafts reject silent coercion and commit one APR precision', () => {
+test('numeric drafts reject silent coercion and excess interest-rate precision', () => {
   for (const text of ['30k', 'abc', '-1', '1,23', '1..2', '1.001', '1e5', '1000001']) assert.ok(parseFinancialInput(text).error, text);
   assert.deepEqual(parseFinancialInput('$ 30,000.25'), { value: 30000.25 });
   assert.deepEqual(parseFinancialInput(''), { value: '' });
-  assert.equal(parseFinancialInput('6.005', { kind: 'rate' }).value, 6.01);
+  assert.ok(parseFinancialInput('6.005', { kind: 'rate' }).error);
+  assert.equal(parseFinancialInput('6.010', { kind: 'rate' }).value, 6.01);
   assert.ok(parseFinancialInput('', { kind: 'rate', required: true }).error);
   assert.ok(parseFinancialInput('51', { kind: 'rate' }).error);
 });

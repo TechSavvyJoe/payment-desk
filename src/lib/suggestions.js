@@ -17,7 +17,7 @@ const money = (value) => formatCurrency(value, { cents: true });
 const blank = (value) => value === null || value === undefined || String(value).trim() === '';
 const maxInputCents = CALCULATION_LIMITS.maxAmount * 100;
 
-/** Highest supported 0.01%-APR increment whose cent payment fits the ceiling. */
+/** Highest supported 0.01%-interest-rate increment whose cent payment fits the ceiling. */
 export function solveAprForPayment(principal, termMonths, targetPayment) {
   const targetCents = toCents(targetPayment);
   if (targetCents < 0) throw new RangeError('Target payment cannot be negative.');
@@ -231,10 +231,10 @@ export function buildSuggestions({ dealInput = {}, result: suppliedResult, targe
     if (term) addPatch({
       id: 'term', title: 'Change finance term', value: `${term.months} months`,
       amount: term.months, patch: { termMonths: term.months, apr: term.apr }, iconDirection: 'right',
-    }, `${formatNumber(term.apr)}% APR assumption; verify lender approval.`);
+    }, `${formatNumber(term.apr)}% annual interest rate assumption; verify lender approval.`);
     const apr = solveAprForPayment(Math.max(0, result.amountFinanced), result.termMonths, fromCents(targetCents));
     if (apr !== null && apr < result.apr) addPatch({
-      id: 'apr', title: 'APR needed', value: `${formatNumber(apr)}%`,
+      id: 'apr', title: 'Interest rate needed', value: `${formatNumber(apr)}%`,
       amount: fromCents(toCents(result.apr) - toCents(apr)), patch: { apr }, iconDirection: 'down',
     }, 'Only if lender-approved.');
   }

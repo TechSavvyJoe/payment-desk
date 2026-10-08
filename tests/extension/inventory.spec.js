@@ -8,7 +8,7 @@ import { NIGHT_ALARM, WORK_ALARM } from '../../extensions/payment-desk-companion
 
 const KEY = 'payment-desk.inventory.v1';
 const site = 'https://dealer.example.com/';
-const source = fileURLToPath(new URL('../../extension-dist/payment-desk-companion/', import.meta.url));
+const source = process.env.PD_INVENTORY_EXTENSION_PATH || fileURLToPath(new URL('../../extension-dist/payment-desk-companion/', import.meta.url));
 let directory, context, panel, requests, failUsed, denyRobots, wrongCount;
 const config = type => ({ DealerId: 123, PageId: type === 'new' ? 10 : 20, BaseFilter: type === 'new' ? "type='n'" : "type='u'", DealerModel: { CurrencyCode: 'USD' }, PageVehicleType: type });
 const card = (type, number) => ({ IsAdCard: false, VehicleCard: {
@@ -888,4 +888,95 @@ test('inconsistent vehicle counts cannot publish a complete refresh or remove ca
   expect(state.lastCompletedAt).toBe(previous.lastCompletedAt);
   expect(state.vehicles.every(vehicle => vehicle.listed)).toBe(true);
   await expect(panel.locator('#inventory-notice')).toContainText('page counts');
+});
+
+
+for (const provider of ['DealerOn', 'DealerCarSearch']) {
+  test(`${provider} identical source rows on successive pages never reconcile absence`, async () => {
+    await connect();
+    const previous = await saved();
+    if (provider === 'DealerOn') {
+      await context.route(`${site}api/vhcliaa/**`, route => {
+        const url = new URL(route.request().url());
+        const type = url.pathname.endsWith('/10') ? 'new' : 'used';
+        const body = response(type, Number(url.searchParams.get('pt')));
+        body.DisplayCards = [card(type, type === 'new' ? 1 : 2)];
+        return route.fulfill({ json: body });
+      });
+    } else {
+      await context.route('https://dealer.example.com/**', route => {
+        const url = new URL(route.request().url());
+        if (url.pathname === '/robots.txt') return route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /' });
+        const navigation = '<a href="/inventory/new">New</a><a href="/inventory/used">Used</a>';
+        if (url.pathname === '/') return route.fulfill({ contentType: 'text/html', body: navigation });
+        const type = url.pathname.endsWith('/new') ? 'new' : 'used';
+        const page = Number(url.searchParams.get('page') || 1), pages = type === 'new' ? 1 : 2;
+        const number = type === 'new' ? 1 : 2;
+        return route.fulfill({ contentType: 'text/html', body: `${navigation}<span class="pager-summary">Page: ${page} of ${pages} (${pages} vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/${type}/location">2024 Ford Explorer</a></h4><p>VIN: 1FM5K8D80MGA1234${number}</p></div>` });
+      });
+    }
+    await panel.getByRole('button', { name: 'Refresh now' }).click();
+    await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+    const state = await saved();
+    expect(state.lastCompletedAt).toBe(previous.lastCompletedAt);
+    expect(state.vehicles.every(vehicle => vehicle.listed)).toBe(true);
+    expect(state.error).toContain('repeated inventory source rows');
+  });
+}
+
+test('restrictive DealerOn BaseFilter imports observations but keeps the prior catalog partial', async () => {
+  await connect();
+  const previous = await saved();
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/inventory">All inventory</a>' }));
+  await context.route(`${site}inventory`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, PageVehicleType: 'All', BaseFilter: 'year >= 2025' })}</script>` }));
+  await context.route(`${site}api/vhcliaa/**/30?*`, route => route.fulfill({ json: { DisplayCards: [card('used', 2)], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 1, TotalCount: 1 } } } }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  const state = await saved();
+  expect(state.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(state.vehicles.every(vehicle => vehicle.listed)).toBe(true);
+  expect(state.vehicles.find(vehicle => vehicle.stock === 'U2').lastSeenAt).toBeGreaterThan(previous.vehicles.find(vehicle => vehicle.stock === 'U2').lastSeenAt);
+  expect(state.error).toContain('source filter');
+});
+
+test('robots redirected policy delegates the requesting origin without rerooting its path', async () => {
+  await connect();
+  const previous = await saved();
+  await context.route(`${site}robots.txt`, route => route.fulfill({ status: 302, headers: { location: '/policy' } }));
+  await context.route(`${site}policy`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nDisallow: /' }));
+  const before = requests.length;
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('error');
+  expect(requests.slice(before).filter(url => url.startsWith(site) && !url.endsWith('/photo.jpg'))).toEqual([`${site}robots.txt`, `${site}policy`]);
+  expect((await saved()).vehicles).toEqual(previous.vehicles);
+});
+
+test('native worker retains 429 task and honors persisted Retry-After before recovery', async () => {
+  await connect();
+  const previous = await saved();
+  let attempts = 0;
+  await context.route(`${site}api/vhcliaa/**/20?*`, route => {
+    attempts++;
+    if (attempts === 1) return route.fulfill({ status: 429, headers: { 'Retry-After': '120' } });
+    return route.fulfill({ json: response('used', Number(new URL(route.request().url()).searchParams.get('pt'))) });
+  });
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.job?.queue[0]?.retries, { timeout: 30_000 }).toBe(1);
+  const paused = await saved();
+  expect(paused.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(paused.job.queue[0].url).toContain('/20?');
+  expect(paused.job.originWaits[new URL(site).origin]).toBeGreaterThan(Date.now() + 110_000);
+  const [worker] = context.serviceWorkers();
+  await worker.evaluate(async name => chrome.alarms.create(name, { when: Date.now() + 100 }), WORK_ALARM);
+  await expect.poll(() => worker.evaluate(async name => (await chrome.alarms.get(name))?.scheduledTime, WORK_ALARM)).toBeGreaterThan(Date.now() + 110_000);
+  expect(attempts).toBe(1);
+  // Advance the persisted wait only in this fixture to exercise recovery promptly.
+  await panel.evaluate(async key => {
+    const state = (await chrome.storage.local.get(key))[key];
+    state.job.nextRequestAt = 0; state.job.originWaits = {}; state.requestWaits = {};
+    await chrome.storage.local.set({ [key]: state });
+    await chrome.alarms.create('payment-desk-inventory-work', { when: Date.now() + 100 });
+  }, KEY);
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('ready');
+  expect(attempts).toBe(3);
 });

@@ -2,6 +2,7 @@ import { calculatePayment, fromCents, toCents } from "./calculations.js";
 import { formatCurrency, formatNumber, formatShortDate } from "./formatters.js";
 import { resolveBrand } from "./brandSettings.js";
 import { POLICY_CONFIG } from "./policy.js";
+import { FINANCE_MODEL_EXPLANATION } from "./financeModel.js";
 
 export const ESTIMATE_QUALIFICATION = "Estimate only, not a financing approval or contract. Actual payments, taxes, fees, product eligibility, and final figures must be confirmed with the lender and the dealership's approved systems.";
 
@@ -89,7 +90,7 @@ export function buildProposalGroups(result) {
     if (financedNegative) balanceRows.push(row("financedNegativeEquity", "Negative equity financed", financedNegative));
     balanceRows.push(row("cashDown", "Less cash down", -cents("cashDown")));
     if (cents("upfrontAmount")) balanceRows.push(row("upfrontAmount", "Less other upfront payment", -cents("upfrontAmount")));
-    groups.push(group("financing", "Financed balance", balanceRows, row("amountFinanced", "Amount financed", cents("amountFinanced"))));
+    groups.push(group("financing", "Financed balance", balanceRows, row("amountFinanced", "Estimated loan balance", cents("amountFinanced"))));
     const cashRows = [row("cashDown", "Cash down", cents("cashDown"))];
     if (upfrontNegative) cashRows.push(row("upfrontNegativeEquity", "Negative equity paid at signing", upfrontNegative));
     if (cents("upfrontAmount")) cashRows.push(row("upfrontAmount", "Other upfront payment", cents("upfrontAmount")));
@@ -143,7 +144,7 @@ export function createProposalSnapshot({ dealInput = {}, result, createdAt = new
   ];
   if (rule.version) assumptions.push(`Rules ${rule.version}; effective ${formatShortDate(rule.effectiveFrom)} through ${formatShortDate(rule.effectiveTo)}; reviewed ${formatShortDate(rule.reviewedAt)}.`);
   if (rule.dealDate) assumptions.push(`Deal date: ${rule.dealDate === "Not specified" ? rule.dealDate : formatShortDate(rule.dealDate)}.`);
-  if (result.isFinanced) assumptions.push("Regular monthly amortization at the selected APR; lender timing and final-payment rounding may differ.");
+  if (result.isFinanced) assumptions.push(FINANCE_MODEL_EXPLANATION);
   const comparisonRows = result.isFinanced ? [...new Set([result.termMonths, 60, 72, 84])].sort((a, b) => a - b).map((termMonths) => {
     const selected = termMonths === result.termMonths;
     const apr = selected ? result.apr : Number(gridRates[termMonths] ?? result.apr);
@@ -177,7 +178,7 @@ export function formatProposalText(snapshot, { calculatorUrl } = {}) {
   if (snapshot.vehicleReference) lines.push(`Vehicle / stock: ${snapshot.vehicleReference}`);
   if (!summary.canExport) lines.push("INCOMPLETE ESTIMATE", ...summary.reasons);
   lines.push("", `${summary.headline}: ${money(summary.headlineAmount)}${summary.isFinanced ? "/mo" : ""}`);
-  if (summary.isFinanced) lines.push(`${summary.termMonths} months at ${formatNumber(summary.apr)}% APR`, `Amount financed: ${money(summary.amountFinanced)}`, `Due at signing: ${money(summary.dueAtSigning)}`);
+  if (summary.isFinanced) lines.push(`${summary.termMonths} months at ${formatNumber(summary.apr)}% interest rate`, `Estimated loan balance: ${money(summary.amountFinanced)}`, `Due at signing: ${money(summary.dueAtSigning)}`);
   for (const section of snapshot.groups) {
     lines.push("", section.title);
     section.rows.forEach((item) => lines.push(`${item.label}: ${money(item.amount)}`));

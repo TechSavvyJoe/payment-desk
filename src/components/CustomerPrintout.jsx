@@ -89,9 +89,9 @@ export default function CustomerPrintout({ snapshot, result }) {
 
       <section className="print-hero">
         <svg className="print-hero-art" viewBox="0 0 720 120" preserveAspectRatio="none" aria-hidden="true"><rect width="720" height="120" rx="9" fill="#00095b" /><path d="M460 0H720V120H580Z" fill="#093c9b" /><path d="M650 0H720V120H705L590 0Z" fill="#066fef" opacity=".45" /></svg>
-        <div className="print-payment"><h2>{summary.headline}</h2><p><strong>{money(summary.headlineAmount)}</strong>{summary.isFinanced ? <span>/mo</span> : null}</p><div>{summary.isFinanced ? `${summary.termMonths} months · ${formatNumber(summary.apr)}% APR` : summary.hasCashCredit ? "Amount in the customer's favor" : 'Includes trade payoff or equity'}</div></div>
+        <div className="print-payment"><h2>{summary.headline}</h2><p><strong>{money(summary.headlineAmount)}</strong>{summary.isFinanced ? <span>/mo</span> : null}</p><div>{summary.isFinanced ? `${summary.termMonths} months · ${formatNumber(summary.apr)}% interest rate` : summary.hasCashCredit ? "Amount in the customer's favor" : 'Includes trade payoff or equity'}</div></div>
         <dl className="print-key-totals">
-          {summary.isFinanced ? <div><dt>Amount financed</dt><dd>{money(summary.amountFinanced)}</dd></div> : null}
+          {summary.isFinanced ? <div><dt>Estimated loan balance</dt><dd>{money(summary.amountFinanced)}</dd></div> : null}
           <div><dt>Out-the-door total</dt><dd>{money(summary.outTheDoor)}</dd></div>
           <div><dt>{summary.isFinanced ? 'Due at signing' : 'Cash due after trade'}</dt><dd>{money(summary.dueAtSigning)}</dd></div>
         </dl>
@@ -111,7 +111,7 @@ export default function CustomerPrintout({ snapshot, result }) {
       })}</ol></section> : null}
 
       {summary.isFinanced ? <section className="print-comparisons"><div className="print-section-heading"><h2><span>{productRows.length ? '04' : '03'}</span> Payment options</h2><small>Same deal and cash due · Subject to lender approval</small></div><div className="print-option-grid" style={{ gridTemplateColumns: `repeat(${snapshot.comparisonRows.length}, minmax(0, 1fr))` }}>{snapshot.comparisonRows.map(option => <div className={`print-option${option.selected ? ' print-option--selected' : ''}`} key={option.termMonths}>
-        <div className="print-option-term">{option.termMonths} months <span>{option.selected ? 'SELECTED' : `${formatNumber(option.apr)}% APR`}</span></div><p><strong>{money(option.monthlyPayment)}</strong><span>/mo</span></p>{option.selected ? <small>{formatNumber(option.apr)}% APR</small> : null}
+        <div className="print-option-term">{option.termMonths} months <span>{option.selected ? 'SELECTED' : `${formatNumber(option.apr)}% interest rate`}</span></div><p><strong>{money(option.monthlyPayment)}</strong><span>/mo</span></p>{option.selected ? <small>{formatNumber(option.apr)}% interest rate</small> : null}
       </div>)}</div></section> : null}
 
       <footer className="print-qualification"><h2>Estimate assumptions</h2><ul>{snapshot.assumptions.map(assumption => <li key={assumption}>{assumption}</li>)}</ul><p>{snapshot.qualification}</p><div className="print-document-reference"><span>{snapshot.reference} · App {snapshot.version}</span><strong>desking.mysoldlog.com</strong></div></footer>

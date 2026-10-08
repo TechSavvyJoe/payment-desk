@@ -94,9 +94,9 @@ test("proposal copies itemized products, cash requirements, identity, policy and
     ],
   }, { policy: { id: "policy-test", version: "2026.09.24", jurisdiction: "Michigan", year: 2026, effectiveFrom: "2026-01-01", effectiveTo: "2026-12-31", reviewedAt: "2026-09-24", dealDate: "2026-09-24" } });
   const text = formatProposalText(snapshot, { calculatorUrl: "https://example.test/calculator/" });
-  assert.doesNotMatch(text, /interest|total (?:loan )?payments/i);
+  assert.doesNotMatch(text, /total interest|total (?:loan )?payments/i);
   assert.match(text, /2026 trade deduction limit: \$12,000\.00/);
-  for (const expected of ["Payment Desk", "2026 F-150 / stock X123", snapshot.reference, "2.0.0 (test-build)", "Service Contract", "GAP", "Bed liner", "trade payoff", "$14,000.00", "Negative equity paid at signing", "$6,000.00", "6.50% APR", "12/31/26", "Estimate only", "not a financing approval or contract", "Open calculator: https://example.test/calculator/", "does not restore this proposal"]) assert.ok(text.includes(expected), expected);
+  for (const expected of ["Payment Desk", "2026 F-150 / stock X123", snapshot.reference, "2.0.0 (test-build)", "Service Contract", "GAP", "Bed liner", "trade payoff", "$14,000.00", "Negative equity paid at signing", "$6,000.00", "6.50% interest rate", "Estimated loan balance", "Lender APR", "12/31/26", "Estimate only", "not a financing approval or contract", "Open calculator: https://example.test/calculator/", "does not restore this proposal"]) assert.ok(text.includes(expected), expected);
   assert.equal(snapshot.groups[0].rows.reduce((total, item) => total + item.cents, 0), snapshot.groups[0].total.cents);
 });
 
@@ -123,7 +123,7 @@ test("selected comparison always uses the selected deal rate and cent payment", 
   assert.equal(selected.length, 1);
   assert.equal(selected[0].apr, snapshot.summary.apr);
   assert.equal(selected[0].monthlyPayment, snapshot.summary.headlineAmount);
-  assert.match(formatProposalText(snapshot), /6\.50% APR/);
+  assert.match(formatProposalText(snapshot), /6\.50% interest rate/);
 });
 
 test("proposal display dates use MM/DD/YY while policy and creation values stay ISO", () => {

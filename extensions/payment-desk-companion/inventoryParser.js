@@ -19,6 +19,14 @@ export function dealerOnUrl(config, origin, page = 1) {
   url.search = new URLSearchParams({ host: url.hostname, baseFilter: btoa(config.BaseFilter), pn: '48', pt: String(page), displayCardsShown: String((page - 1) * 48) });
   return url.href;
 }
+// Only fixture-proven condition filters (or the empty all-inventory filter)
+// establish coverage. Arbitrary provider expressions still import observations.
+export function dealerOnFullScope(config, condition) {
+  const filter = config.BaseFilter.trim();
+  return condition === 'all' && filter === ''
+    || condition === 'new' && /^type\s*=\s*'n'$/i.test(filter)
+    || condition === 'used' && /^type\s*=\s*'u'$/i.test(filter);
+}
 function pricing(html, used) {
   const root = markup(html ?? '');
   const rows = [...root.querySelectorAll('.priceBlockItemPrice, .price')].map(row => ({
@@ -68,7 +76,7 @@ export function parseDealerOn(data, task, site, now) {
     }, site, now);
   }).filter(Boolean);
   const next = task.page < paging.TotalPages ? [{ ...task, page: task.page + 1, url: dealerOnUrl(task.config, task.url, task.page + 1) }] : [];
-  return { vehicles, tasks: next, expected: paging.TotalCount, group: `dealeron:${dealerOnUrl(task.config, task.url)}`, scope: task.condition === 'new' ? 'new' : task.condition === 'used' || task.condition === 'certified' ? 'used' : task.condition === 'all' ? 'all' : 'unknown', finalPage: !next.length, provider: 'DealerOn' };
+  return { vehicles, tasks: next, fullScope: dealerOnFullScope(task.config, task.condition), expected: paging.TotalCount, group: `dealeron:${dealerOnUrl(task.config, task.url)}`, scope: task.condition === 'new' ? 'new' : task.condition === 'used' || task.condition === 'certified' ? 'used' : task.condition === 'all' ? 'all' : 'unknown', finalPage: !next.length, provider: 'DealerOn' };
 }
 
 function discovery(root, url, site) {
@@ -104,7 +112,7 @@ export function parseInventoryHtml(html, task, site, now) {
     if (!Number.isInteger(config.DealerId) || config.DealerId <= 0 || !Number.isInteger(config.PageId) || config.PageId <= 0
       || typeof config.BaseFilter !== 'string' || config.BaseFilter.length > 1000 || !/^[\x20-\x7e]*$/.test(config.BaseFilter)) throw new Error('This inventory configuration is unsupported.');
     const condition = /new/i.test(config.PageVehicleType) ? 'new' : /used|certified/i.test(config.PageVehicleType) ? 'used' : /^all$/i.test(config.PageVehicleType) ? 'all' : feedConditionFor(task);
-    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition }, ...discoverMore(condition)], provider: 'DealerOn' };
+    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, fullScope: dealerOnFullScope(config, condition), config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition }, ...discoverMore(condition)], provider: 'DealerOn' };
   }
   const cards = [...root.querySelectorAll('.invMainCell')];
   const summary = text(root.querySelector('.pager-summary')).match(/Page:\s*(\d+)\s*of\s*(\d+)\s*\((\d+) vehicles\)/i);

@@ -2,7 +2,7 @@
 // finish loading. Let the lightweight panel finish first, then start the app
 // on its first visible frame. A slow/broken worksheet now leaves usable tools
 // and a loading/retry message instead of a grey panel.
-export function installWorksheet(onReady) {
+export function installWorksheet(onReady, onUnavailable) {
   const desk = document.getElementById('desk');
   const loading = document.getElementById('worksheet-loading');
   const message = document.getElementById('worksheet-loading-message');
@@ -27,10 +27,28 @@ export function installWorksheet(onReady) {
     }
     return true;
   };
+  const armRecovery = () => {
+    clearTimeout(timer);
+    loading.hidden = false;
+    message.textContent = 'Opening Payment Desk…';
+    retry.hidden = true;
+    timer = setTimeout(() => {
+      if (checkReady()) return;
+      message.textContent = 'The worksheet is taking longer to open. Try again.';
+      retry.hidden = false;
+    }, 15_000);
+  };
   desk.addEventListener('load', () => {
     observer?.disconnect();
+    if (checkReady()) return;
+    // A completed reload without the worksheet invalidates parent review gating.
+    if (ready) {
+      ready = false;
+      onUnavailable();
+    }
+    armRecovery();
     const doc = worksheetDocument();
-    if (checkReady() || !doc) return;
+    if (!doc) return;
     // React can commit just after the document's load event.
     observer = new MutationObserver(checkReady);
     observer.observe(doc, { childList: true, subtree: true });
@@ -38,16 +56,8 @@ export function installWorksheet(onReady) {
   const start = () => {
     if (ready || checkReady()) return;
     observer?.disconnect();
-    clearTimeout(timer);
-    loading.hidden = false;
-    message.textContent = 'Opening Payment Desk…';
-    retry.hidden = true;
+    armRecovery();
     desk.src = 'desk/index.html';
-    timer = setTimeout(() => {
-      if (checkReady()) return;
-      message.textContent = 'The worksheet is taking longer to open. Try again. If it still fails, reload Payment Desk Companion in Chrome’s Extensions page.';
-      retry.hidden = false;
-    }, 15_000);
   };
   retry.addEventListener('click', start);
   // A rAF callback runs before paint. Starting the iframe in that first

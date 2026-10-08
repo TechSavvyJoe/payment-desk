@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateRateGrid, RATE_GRID_DEFAULTS } from "../lib/calculations.js";
+import { getPurchaseScope } from "../lib/purchaseScope.js";
 import { formatCurrency, formatNumber, formatWholeCurrency } from "../lib/formatters.js";
 import { MoneyInput, PercentInput } from "./Fields.jsx";
 import { ArrowIcon, GridIcon } from "./Icons.jsx";
@@ -30,11 +31,11 @@ export default function PaymentGrid({
   }, []);
   const grid = useMemo(
     () =>
-      calculateRateGrid(dealInput, {
+      getPurchaseScope(dealInput).supported ? calculateRateGrid(dealInput, {
         rows: TERMS.map((termMonths) => ({ termMonths, apr: Number(rates[termMonths] ?? dealInput.apr) })),
         downPayments,
         includeCustom: false,
-      }),
+      }) : { columns: [], rows: [] },
     [dealInput, rates, downPayments],
   );
 
@@ -80,12 +81,12 @@ export default function PaymentGrid({
       {!isMobile && !isStarting ? <div className="desktop-rate-grid">
         <table>
           <caption className="sr-only">
-            Monthly payment estimates by loan term, APR, and total cash down
+            Monthly payment estimates by loan term, interest rate, and total cash down
           </caption>
           <thead>
             <tr>
               <th scope="col">Term</th>
-              <th scope="col">APR</th>
+              <th scope="col">Rate</th>
               {grid.columns.map((column, columnIndex) => (
                 <th key={`down-${columnIndex}`} scope="col">
                   <MoneyInput
@@ -109,7 +110,7 @@ export default function PaymentGrid({
                 <td className="rate-cell">
                   <PercentInput
                     id={`grid-apr-${row.termMonths}`}
-                    ariaLabel={`APR for ${row.termMonths} months`}
+                    ariaLabel={`Interest rate for ${row.termMonths} months`}
                     savedDraft={draftCache[`apr-${row.termMonths}`]}
                     onDraftChange={(draft) => setDraftCache((current) => ({ ...current, [`apr-${row.termMonths}`]: draft }))}
                     onChange={(value) => onRateChange(row.termMonths, value)}
@@ -154,17 +155,17 @@ export default function PaymentGrid({
             ))}
           </div>
         </section>
-        <p className="mobile-grid-helper">Tap any payment to apply its term, APR, and down payment.</p>
+        <p className="mobile-grid-helper">Tap any payment to apply its term, interest rate, and down payment.</p>
         <div className="mobile-term-list">
           {grid.rows.map((row) => (
             <section className="mobile-term-card" key={row.termMonths}>
               <div className="mobile-term-card__header">
                 <h3>{row.termMonths} months</h3>
                 <label>
-                  <span>APR</span>
+                  <span>Rate</span>
                   <PercentInput
                     id={`grid-apr-${row.termMonths}`}
-                    ariaLabel={`APR for ${row.termMonths} months`}
+                    ariaLabel={`Interest rate for ${row.termMonths} months`}
                     savedDraft={draftCache[`apr-${row.termMonths}`]}
                     onDraftChange={(draft) => setDraftCache((current) => ({ ...current, [`apr-${row.termMonths}`]: draft }))}
                     onChange={(value) => onRateChange(row.termMonths, value)}
@@ -201,7 +202,7 @@ export default function PaymentGrid({
           <strong>Payment grid</strong>
           <span>Compare terms, rates, and down payments</span>
         </div>
-        <p>Select any payment to apply its term, APR, and down payment to the deal.</p>
+        <p>Select any payment to apply its term, interest rate, and down payment to the deal.</p>
       </div>
     </section>
   );

@@ -2,8 +2,12 @@ import { CALCULATION_LIMITS, RATE_GRID_DEFAULTS } from './calculations.js';
 import { createDeskState, hasDealEdits } from './dealState.js';
 import { parseShortDate } from './formatters.js';
 import { parseFinancialInput } from './inputValidation.js';
+import { isRegistrationState, isTransactionScope } from './purchaseScope.js';
 
-export const DESK_DRAFT_KEY = 'payment-desk.draft.v1';
+export const LEGACY_DESK_DRAFT_KEY = 'payment-desk.draft.v1';
+export const DESK_DRAFT_KEY = 'payment-desk.draft.v2';
+// Share the released writer's lock while reading a legacy snapshot.
+export const DESK_DRAFT_LOCK_KEY = LEGACY_DESK_DRAFT_KEY;
 const terms = RATE_GRID_DEFAULTS.termMonths;
 const targets = ['payment', 'outTheDoor', 'amountFinanced', 'cashDue'];
 const money = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= CALCULATION_LIMITS.maxAmount && Math.abs(value * 100 - Math.round(value * 100)) < .00001;
@@ -32,10 +36,13 @@ export function isBaselineDeskInput(id, raw, startDate) {
 
 export function normalizeDeskDraft(value) {
   try {
-    if (value?.version !== 1 || !value.desk || !value.targetValues || !value.inputDrafts) return null;
+    if (![1, 2].includes(value?.version) || !value.desk || !value.targetValues || !value.inputDrafts) return null;
     const source = value.desk;
     const deal = source.deal;
+    const registrationState = value.version === 1 && deal?.registrationState === undefined ? 'MI' : deal.registrationState;
+    const transactionScope = value.version === 1 && deal?.transactionScope === undefined ? 'resident-retail' : deal.transactionScope;
     if (!deal || !date(deal.dealDate) || !date(source.startDate)
+      || !isRegistrationState(registrationState) || !isTransactionScope(transactionScope)
       || !['finance', 'cash'].includes(deal.dealType) || !['transfer', 'new'].includes(deal.plateMode)
       || typeof deal.rollNegativeEquity !== 'boolean' || typeof source.dateChosen !== 'boolean'
       || !terms.includes(deal.termMonths) || !rate(deal.apr)
@@ -77,20 +84,47 @@ export function normalizeDeskDraft(value) {
       inputDrafts[id] = { raw: draft.raw };
     }
     const desk = createDeskState(source.startDate);
-    desk.deal = Object.fromEntries(Object.keys(desk.deal).map(key => [key, key === 'optionalItems' ? optionalItems : deal[key]]));
+    desk.deal = Object.fromEntries(Object.keys(desk.deal).map(key => [key, key === 'optionalItems' ? optionalItems
+      : key === 'registrationState' ? registrationState : key === 'transactionScope' ? transactionScope : deal[key]]));
     desk.gridRates = Object.fromEntries(terms.map(term => [term, source.gridRates[term]]));
     desk.gridDownPayments = [...source.gridDownPayments];
     desk.dateChosen = source.dateChosen;
     desk.nextItemId = source.nextItemId;
-    return { version: 1, desk, targetType: value.targetType, targetValues: Object.fromEntries(targets.map(type => [type, value.targetValues[type]])), inputDrafts };
+    return { version: 2, desk, targetType: value.targetType, targetValues: Object.fromEntries(targets.map(type => [type, value.targetValues[type]])), inputDrafts };
   } catch { return null; }
 }
 
-export function loadDeskDraft(storage = storageOnDevice()) {
+function classifyRecord(raw, key) {
+  const record = { kind: 'absent', draft: null, raw, key, reason: null };
+  if (raw === null) return record;
+  const reject = reason => ({ ...record, kind: 'rejected', reason });
+  if (raw.length > 200_000) return reject('oversized');
+  let value;
+  try { value = JSON.parse(raw); } catch { return reject('malformed-json'); }
+  if (value?.version !== (key === DESK_DRAFT_KEY ? 2 : 1)) return reject('unsupported-version');
+  if (key === DESK_DRAFT_KEY && value.discarded === true) {
+    return typeof value.revision === 'string' && value.revision.length > 0 && value.revision.length <= 100
+      && Object.keys(value).every(key => ['version', 'discarded', 'revision'].includes(key))
+      ? record : reject('invalid-fields');
+  }
+  const draft = normalizeDeskDraft(value);
+  return draft ? { ...record, kind: 'valid', draft } : reject('invalid-fields');
+}
+
+export function readDeskDraftRecord(storage = storageOnDevice()) {
   try {
-    const raw = storage?.getItem(DESK_DRAFT_KEY);
-    return raw && raw.length <= 200_000 ? normalizeDeskDraft(JSON.parse(raw)) : null;
-  } catch { return null; }
+    if (!storage) throw new Error('Storage unavailable');
+    const raw = storage.getItem(DESK_DRAFT_KEY);
+    // Even a rejected or discarded v2 record suppresses legacy fallback.
+    return raw !== null ? classifyRecord(raw, DESK_DRAFT_KEY)
+      : classifyRecord(storage.getItem(LEGACY_DESK_DRAFT_KEY), LEGACY_DESK_DRAFT_KEY);
+  } catch {
+    return { kind: 'unreadable', draft: null, raw: null, key: null, reason: 'unavailable' };
+  }
+}
+
+export function loadDeskDraft(storage = storageOnDevice()) {
+  return readDeskDraftRecord(storage).draft;
 }
 
 export function hasDeskDraftEdits({ desk, targetValues, inputDrafts }) {
@@ -98,13 +132,16 @@ export function hasDeskDraftEdits({ desk, targetValues, inputDrafts }) {
     || Object.entries(inputDrafts).some(([id, draft]) => !isBaselineDeskInput(id, draft.raw, desk.startDate));
 }
 
-export function saveDeskDraft(value, storage = storageOnDevice()) {
-  const draft = normalizeDeskDraft({ ...value, version: 1 });
-  if (!storage || !draft) return { ok: false };
+function writeDeskDraft(value, storage, record, discard = false) {
+  const draft = discard ? null : normalizeDeskDraft({ ...value, version: 2 });
+  if (!storage || (!discard && !draft)) return { ok: false };
   try {
-    const empty = !hasDeskDraftEdits(draft);
-    if (empty) storage.removeItem(DESK_DRAFT_KEY);
-    else {
+    if (discard || !hasDeskDraftEdits(draft)) {
+      // Retain v1 bytes for recovery, but never resurrect them after a reset.
+      // A unique revision also prevents a reset/save/reset ABA across tabs.
+      if (discard || record.kind !== 'absent') storage.setItem(DESK_DRAFT_KEY,
+        JSON.stringify({ version: 2, discarded: true, revision: crypto.randomUUID() }));
+    } else {
       const raw = JSON.stringify(draft);
       if (raw.length > 200_000) return { ok: false };
       storage.setItem(DESK_DRAFT_KEY, raw);
@@ -113,39 +150,72 @@ export function saveDeskDraft(value, storage = storageOnDevice()) {
   } catch { return { ok: false }; }
 }
 
-// One session remembers the exact draft it opened or last saved. The shared
-// browser lock makes comparison and mutation a single operation across tabs.
-// A stale session stays read-only until reload; Reset cannot erase newer work.
+export function saveDeskDraft(value, storage = storageOnDevice()) {
+  const record = readDeskDraftRecord(storage);
+  if (record.kind === 'rejected') return { ok: false, rejected: true, reason: record.reason };
+  if (record.kind === 'unreadable') return { ok: false };
+  return writeDeskDraft(value, storage, record);
+}
+
+// Compare exact bytes under the same lock used by released v1 tabs. Once v2
+// exists, old writers may update v1 but can never replace the current worksheet.
 export function createDeskDraftSession(storage = storageOnDevice(), locks = locksOnDevice()) {
-  let expected, unreadable = false, conflicted = false;
-  try { expected = storage?.getItem(DESK_DRAFT_KEY) ?? null; }
-  catch { unreadable = true; }
-  let draft = null;
-  try { if (expected && expected.length <= 200_000) draft = normalizeDeskDraft(JSON.parse(expected)); }
-  catch { /* Invalid drafts open a blank worksheet. */ }
-  const status = () => {
+  let record = readDeskDraftRecord(storage), conflicted = false, cleanupFailed = false;
+  let legacyExpected = record.key === LEGACY_DESK_DRAFT_KEY ? record.raw : null, legacyUnreadable = false;
+  if (record.key === DESK_DRAFT_KEY) {
+    try { legacyExpected = storage.getItem(LEGACY_DESK_DRAFT_KEY); } catch { legacyUnreadable = true; }
+  }
+  const draft = record.draft;
+  const checkStatus = () => {
     if (conflicted) return 'conflict';
-    if (!storage || unreadable) return 'error';
+    if (record.kind === 'unreadable') return 'error';
+    const current = readDeskDraftRecord(storage);
+    if (current.kind === 'unreadable') { record = current; return 'error'; }
+    if (current.key !== record.key || current.raw !== record.raw) { conflicted = true; return 'conflict'; }
+    return record.kind === 'rejected' ? 'rejected' : 'saved';
+  };
+  const mutate = async (value, discard) => {
+    if (!locks?.request) return { ok: false };
     try {
-      if (storage.getItem(DESK_DRAFT_KEY) !== expected) { conflicted = true; return 'conflict'; }
-      return 'saved';
-    } catch { return 'error'; }
+      return await locks.request(DESK_DRAFT_LOCK_KEY, () => {
+        const current = checkStatus();
+        if (current === 'rejected' && !discard) return { ok: false, rejected: true, reason: record.reason };
+        if (current !== 'saved' && !(discard && current === 'rejected')) return { ok: false, conflict: current === 'conflict' };
+        if (!discard && cleanupFailed) return { ok: false, reason: 'legacy-removal-failed' };
+        if (discard) {
+          if (legacyUnreadable) return { ok: false, reason: 'legacy-unreadable' };
+          try {
+            if (storage.getItem(LEGACY_DESK_DRAFT_KEY) !== legacyExpected) {
+              conflicted = true; return { ok: false, conflict: true };
+            }
+          } catch { legacyUnreadable = true; return { ok: false, reason: 'legacy-unreadable' }; }
+        }
+        const outcome = writeDeskDraft(value, storage, record, discard);
+        if (outcome.ok) {
+          record = readDeskDraftRecord(storage);
+          if (record.kind === 'unreadable') return { ok: false };
+          if (discard) {
+            // Only explicit cleanup removes legacy figures. Blank autosave must
+            // not erase a separate old-version worksheet behind valid v2 data.
+            try {
+              if (legacyExpected !== null) storage.removeItem(LEGACY_DESK_DRAFT_KEY);
+              if (storage.getItem(LEGACY_DESK_DRAFT_KEY) !== null) throw new Error('Legacy draft remains');
+              legacyExpected = null; cleanupFailed = false;
+            } catch {
+              cleanupFailed = true;
+              return { ok: false, reason: 'legacy-removal-failed' };
+            }
+          }
+        }
+        return outcome;
+      });
+    } catch { return { ok: false }; }
   };
   return {
-    draft, status,
-    async save(value) {
-      // Without cross-tab locking, retain the previous draft rather than risk
-      // replacing it. The app reports the existing save warning in that case.
-      if (!locks?.request) return { ok: false };
-      try {
-        return await locks.request(DESK_DRAFT_KEY, () => {
-          const current = status();
-          if (current !== 'saved') return { ok: false, conflict: current === 'conflict' };
-          const outcome = saveDeskDraft(value, storage);
-          if (outcome.ok) expected = storage.getItem(DESK_DRAFT_KEY);
-          return outcome;
-        });
-      } catch { return { ok: false }; }
-    },
+    draft,
+    status: () => { const current = checkStatus(); return current === 'saved' && cleanupFailed ? 'error' : current; },
+    get record() { return record; },
+    save: value => mutate(value, false),
+    discard: () => mutate(null, true),
   };
 }
