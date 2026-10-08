@@ -32,7 +32,10 @@ const openPanelDocument = async (width = 390, height = 850) => {
 
 test('panel finishes loading before starting the worksheet', async () => {
   const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.stack ?? error.message));
   await page.addInitScript(() => {
+    if (window !== window.top) return;
     window.addEventListener('load', () => {
       window.panelStartup = {
         frameSource: document.getElementById('desk').getAttribute('src'),
@@ -45,6 +48,8 @@ test('panel finishes loading before starting the worksheet', async () => {
   expect(await page.evaluate(() => window.panelStartup)).toEqual({ frameSource: null, loadingVisible: true });
   await expect(page.locator('#worksheet-loading')).toBeHidden();
   await expect(page.locator('#start-estimate')).toBeEnabled();
+  await expect(page.locator('#inventory-notice')).toContainText('Automatic refresh is off');
+  expect(errors).toEqual([]);
 });
 
 test('a worksheet startup failure offers retry and recovers without losing a loaded deal', async () => {
@@ -275,7 +280,7 @@ test('packaged worksheet works offline, calculates, compares, copies and prints 
   expect(browserName).toBe('chromium');
   const panel = await openPanelDocument(420);
   const errors = [];
-  panel.on('pageerror', error => errors.push(error.message));
+  panel.on('pageerror', error => errors.push(error.stack ?? error.message));
   await context.setOffline(true);
   await panel.reload();
   const desk = panel.frameLocator('#desk');

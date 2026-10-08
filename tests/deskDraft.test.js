@@ -117,6 +117,16 @@ test('saved APRs require cent precision in both the deal and every grid term', (
   }
 });
 
+test('restored date drafts retain invalid entry but discard a valid date that disagrees with the deal', () => {
+  const value = empty();
+  value.inputDrafts['estimate-date'] = { raw: '10/08/26' };
+  assert.deepEqual(normalizeDeskDraft(value).inputDrafts, {});
+  value.inputDrafts['estimate-date'] = { raw: '10/07/26' };
+  assert.deepEqual(normalizeDeskDraft(value).inputDrafts, value.inputDrafts);
+  value.inputDrafts['estimate-date'] = { raw: '10/99/26' };
+  assert.deepEqual(normalizeDeskDraft(value).inputDrafts, value.inputDrafts);
+});
+
 test('storage failures never throw or overwrite the previous saved draft', () => {
   const value = empty(); value.desk.deal.salePrice = 30000;
   const device = storage(); saveDeskDraft(value, device);

@@ -291,9 +291,21 @@ async function command(message) {
     });
     await schedule(state);
   } else if (message.action === 'disconnect') {
-    const previous = await transaction(async state => { await chrome.storage.local.remove(INVENTORY_KEY); return state; });
-    await schedule({});
-    if (previous.config) await releaseWebsite(previous.config.site);
+    await transaction(async state => {
+      // Stop refresh work first, retaining the site/catalog as a retry path until
+      // both alarms and website access have been withdrawn successfully.
+      const stopped = { ...state, job: null, config: state.config && { ...state.config, nightly: false }, status: 'idle', error: '' };
+      await write(stopped);
+      try {
+        await schedule({});
+        if (state.config) await releaseWebsite(state.config.site);
+        await chrome.storage.local.remove(INVENTORY_KEY);
+      } catch (error) {
+        try { await write({ ...stopped, status: 'error', error: `${error.message} Disconnect did not finish. Try Disconnect again.` }); }
+        catch { /* The retained site still provides the same retry action. */ }
+        throw error;
+      }
+    });
   } else throw new Error('Unknown inventory action.');
   return { ok: true };
 }

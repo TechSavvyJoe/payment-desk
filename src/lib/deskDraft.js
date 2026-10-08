@@ -1,5 +1,6 @@
 import { CALCULATION_LIMITS, RATE_GRID_DEFAULTS } from './calculations.js';
 import { createDeskState, hasDealEdits } from './dealState.js';
+import { parseShortDate } from './formatters.js';
 
 export const DESK_DRAFT_KEY = 'payment-desk.draft.v1';
 const terms = RATE_GRID_DEFAULTS.termMonths;
@@ -48,6 +49,12 @@ export function normalizeDeskDraft(value) {
     for (const [id, draft] of entries) {
       if (!fieldId.test(id) || typeof draft?.raw !== 'string' || draft.raw.length > 1000) return null;
       if (id.startsWith('product-') && !ids.has(id.slice(8, -7))) continue;
+      // Preserve unfinished/invalid typing, but a valid restored date must agree
+      // with the committed date used in calculations and customer proposals.
+      if (id === 'estimate-date') {
+        const parsed = parseShortDate(draft.raw);
+        if (parsed.value && parsed.value !== deal.dealDate) continue;
+      }
       inputDrafts[id] = { raw: draft.raw };
     }
     const desk = createDeskState(source.startDate);

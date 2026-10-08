@@ -2,14 +2,14 @@ import { COMPANION_PREFIX, validateCatalogPage } from '../../extensions/payment-
 
 const STORAGE_KEY = 'payment-desk.companion.v1';
 const validId = value => typeof value === 'string' && /^[a-p]{32}$/.test(value);
-let pendingId = null;
+let pendingConnection = null;
 
 export function rememberCompanion() {
   if (!window.location.hash.startsWith(COMPANION_PREFIX)) return;
   const id = window.location.hash.slice(COMPANION_PREFIX.length);
   // Treat the link as a candidate. A valid catalog response must confirm it
   // before it can replace an already working companion connection.
-  pendingId = validId(id) ? id : null;
+  pendingConnection = validId(id) ? { id, attempts: 0 } : null;
   window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
 }
 
@@ -46,21 +46,25 @@ function requestCatalog(id, query) {
 
 export async function readCompanionInventory(query) {
   const previous = companionId();
-  const candidate = pendingId;
+  const candidate = pendingConnection;
   if (candidate) {
+    candidate.attempts++;
     try {
-      const page = await requestCatalog(candidate, query);
-      if (pendingId === candidate) {
-        pendingId = null;
+      const page = await requestCatalog(candidate.id, query);
+      if (pendingConnection === candidate) {
+        pendingConnection = null;
         // Save only the confirmed public identifier, never inventory/deal data.
-        window.paymentDeskCompanionId = candidate;
-        try { window.localStorage.setItem(STORAGE_KEY, candidate); } catch { /* This visit still works. */ }
+        window.paymentDeskCompanionId = candidate.id;
+        try { window.localStorage.setItem(STORAGE_KEY, candidate.id); } catch { /* This visit still works. */ }
       }
       return page;
     } catch (error) {
-      if (pendingId === candidate) pendingId = null;
-      if (!previous || previous === candidate) throw error;
+      if (!previous || previous === candidate.id) throw error;
       // A broken connection link must not disable the saved companion.
+    } finally {
+      candidate.attempts--;
+      // An earlier failed filter read cannot invalidate another pending read.
+      if (!candidate.attempts && pendingConnection === candidate) pendingConnection = null;
     }
   }
   return requestCatalog(previous, query);

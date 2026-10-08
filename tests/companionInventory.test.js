@@ -82,3 +82,33 @@ test('the bounded timeout ignores a late handshake instead of saving its identif
   await Promise.resolve();
   assert.equal(storage.has(KEY), false);
 });
+
+test('a failed concurrent read cannot discard a candidate verified by another read', async t => {
+  const callbacks = [];
+  const storage = browser(t, null, (_runtime, _id, _message, callback) => callbacks.push(callback));
+  const failed = assert.rejects(readCompanionInventory({ search: 'first' }), /could not provide inventory/);
+  const successful = readCompanionInventory({ search: 'second' });
+  callbacks[0]({ ok: false });
+  await failed;
+  callbacks[1](page);
+  assert.deepEqual(await successful, page);
+  assert.equal(storage.get(KEY), candidate);
+  const following = readCompanionInventory({});
+  callbacks[2](page);
+  assert.deepEqual(await following, page);
+});
+
+test('a superseded candidate cannot replace the companion verified by a newer link', async t => {
+  const callbacks = [];
+  const storage = browser(t, previous, (_runtime, id, _message, callback) => callbacks.push({ id, callback }));
+  const oldRead = readCompanionInventory({});
+  const replacement = 'c'.repeat(32);
+  window.location.hash = `#pd-companion=${replacement}`;
+  rememberCompanion();
+  const newRead = readCompanionInventory({});
+  callbacks[1].callback(page);
+  await newRead;
+  callbacks[0].callback(page);
+  await oldRead;
+  assert.equal(storage.get(KEY), replacement);
+});

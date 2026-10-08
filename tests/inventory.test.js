@@ -22,6 +22,17 @@ test('inventory never invents a selling price from payments or non-USD values', 
   assert.equal(vehicleRecord({ ...source, currency: 'USD' }, 'https://dealer.example.com', 100).price, 29995);
 });
 
+test('inventory accepts only a complete VIN and never truncates one into an identifier', () => {
+  const vin = '1FM5K8D80MGA12345';
+  const source = { name: '2024 Ford Explorer', url: '/used/123' };
+  for (const raw of [vin + '6', vin + ' EXTRA', vin.repeat(20), vin.slice(0, -1)]) {
+    const record = vehicleRecord({ ...source, vin: raw }, 'https://dealer.example.com/', 100);
+    assert.equal(record.vin, '');
+    assert.equal(record.id, 'https://dealer.example.com/used/123');
+  }
+  assert.equal(vehicleRecord({ ...source, vin: `  ${vin.toLowerCase()}\n` }, 'https://dealer.example.com/', 100).vin, vin);
+});
+
 test('full inventory selection excludes filters and starts pagination at page one', () => {
   for (const path of ['/searchnew.aspx', '/inventory/used/', '/used-inventory/index.htm', '/used-vehicle-inventory-howell-mi.html']) assert.equal(inventoryFeedUrl(`https://dealer.example.com${path}`), true);
   assert.equal(inventoryFeedUrl('https://dealer.example.com/'), false);

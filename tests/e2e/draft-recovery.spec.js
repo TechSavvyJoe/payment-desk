@@ -77,6 +77,26 @@ test('invalid price and date drafts stay invalid after refresh and cannot become
   await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled();
 });
 
+test('a stale valid date draft cannot disagree with the restored estimate date', async ({ page }) => {
+  await page.locator('#sale-price').fill('30000');
+  await page.locator('#sale-price').blur();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.desk.deal.salePrice, KEY)).toBe(30000);
+  await page.evaluate(key => {
+    const saved = JSON.parse(localStorage.getItem(key));
+    saved.desk.deal.dealDate = '2026-10-06';
+    saved.desk.dateChosen = true;
+    saved.inputDrafts['estimate-date'] = { raw: '10/08/26' };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, KEY);
+  await page.reload();
+  await page.locator('details.deal-details > summary').click();
+  await expect(page.locator('#estimate-date')).toHaveValue('10/06/26');
+  await expect(page.locator('#estimate-date')).not.toHaveAttribute('aria-invalid', 'true');
+  await page.getByRole('button', { name: 'Customer view', exact: true }).click();
+  await expect(page.locator('.customer-layout')).toContainText('10/06/26');
+  await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled();
+});
+
 test('blocked draft storage gives an honest warning while the current worksheet still works', async ({ page }) => {
   await page.addInitScript(() => { Storage.prototype.setItem = () => { throw new Error('blocked'); }; });
   await page.reload();

@@ -65,7 +65,7 @@ export function usdPrice(value) {
 export function vehicleRecord(value, site, now) {
   const url = inventoryUrl(value.url, site);
   const name = cleanText(value.name);
-  const vin = cleanText(value.vin, 17).toUpperCase();
+  const vin = cleanText(value.vin, Infinity).toUpperCase();
   if (!url || !name || !/^(?:19|20)\d{2}\b/.test(name)) return null;
   const validVin = /^[A-HJ-NPR-Z0-9]{17}$/.test(vin) ? vin : '';
   const stock = cleanText(value.stock, 40);

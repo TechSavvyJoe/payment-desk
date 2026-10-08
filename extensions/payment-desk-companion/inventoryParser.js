@@ -72,15 +72,17 @@ export function parseDealerOn(data, task, site, now) {
 
 function discovery(root, url, site) {
   const candidates = [...root.querySelectorAll('a[href]')].map(a => ({ url: inventoryUrl(a.getAttribute('href'), site, url), label: text(a) })).filter(item => item.url);
+  let filteredOnly = false;
   const find = patterns => {
     const matches = candidates.filter(item => patterns.some(pattern => pattern.test(new URL(item.url).pathname)) && !/special|certified|under|truck|suv|electric|lease|offer/i.test(new URL(item.url).pathname));
     const full = matches.find(item => unfilteredInventoryUrl(item.url));
-    if (!full && matches.length) throw new Error('Only filtered inventory links were found. Connect an unfiltered inventory page. The previous catalog was kept.');
+    if (!full && matches.length) filteredOnly = true;
     return full;
   };
   const newPage = find([/\/searchnew\.aspx$/i, /\/(?:new|new-inventory)(?:\/index\.htm)?\/?$/i, /\/inventory\/new\/?$/i]);
   const usedPage = find([/\/searchused\.aspx$/i, /\/(?:used|used-inventory|pre-owned)(?:\/index\.htm)?\/?$/i, /\/inventory\/used\/?$/i, /used-vehicle-inventory[^/]*\.html$/i]);
   const all = find([/\/inventory\/?$/i, /\/cars-for-sale\/?$/i, /\/searchall\.aspx$/i]);
+  if (filteredOnly && !all && !(newPage && usedPage)) throw new Error('Only filtered inventory links were found. Connect an unfiltered inventory page. The previous catalog was kept.');
   const chosen = [newPage && { ...newPage, condition: 'new' }, usedPage && { ...usedPage, condition: 'used' }, (!newPage || !usedPage) && all && { ...all, condition: 'all' }];
   return chosen.filter(Boolean).filter(item => item.url !== url).map(item => ({ url: item.url, kind: 'html', condition: item.condition, feed: true }));
 }
@@ -118,7 +120,7 @@ export function parseInventoryHtml(html, task, site, now) {
       const href = a?.getAttribute('href') ?? '';
       const condition = /\/New-/i.test(href) ? 'new' : /\/(?:Used|Certified)-/i.test(href) ? 'used' : feedCondition;
       return vehicleRecord({ name, url: inventoryUrl(href, site, task.url),
-        vin: card.querySelector('[data-vin]')?.getAttribute('data-vin') || details.match(/\bVIN\s*:?\s*([A-HJ-NPR-Z0-9]{17})/i)?.[1],
+        vin: card.querySelector('[data-vin]')?.getAttribute('data-vin') || details.match(/\bVIN\s*:?\s*(\S+)/i)?.[1],
         stock: details.match(/\bStock\s*(?:#|No\.?|Number)?\s*:\s*(\S+)/i)?.[1],
         mileage: text(card.querySelector('.i18r_optMileage p')).match(/\bMileage\s*:\s*([\d,]+)/i)?.[1] ?? details.match(/\bMileage\s*:\s*([\d,]+)/i)?.[1],
         trim: text(card.querySelector('.i18r_TrimLevel')),

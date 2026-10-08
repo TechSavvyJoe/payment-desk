@@ -33,7 +33,7 @@ DealerCarSearch USD pricing requires a recognizable US state/ZIP address in the 
 - The worker persists its queue/staging records after each page and maintains a recovery alarm. Batches are bounded to two minutes; remaining pages resume through the work alarm. A stopped browser does not perform background reads.
 - A one-shot alarm schedules the next local 2 AM, preserving calendar behavior across daylight saving changes. Startup checks recreate alarms and catch up missed scheduled runs. If a refresh is already in progress at the nightly time, it fulfills that run and the next alarm moves to tomorrow. Turning nightly off clears that alarm; an already-running refresh can finish.
 - A complete run requires verified source counts and completed pagination. Partial runs merge newly observed data without dropping previous vehicles. Complete runs mark absent records as not currently listed, not sold. Manual selection always passes through the existing reviewed import flow.
-- Disconnect clears the inventory state and schedule, and withdraws the selected site's optional permissions. It leaves the worksheet and dealership presentation/fees alone.
+- Disconnect stops refresh work, clears the schedule and withdraws the selected site's optional permissions before clearing its catalog. If cleanup fails, the site and catalog stay available with a **Disconnect** retry action; automatic refresh remains off. It leaves the worksheet and dealership presentation/fees alone.
 
 The offscreen document uses a detached HTML template to parse markup. It is never mounted as website content, and source scripts, tracking images and forms are not executed. The worksheet remains the same bundled app and calculations.
 
@@ -44,3 +44,5 @@ The offscreen document uses a detached HTML template to parse markup. It is neve
 Inventory browser fixtures use an isolated test package with only the synthetic dealer pre-granted; the production package relies on Chrome's native website permission prompt. That native approval remains the person's installation/connection action. Live page probes supplement fixtures; they do not enable any dealership feed in the user's installed Chrome profile.
 
 Live packaged-reader checks on October 7, 2026 completed Brighton's 668 vehicles (527 new, 141 used) and Jenna's 33 used vehicles with verified pagination counts. All Jenna records had prices and mileage. Brighton had 74 separately labeled base selling prices; advertised totals remain distinct, and absent base prices require manual confirmation. These are dated observations, not fixed inventory counts or guarantees for other sites using those platforms.
+
+A packaged 1.2.2 check later that day completed Bob Maxey Ford Howell's legacy inventory address without errors: 774 unique vehicles across 22 checked pages, classified from source data as 558 new, 194 used and 22 with an unspecified condition. The isolated test did not change the user's installed companion catalog.

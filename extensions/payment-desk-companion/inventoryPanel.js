@@ -28,7 +28,7 @@ export function installInventoryPanel(onChoose, onOpen) {
     return result;
   };
   const message = (value, error = false) => {
-    const warning = state.permissionWarning || (permissionWarning?.site === state.config?.site ? permissionWarning.text : '');
+    const warning = state.permissionWarning || (permissionWarning && permissionWarning.site === state.config?.site ? permissionWarning.text : '');
     notice.textContent = [warning, value].filter(Boolean).join(' ');
     notice.classList.toggle('is-error', error || Boolean(warning));
   };

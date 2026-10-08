@@ -340,6 +340,16 @@ test('a no-content robots response permits the verified inventory refresh', asyn
 });
 
 for (const condition of ['new', 'used']) {
+  test(`a complete combined feed is used beside a filtered ${condition} link`, async () => {
+    await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="/search${condition}.aspx?make=Ford">Filtered ${condition}</a><a href="/searchall.aspx">All inventory</a>` }));
+    await context.route(`${site}searchall.aspx`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, BaseFilter: '', PageVehicleType: 'All' })}</script>` }));
+    await context.route(`${site}api/vhcliaa/**/30?*`, route => route.fulfill({ json: { DisplayCards: [card('new', 1), card('used', 2)], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 1, TotalCount: 2 } } } }));
+    await connect();
+    expect((await saved()).vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used']);
+    expect(requests).toContain(`${site}searchall.aspx`);
+    expect(requests).not.toContain(`${site}search${condition}.aspx?make=Ford`);
+  });
+
   test(`discovery retains the combined feed beside only a ${condition} feed on a fresh connection`, async () => {
     await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="/search${condition}.aspx">${condition}</a><a href="/searchall.aspx">All inventory</a>` }));
     await context.route(`${site}searchall.aspx`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, BaseFilter: '', PageVehicleType: 'All' })}</script>` }));
@@ -585,6 +595,63 @@ test('blocked partial refresh preserves cached vehicles and completion time; dis
   await panel.getByRole('button', { name: 'Disconnect and clear inventory' }).click();
   await expect.poll(saved).toBeUndefined();
   await expect.poll(() => panel.evaluate(async () => (await chrome.alarms.getAll()).filter(a => a.name.startsWith('payment-desk-inventory')).length)).toBe(0);
+});
+
+for (const failure of ['alarm', 'permission']) {
+  test(`Disconnect retains its retry path after ${failure} cleanup fails`, async () => {
+    await connect();
+    const previous = await saved();
+    const [worker] = context.serviceWorkers();
+    await worker.evaluate(failure => {
+      let injected = false;
+      globalThis.disconnectRemovals = [];
+      if (failure === 'alarm') {
+        const clear = chrome.alarms.clear;
+        chrome.alarms.clear = async (...args) => {
+          if (!injected) { injected = true; throw new Error('Injected alarm cleanup failure'); }
+          return clear(...args);
+        };
+      } else {
+        // Exercise optional-permission cleanup in the isolated pre-granted build.
+        const manifest = chrome.runtime.getManifest();
+        chrome.runtime.getManifest = () => ({ ...manifest, host_permissions: [] });
+        chrome.permissions.contains = async () => true;
+        chrome.permissions.remove = async ({ origins }) => {
+          globalThis.disconnectRemovals.push(origins);
+          if (!injected) { injected = true; throw new Error('Injected permission cleanup failure'); }
+          return true;
+        };
+      }
+    }, failure);
+    await panel.locator('#inventory-settings summary').click();
+    const disconnect = panel.getByRole('button', { name: 'Disconnect and clear inventory' });
+    await disconnect.click();
+    await expect(panel.locator('#inventory-notice')).toContainText(`Injected ${failure} cleanup failure`);
+    const retained = await saved();
+    expect(retained.config.site).toBe(previous.config.site);
+    expect(retained.config.nightly).toBe(false);
+    expect(retained.job).toBeNull();
+    expect(retained.vehicles).toEqual(previous.vehicles);
+    await expect(disconnect).toBeVisible();
+    await disconnect.click();
+    await expect.poll(saved).toBeUndefined();
+    expect(await worker.evaluate(() => chrome.alarms.getAll())).toEqual([]);
+    if (failure === 'permission') expect(await worker.evaluate(() => globalThis.disconnectRemovals)).toEqual([
+      ['https://dealer.example.com/*', 'https://www.dealer.example.com/*'],
+      ['https://dealer.example.com/*', 'https://www.dealer.example.com/*'],
+    ]);
+  });
+}
+
+test('DealerCarSearch rejects a contaminated text VIN instead of manufacturing a VIN prefix', async () => {
+  const vehicles = await panel.evaluate(async () => {
+    const { parseInventoryHtml } = await import('./inventoryParser.js');
+    const html = '<span class="pager-summary">Page: 1 of 1 (1 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/vehicle/123">2024 Ford Escape</a></h4><p>VIN: 1FM5K8D80MGA123456</p></div>';
+    return parseInventoryHtml(html, { url: 'https://dealer.example.com/inventory', kind: 'html' }, 'https://dealer.example.com/', 100).vehicles;
+  });
+  expect(vehicles).toHaveLength(1);
+  expect(vehicles[0].vin).toBe('');
+  expect(vehicles[0].id).toBe(`${site}vehicle/123`);
 });
 
 test('nightly alarm resumes a due refresh with the panel closed and automatic updates can be disabled', async () => {
