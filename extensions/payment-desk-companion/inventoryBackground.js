@@ -119,7 +119,7 @@ async function finish(jobId, error = '') {
   const state = await transaction(async state => {
     if (state.job?.id !== jobId) return state;
     const job = state.job;
-    const countsMatch = Object.values(job.groups).every(group => group.finalPage && group.ids.length === group.expected);
+    const countsMatch = Object.values(job.groups).every(group => group.finalPage && group.acceptedRows === group.expected);
     const seen = new Set(job.vehicles.map(vehicle => vehicle.id));
     const scopes = new Set(Object.values(job.groups).map(group => group.scope));
     const missingScope = (state.vehicles ?? []).some(vehicle => {
@@ -213,8 +213,12 @@ async function processBatch() {
         next.vehicles = [...records.values()];
         if (next.vehicles.length > MAX_VEHICLES) next.warnings.push('The inventory exceeded the catalog size limit.');
         if (result.group) {
-          const group = next.groups[result.group] ?? { ids: [], expected: result.expected };
+          const group = next.groups[result.group] ?? { ids: [], acceptedRows: 0, expected: result.expected };
           if (group.expected !== result.expected) next.warnings.push('Inventory changed during this refresh; counts are incomplete.');
+          // Source totals count listing rows, including syndicated or location
+          // duplicates. Catalog IDs are deduplicated independently for display.
+          // Older paused jobs retain their conservative unique-row count.
+          group.acceptedRows = (group.acceptedRows ?? group.ids.length) + (result.vehicles ?? []).length;
           group.ids = [...new Set([...group.ids, ...(result.vehicles ?? []).map(vehicle => vehicle.id)])];
           group.scope = result.scope;
           group.finalPage = result.finalPage;

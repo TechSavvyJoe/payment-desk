@@ -15,6 +15,8 @@ This is an unpacked extension. It has not been published to the Chrome Web Store
 
 The panel opens its listing tools before loading the worksheet. If the worksheet cannot start, **Try again** retries it. The laptop panel uses shorter headers, a compact payment card and tighter field rows to reduce scrolling. All deal fields and the itemized estimate remain available.
 
+For a wider worksheet, drag the panel's left edge toward the webpage. Chrome controls the outer panel width; the worksheet fills the space available. See [Chrome's side panel controls](https://support.google.com/chrome/answer/13156494?hl=en).
+
 Click the extension icon and use the worksheet directly: enter selling price, trade, cash down, products and financing; compare payments; switch to Customer view to copy or print an estimate. The open global panel retains the current worksheet when you switch browser tabs. Its draft is saved automatically on this device and restored after reload or reopening. **Reset deal** clears the saved draft; reset when finished on a shared device. Storage failures appear in the worksheet footer. Removing the extension or clearing its site data can erase the draft.
 
 For capture, open a single vehicle listing, click the extension icon to grant access on that tab, then **Capture listing**. Review or edit Vehicle, Stock # and Selling price. Select **Review in worksheet** and confirm **Start new estimate** below. The app clears the import fragment and applies only the price and reference; taxes, fees, trade and financing use the worksheet's own rules. A missing price can be entered there. Existing deals require confirmation before being cleared. **Enter vehicle** opens the same fields for manual entry. **Hide vehicle** restores the worksheet's full height.

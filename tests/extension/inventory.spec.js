@@ -73,6 +73,45 @@ test('a direct used-inventory page discovers new inventory before reporting comp
   expect(requests).toContain(`${site}searchnew.aspx`);
 });
 
+for (const provider of ['DealerOn', 'DealerCarSearch']) {
+  test(`${provider} verifies duplicate VIN source rows before deduplicating the catalog`, async () => {
+    await connect();
+    const previous = await saved();
+    if (provider === 'DealerOn') {
+      await context.route(`${site}api/vhcliaa/**`, route => {
+        const url = new URL(route.request().url());
+        const type = url.pathname.endsWith('/10') ? 'new' : 'used';
+        const page = Number(url.searchParams.get('pt'));
+        const body = response(type, page);
+        body.DisplayCards = [card(type, type === 'new' ? 1 : 2)];
+        body.DisplayCards[0].VehicleCard.VehicleDetailUrl = `${site}${type}/location-${page}`;
+        return route.fulfill({ json: body });
+      });
+    } else {
+      await context.route('https://dealer.example.com/**', route => {
+        const url = new URL(route.request().url());
+        if (url.pathname === '/robots.txt') return route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /' });
+        const navigation = '<a href="/inventory/new">New</a><a href="/inventory/used">Used</a>';
+        if (url.pathname === '/') return route.fulfill({ contentType: 'text/html', body: navigation });
+        const type = url.pathname.endsWith('/new') ? 'new' : 'used';
+        const page = Number(url.searchParams.get('page') || 1);
+        const pages = type === 'new' ? 1 : 2;
+        const number = type === 'new' ? 1 : 2;
+        const html = `${navigation}<span class="pager-summary">Page: ${page} of ${pages} (${pages} vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/${type}/location-${page}">2024 Ford Explorer</a></h4><p>VIN: 1FM5K8D80MGA1234${number}</p><p>Stock #: S${number}</p></div>`;
+        return route.fulfill({ contentType: 'text/html', body: html });
+      });
+    }
+    await panel.getByRole('button', { name: 'Refresh now' }).click();
+    await expect.poll(async () => (await saved())?.lastCompletedAt, { timeout: 30_000 }).not.toBe(previous.lastCompletedAt);
+    const state = await saved();
+    expect(state.status).toBe('ready');
+    expect(state.error).toBe('');
+    expect(state.vehicles.filter(vehicle => vehicle.listed)).toHaveLength(2);
+    expect(state.vehicles.find(vehicle => vehicle.id === '1FM5K8D80MGA12343').listed).toBe(false);
+    expect(state.vehicles.filter(vehicle => vehicle.id === '1FM5K8D80MGA12342')).toHaveLength(1);
+  });
+}
+
 test('separate DealerCarSearch new and used feeds verify their own totals', async () => {
   await context.route('https://dealer.example.com/**', async route => {
     const url = new URL(route.request().url());

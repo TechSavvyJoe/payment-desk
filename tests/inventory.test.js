@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dealershipSite, inventoryFeedUrl, inventoryUrl, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
+import { cleanText, dealershipSite, inventoryFeedUrl, inventoryUrl, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
+import { validateVehicle } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
 test('inventory connects only public HTTPS sites and scopes access to apex/www', () => {
   assert.equal(dealershipSite('dealer.example.com'), 'https://dealer.example.com/');
@@ -27,6 +28,18 @@ test('full inventory selection excludes filters and starts pagination at page on
   for (const query of ['', '?clearall=1', '?page=1']) assert.equal(unfilteredInventoryUrl(`https://dealer.example.com/inventory${query}`), true);
   for (const query of ['?make=Ford', '?certified=true', '?clearall=1&make=Ford', '?page=2']) assert.equal(unfilteredInventoryUrl(`https://dealer.example.com/inventory${query}`), false);
   assert.equal(unfilteredInventoryUrl('https://dealer.example.com/inventory?page=2', 2), true);
+});
+
+test('inventory text removes directionality controls and remains importable', () => {
+  for (const control of ['\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069']) {
+    const vehicle = vehicleRecord({ name: `2024 Ford ${control}Explorer`, stock: `H${control}123`, url: '/used/123', price: 29995, currency: 'USD', features: [`Heated${control}seats`] }, 'https://dealer.example.com', 100);
+    assert.equal(cleanText(`A${control}B`), 'A B');
+    assert.equal(vehicle.name, '2024 Ford Explorer');
+    assert.equal(vehicle.stock, 'H 123');
+    assert.deepEqual(vehicle.features, ['Heated seats']);
+    assert.ok(validateVehicle({ version: 1, salePrice: vehicle.price, vehicleDescription: `${vehicle.name} · ${vehicle.stock}` }));
+  }
+  assert.equal(cleanText('2024 تويوتا Corolla'), '2024 تويوتا Corolla');
 });
 
 test('records keep only bounded public vehicle fields, without customer data or executable URLs', () => {

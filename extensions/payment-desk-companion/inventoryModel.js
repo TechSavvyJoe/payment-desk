@@ -5,7 +5,7 @@ export const WORK_ALARM = 'payment-desk-inventory-work';
 export const MAX_PAGES = 80;
 export const MAX_VEHICLES = 3000;
 export const cleanText = (value, max = 180) => typeof value === 'string'
-  ? value.replace(/[\p{Cc}\u200b-\u200d\u2060\ufeff]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+  ? value.replace(/[\p{Cc}\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ufeff]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
 export function dealershipSite(value) {
   const url = new URL(/^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`);
