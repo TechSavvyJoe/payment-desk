@@ -81,7 +81,7 @@ function discovery(root, url, site) {
   const newPage = find([/\/searchnew\.aspx$/i, /\/(?:new|new-inventory)(?:\/index\.htm)?\/?$/i, /\/inventory\/new\/?$/i]);
   const usedPage = find([/\/searchused\.aspx$/i, /\/(?:used|used-inventory|pre-owned)(?:\/index\.htm)?\/?$/i, /\/inventory\/used\/?$/i, /used-vehicle-inventory[^/]*\.html$/i]);
   const all = find([/\/inventory\/?$/i, /\/cars-for-sale\/?$/i, /\/searchall\.aspx$/i]);
-  const chosen = newPage || usedPage ? [newPage && { ...newPage, condition: 'new' }, usedPage && { ...usedPage, condition: 'used' }] : [all && { ...all, condition: 'unknown' }];
+  const chosen = [newPage && { ...newPage, condition: 'new' }, usedPage && { ...usedPage, condition: 'used' }, (!newPage || !usedPage) && all && { ...all, condition: 'all' }];
   return chosen.filter(Boolean).filter(item => item.url !== url).map(item => ({ url: item.url, kind: 'html', condition: item.condition, feed: true }));
 }
 export function parseInventoryHtml(html, task, site, now) {

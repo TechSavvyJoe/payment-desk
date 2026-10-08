@@ -87,3 +87,23 @@ test('robots policies respect site exclusions, wildcards, more-specific allows a
   assert.equal(robotsAllows(namedAllow, 'https://dealer.example.com/searchused.aspx'), false);
   assert.equal(namedAllow.delay, 10);
 });
+
+test('global robots records do not split consecutive agents and missing groups allow access', () => {
+  const policy = robotsPolicy('User-agent: *\nSitemap: https://dealer.example.com/sitemap.xml\nUser-agent: OtherBot\nDisallow: /private/\nUser-agent: NamedBot\nAllow: /private/');
+  assert.equal(robotsAllows(policy, 'https://dealer.example.com/private/inventory'), false);
+  for (const text of ['Sitemap: https://dealer.example.com/sitemap.xml', '# No exclusions']) {
+    assert.equal(robotsAllows(robotsPolicy(text), 'https://dealer.example.com/searchall.aspx'), true);
+  }
+});
+
+test('robots matching normalizes encoded unreserved and Unicode paths without decoding reserved octets', () => {
+  const policy = robotsPolicy('User-agent: *\nDisallow: /private/\nAllow: /private/public/\nDisallow: /%72estricted/\nDisallow: /café/\nDisallow: /literal%2A$\nDisallow: /literal%24$');
+  for (const path of ['/%70rivate/inventory', '/private/%69nventory', '/restricted/list', '/caf%C3%A9/list', '/literal*', '/literal$']) {
+    assert.equal(robotsAllows(policy, `https://dealer.example.com${path}`), false, path);
+  }
+  for (const path of ['/%70rivate/%70ublic/list', '/private%2Finventory', '/restricted%2Flist', '/literalx']) {
+    assert.equal(robotsAllows(policy, `https://dealer.example.com${path}`), true, path);
+  }
+  const equalRules = robotsPolicy('User-agent: *\nDisallow: /%70rivate/\nAllow: /private/');
+  assert.equal(robotsAllows(equalRules, 'https://dealer.example.com/private/list'), true);
+});

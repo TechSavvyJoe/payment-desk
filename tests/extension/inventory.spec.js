@@ -198,6 +198,43 @@ test('a no-content robots response permits the verified inventory refresh', asyn
   expect(requests).toContain(`${site}searchused.aspx`);
 });
 
+for (const condition of ['new', 'used']) {
+  test(`discovery retains the combined feed beside only a ${condition} feed on a fresh connection`, async () => {
+    await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="/search${condition}.aspx">${condition}</a><a href="/searchall.aspx">All inventory</a>` }));
+    await context.route(`${site}searchall.aspx`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, BaseFilter: '', PageVehicleType: 'All' })}</script>` }));
+    await context.route(`${site}api/vhcliaa/**/30?*`, route => route.fulfill({ json: { DisplayCards: [card('new', 1), card('used', 2), card('used', 3)], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 1, TotalCount: 3 } } } }));
+    await connect();
+    const state = await saved();
+    expect(state.vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used', 'used']);
+    expect(requests).toContain(`${site}searchall.aspx`);
+    expect(state.lastCompletedAt).toBeGreaterThan(0);
+  });
+}
+
+test('robots files containing only global records or comments permit inventory refreshes', async () => {
+  for (const body of ['Sitemap: https://dealer.example.com/sitemap.xml', '# No exclusions configured']) {
+    await context.route(`${site}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body }));
+    const previous = (await saved())?.lastCompletedAt;
+    if (!previous) await connect();
+    else {
+      await panel.getByRole('button', { name: 'Refresh now' }).click();
+      await expect.poll(async () => (await saved())?.lastCompletedAt, { timeout: 30_000 }).not.toBe(previous);
+    }
+    expect((await saved()).status).toBe('ready');
+    expect((await saved()).vehicles).toHaveLength(3);
+  }
+});
+
+test('global robots records preserve a shared exclusion and encoded inventory paths are not requested', async () => {
+  await context.route(`${site}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nSitemap: https://dealer.example.com/sitemap.xml\nUser-agent: OtherBot\nDisallow: /private/' }));
+  const inventory = `${site}%70rivate/inventory`;
+  await panel.locator('#dealership-site').fill(inventory);
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('error');
+  expect((await saved()).error).toContain('excludes this inventory path');
+  expect(requests).not.toContain(inventory);
+});
+
 test('unparsed feed navigation cannot complete a refresh or unlist its cached vehicles', async () => {
   await connect();
   const previous = await saved();

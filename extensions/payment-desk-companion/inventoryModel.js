@@ -111,7 +111,7 @@ export function robotsPolicy(text) {
     if (key === 'user-agent') {
       if (hadRule) { groups.push(group); group = { agents: [], rules: [], delay: 1 }; hadRule = false; }
       group.agents.push(value.toLowerCase());
-    } else if (group.agents.length) {
+    } else if (group.agents.length && ['allow', 'disallow', 'crawl-delay'].includes(key)) {
       hadRule = true;
       if ((key === 'allow' || key === 'disallow') && value.startsWith('/')) group.rules.push({ allow: key === 'allow', path: value });
       if (key === 'crawl-delay' && Number.isFinite(Number(value))) group.delay = Math.min(60, Math.max(1, Number(value)));
@@ -122,12 +122,19 @@ export function robotsPolicy(text) {
   const selected = groups.filter(g => g.agents.includes('*'));
   return { rules: selected.flatMap(g => g.rules), delay: Math.max(1, ...selected.map(g => g.delay)) };
 }
+// RFC 9309 compares equivalent unreserved octets, while escaped reserved
+// characters remain distinct. Normalize rules too, including UTF-8 paths.
+const robotsPath = value => value.replace(/[\u0080-\u{10ffff}]/gu, character => encodeURIComponent(character)).replace(/%[0-9a-f]{2}/gi, encoded => {
+  const character = String.fromCharCode(parseInt(encoded.slice(1), 16));
+  return /[a-z0-9._~-]/i.test(character) ? character : encoded.toUpperCase();
+});
+const ruleLength = path => path.replace(/[*$]/g, '').replace(/%[0-9A-F]{2}/g, 'x').length;
 export function robotsAllows(policy, url) {
   const parsed = new URL(url);
-  const path = parsed.pathname + parsed.search;
-  const matches = (policy?.rules ?? []).filter(rule => {
+  const path = robotsPath(parsed.pathname + parsed.search).replace(/\*/g, '%2A').replace(/\$/g, '%24');
+  const matches = (policy?.rules ?? []).map(rule => ({ ...rule, path: robotsPath(rule.path) })).filter(rule => {
     const pattern = rule.path.split('*').map(part => part.replace(/[.+?^{}()|[\]\\]/g, '\\$&')).join('.*').replace(/\$$/, '$');
     return new RegExp(`^${pattern}`).test(path);
-  }).sort((a, b) => b.path.replace(/[*$]/g, '').length - a.path.replace(/[*$]/g, '').length || Number(b.allow) - Number(a.allow));
+  }).sort((a, b) => ruleLength(b.path) - ruleLength(a.path) || Number(b.allow) - Number(a.allow));
   return !matches.length || matches[0].allow;
 }
