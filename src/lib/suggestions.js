@@ -217,14 +217,19 @@ export function buildSuggestions({ dealInput = {}, result: suppliedResult, targe
   }
 
   if (!findingPrice && targetType === 'payment' && direction === 'reduce') {
-    const term = RATE_GRID_DEFAULTS.termMonths.filter((months) => months > result.termMonths)
+    const terms = RATE_GRID_DEFAULTS.termMonths.filter((months) => months > result.termMonths)
       .map((months) => {
         const apr = normalizeApr(gridRates[months] ?? result.apr);
         const deal = calculateDeal({ ...base, apr, termMonths: months });
         return { months, apr, deal };
-      }).find((candidate) => candidate.deal.cents.monthlyPayment <= targetCents);
+      }).filter(candidate => candidate.deal.cents.monthlyPayment < actualCents);
+    // Offer the shortest term that fits the target, or the largest available
+    // reduction when a term change alone cannot reach it. The preview labels
+    // that remaining gap, rather than hiding the option entirely.
+    const term = terms.find(candidate => candidate.deal.cents.monthlyPayment <= targetCents)
+      ?? terms.reduce((best, candidate) => !best || candidate.deal.cents.monthlyPayment < best.deal.cents.monthlyPayment ? candidate : best, null);
     if (term) addPatch({
-      id: 'term', title: `Use ${term.months} months`, value: `${money(term.deal.monthlyPayment)}/mo`,
+      id: 'term', title: 'Change finance term', value: `${term.months} months`,
       amount: term.months, patch: { termMonths: term.months, apr: term.apr }, iconDirection: 'right',
     }, `${formatNumber(term.apr)}% APR assumption; verify lender approval.`);
     const apr = solveAprForPayment(Math.max(0, result.amountFinanced), result.termMonths, fromCents(targetCents));
@@ -237,7 +242,7 @@ export function buildSuggestions({ dealInput = {}, result: suppliedResult, targe
   return {
     ...initial, direction, gap: fromCents(gapCents), targetMetric, targetPaymentSolution,
     withinTarget: !findingPrice && actualCents <= targetCents,
-    suggestions: suggestions.sort((a, b) => Number(b.id === 'sale-price') - Number(a.id === 'sale-price')), limitations,
+    suggestions: suggestions.sort((a, b) => ({ 'sale-price': 0, 'cash-down': 1, term: 2 }[a.id] ?? 3) - ({ 'sale-price': 0, 'cash-down': 1, term: 2 }[b.id] ?? 3)), limitations,
     status: suggestions.length ? 'ready' : 'unavailable',
   };
 }

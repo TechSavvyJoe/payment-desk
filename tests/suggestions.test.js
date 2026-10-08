@@ -73,6 +73,23 @@ test('APR solver returns the highest available cent rate below the payment ceili
   assert.equal(solveAprForPayment(0, 72, 0), null);
 });
 
+test('finance term appears beside price and cash options with an honest payment preview', () => {
+  for (const target of [450, 500]) {
+    const solution = suggest(initial, target);
+    assert.deepEqual(solution.suggestions.slice(0, 3).map(item => item.id), ['sale-price', 'cash-down', 'term']);
+    const term = solution.suggestions.find(item => item.id === 'term');
+    assert.deepEqual(term.patch, { termMonths: 84, apr: 7 });
+    assert.equal(term.previewDeal.salePrice, 30000);
+    assert.equal(term.previewDeal.cashDown, 0);
+    assert.deepEqual(calculateDeal(apply(initial, term)).cents, term.previewDeal.cents);
+    assert.equal(term.withinTarget, target === 500);
+    assert.equal(term.status, target === 500 ? 'below-target' : 'partial');
+    assert.match(term.detail, target === 500 ? /below target/ : /above target/);
+  }
+  assert.equal(suggest({ ...initial, termMonths: 84 }, 450).suggestions.some(item => item.id === 'term'), false);
+  assert.equal(initial.termMonths, 72);
+});
+
 test('current cent payment is already met with no phantom adjustment or longer term', () => {
   const current = calculateDeal(initial);
   assert.equal(current.payment, 540.67);

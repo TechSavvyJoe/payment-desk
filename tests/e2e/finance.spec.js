@@ -54,6 +54,30 @@ test('successive payment targets from blank down preserve the deal and reach bot
   await expect(page.getByRole('heading', { name: 'Something went wrong', exact: true })).toHaveCount(0);
 });
 
+test('finance term is a visible target option and only Apply changes the worksheet', async ({ page }) => {
+  await enterVehicle(page);
+  await target(page).fill('450');
+  const termOption = page.locator('.suggestion').filter({ has: page.getByRole('heading', { name: 'Change finance term', exact: true }) });
+  await expect(termOption).toBeVisible();
+  await expect(termOption).toContainText('84 months');
+  await expect(termOption).toContainText('remaining to target');
+  await expect(page.getByRole('button', { name: 'See all options', exact: true })).toBeVisible();
+  await expect(currentSummary(page)).toContainText('72 months at 6.50% APR');
+  await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toHaveValue('30,000');
+  await expect(page.getByRole('textbox', { name: 'Cash down', exact: true })).toHaveValue('0');
+  await target(page).fill('500');
+  await expect(termOption).toContainText('Within target');
+  const previewPayment = await termOption.locator('.suggestion-preview>strong').innerText();
+  await termOption.getByRole('button', { name: 'Apply Change finance term', exact: true }).click();
+  await expect(selectedPayment(page)).toHaveText(previewPayment.replace('/mo', ''));
+  await expect(currentSummary(page)).toContainText('84 months at 7.00% APR');
+  await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toHaveValue('30,000');
+  await expect(page.getByRole('textbox', { name: 'Cash down', exact: true })).toHaveValue('0');
+  await page.getByRole('button', { name: 'Undo adjustment', exact: true }).click();
+  await expect(currentSummary(page)).toContainText('72 months at 6.50% APR');
+  await expect(selectedPayment(page)).toHaveText('$540.67');
+});
+
 test('roll backs out an unknown selling price then supports a cash target and undo', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Selling price', exact: true }).fill('30000');
   await page.getByRole('textbox', { name: 'Selling price', exact: true }).fill('');
