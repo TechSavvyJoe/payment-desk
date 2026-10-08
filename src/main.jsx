@@ -8,14 +8,16 @@ import "@fontsource/ibm-plex-sans/latin-600.css";
 import "@fontsource/ibm-plex-sans/latin-700.css";
 import "./redesign.css";
 import "./customer-print.css";
+import { createDeskDraftSession } from './lib/deskDraft.js';
 
 function Root() {
   // Crash recovery bypasses the saved draft even if browser storage cannot
   // remove it. The blank worksheet's normal save effect clears it when possible.
   const [appKey, setAppKey] = useState(0);
+  const [draftSession] = useState(createDeskDraftSession);
   return (
     <ErrorBoundary onReset={() => setAppKey((current) => current + 1)}>
-      <App key={appKey} restoreDraft={appKey === 0} />
+      <App key={appKey} restoreDraft={appKey === 0} savedDraftSession={draftSession} />
     </ErrorBoundary>
   );
 }

@@ -1,13 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDeskState, deskReducer } from '../src/lib/dealState.js';
-import { DESK_DRAFT_KEY, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
 
 const empty = () => ({ version: 1, desk: createDeskState('2026-10-07'), targetType: 'payment', targetValues: { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' }, inputDrafts: {} });
 const storage = () => {
   const values = new Map();
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
 };
+const locks = () => {
+  let pending = Promise.resolve();
+  return { request: (_name, callback) => { pending = pending.then(callback); return pending; } };
+};
+
+test('draft sessions serialize simultaneous writes and refuse stale saves and resets', async () => {
+  const device = storage(), coordinator = locks();
+  const a = createDeskDraftSession(device, coordinator), b = createDeskDraftSession(device, coordinator);
+  const first = empty(), second = empty();
+  first.desk.deal.salePrice = 30000; second.desk.deal.salePrice = 20000;
+  const outcomes = await Promise.all([a.save(first), b.save(second)]);
+  assert.deepEqual(outcomes, [{ ok: true }, { ok: false, conflict: true }]);
+  assert.equal(loadDeskDraft(device).desk.deal.salePrice, 30000);
+  assert.deepEqual(await b.save(empty()), { ok: false, conflict: true });
+  assert.equal(loadDeskDraft(device).desk.deal.salePrice, 30000);
+  assert.deepEqual(await a.save(empty()), { ok: true });
+  assert.equal(device.getItem(DESK_DRAFT_KEY), null);
+  assert.deepEqual(await b.save(second), { ok: false, conflict: true });
+});
+
+test('draft sessions retain the previous draft when locking or storage is unavailable', async () => {
+  const device = storage(), value = empty(); value.desk.deal.salePrice = 30000;
+  saveDeskDraft(value, device);
+  const previous = device.getItem(DESK_DRAFT_KEY);
+  assert.deepEqual(await createDeskDraftSession(device, null).save(empty()), { ok: false });
+  assert.equal(device.getItem(DESK_DRAFT_KEY), previous);
+  device.removeItem = () => { throw new Error('blocked'); };
+  assert.deepEqual(await createDeskDraftSession(device, locks()).save(empty()), { ok: false });
+  assert.equal(device.getItem(DESK_DRAFT_KEY), previous);
+});
 
 test('a draft round trip restores figures, products, grid and targets without serializing settings or undo', () => {
   const value = empty();

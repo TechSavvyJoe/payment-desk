@@ -116,6 +116,7 @@ for (const blockedRemoval of [false, true]) {
     }, { key: KEY, blockedRemoval });
     await page.reload();
     await expect(page.getByRole('alert')).toContainText('Something went wrong');
+    await expect(page.getByRole('alert')).toContainText('A worksheet draft may be saved on this device');
     await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
     await expect(page.locator('#sale-price')).toHaveValue('');
     await expect(page.getByRole('alert')).toHaveCount(0);
@@ -132,6 +133,53 @@ for (const blockedRemoval of [false, true]) {
     await expect(page.locator('#sale-price')).toHaveValue('20,000');
   });
 }
+
+test('a stale tab cannot replace or clear the newer draft and reload recovers it', async ({ page, context }) => {
+  await page.locator('#sale-price').fill('30000');
+  await page.locator('#sale-price').blur();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.desk.deal.salePrice, KEY)).toBe(30000);
+  const other = await context.newPage();
+  other.on('dialog', dialog => dialog.accept());
+  page.on('dialog', dialog => dialog.accept());
+  await other.goto('/');
+  await expect(other.locator('#sale-price')).toHaveValue('30,000');
+  await page.locator('#cash-down').fill('2500');
+  await page.locator('#cash-down').blur();
+  await expect(other.locator('.app-footer')).toContainText('Another tab changed the saved draft');
+  await other.locator('#target-value').fill('500');
+  await other.locator('#target-value').blur();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).targetValues.payment, KEY)).toBe('');
+  await other.reload();
+  await expect(other.locator('#cash-down')).toHaveValue('2,500');
+  await other.locator('#target-value').fill('500');
+  await other.locator('#target-value').blur();
+  await expect(page.locator('.app-footer')).toContainText('Another tab changed the saved draft');
+  await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).targetValues.payment, KEY)).toBe(500);
+  await page.reload();
+  await expect(page.locator('#sale-price')).toHaveValue('30,000');
+  await expect(page.locator('#cash-down')).toHaveValue('2,500');
+  await expect(page.locator('#target-value')).toHaveValue('500');
+});
+
+test('simultaneous tab edits keep one saved draft and warn the other tab', async ({ page, context }) => {
+  const other = await context.newPage();
+  await other.goto('/');
+  await expect(other.locator('#sale-price')).toBeVisible();
+  await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
+  await expect(other.locator('.app-footer')).toContainText('Draft saved on this device');
+  await Promise.all([page.locator('#sale-price').fill('30000'), other.locator('#sale-price').fill('20000')]);
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.desk.deal.salePrice, KEY)).toBeTruthy();
+  const price = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.salePrice, KEY);
+  expect([20000, 30000]).toContain(price);
+  const stale = price === 30000 ? other : page;
+  const active = price === 30000 ? page : other;
+  await expect(stale.locator('.app-footer')).toContainText('Another tab changed the saved draft');
+  await expect(active.locator('.app-footer')).toContainText('Draft saved on this device');
+  await stale.locator('#cash-down').fill('5000');
+  await stale.locator('#cash-down').blur();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.cashDown, KEY)).toBe(0);
+});
 
 test('an invalid grid rate survives refresh and blocks an estimate until corrected', async ({ page }) => {
   await page.locator('#sale-price').fill('30000');

@@ -22,7 +22,7 @@ import PolicyReminder from './components/PolicyReminder.jsx';
 import VehicleImportDialog from './components/VehicleImportDialog.jsx';
 import InventoryPicker from './components/InventoryPicker.jsx';
 import { rememberCompanion } from './lib/companionInventory.js';
-import { isDeskDraftField, loadDeskDraft, saveDeskDraft } from './lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, isDeskDraftField } from './lib/deskDraft.js';
 import { DraftContext } from './components/DraftContext.jsx';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
@@ -54,11 +54,13 @@ function useEasternToday() {
   return today;
 }
 
-export default function App({ restoreDraft = true }) {
-  const [restoredDraft] = useState(() => restoreDraft ? loadDeskDraft() : null);
+export default function App({ restoreDraft = true, savedDraftSession }) {
+  const [draftSession] = useState(() => savedDraftSession ?? createDeskDraftSession());
+  const [restoredDraft] = useState(() => restoreDraft ? draftSession.draft : null);
   const [state, dispatch] = useReducer(deskReducer, undefined, () => restoredDraft?.desk ?? createDeskState());
   const [inputDrafts, setInputDrafts] = useState(() => restoredDraft?.inputDrafts ?? {});
-  const [draftSaved, setDraftSaved] = useState(true);
+  const [draftStatus, setDraftStatus] = useState('saving');
+  const draftSaved = draftStatus === 'saved';
   const rememberInput = useCallback((id, raw) => { if (isDeskDraftField(id)) setInputDrafts(current => current[id]?.raw === raw ? current : { ...current, [id]: { raw } }); }, []);
   const draftContext = useMemo(() => ({ values: inputDrafts, remember: rememberInput }), [inputDrafts, rememberInput]);
   const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
@@ -107,11 +109,26 @@ export default function App({ restoreDraft = true }) {
   const [accordions, setAccordions] = useState(allOpen);
   const [contextOpen, setContextOpen] = useState(false);
   useEffect(() => {
-    // The status reports an external storage write, not derived worksheet state.
-    // React skips rendering when the write outcome has not changed.
+    const changed = event => {
+      if (event.key !== null && event.key !== DESK_DRAFT_KEY) return;
+      const status = draftSession.status();
+      if (status !== 'saved') setDraftStatus(status);
+    };
+    window.addEventListener('storage', changed);
+    return () => window.removeEventListener('storage', changed);
+  }, [draftSession]);
+  useEffect(() => {
+    let current = true;
+    // This status describes external storage work, not derived deal state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraftSaved(saveDeskDraft({ desk: state, targetType, targetValues, inputDrafts }).ok);
-  }, [state, targetType, targetValues, inputDrafts]);
+    setDraftStatus(status => status === 'conflict' ? status : 'saving');
+    void draftSession.save({ desk: state, targetType, targetValues, inputDrafts }).then(outcome => {
+      if (!current) return;
+      const status = draftSession.status();
+      setDraftStatus(outcome.conflict || status === 'conflict' ? 'conflict' : outcome.ok && status === 'saved' ? 'saved' : 'error');
+    });
+    return () => { current = false; };
+  }, [draftSession, state, targetType, targetValues, inputDrafts]);
   const [fieldErrors, setFieldErrors] = useState({});
   const targetInputRef = useRef(null);
   const reportError = useCallback((id, error) => setFieldErrors(current => {
@@ -270,7 +287,10 @@ export default function App({ restoreDraft = true }) {
           rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onStartEstimate={summaryProps.onStartEstimate} /> : null}
         <footer className="app-footer">
           <p>Estimates only. Subject to lender approval and final taxes, fees, and deal structure.</p>
-          <p>{draftSaved ? 'Draft saved on this device. Refreshing keeps your figures; Reset deal clears them.' : 'Draft could not be saved on this device. Keep this page open until you copy or print your estimate.'}</p>
+          <p>{draftStatus === 'conflict' ? 'Another tab changed the saved draft. This worksheet has not been saved. Copy or print it, then reload to open the latest draft.'
+            : draftStatus === 'saving' ? 'Saving draft on this device…'
+            : draftSaved ? 'Draft saved on this device. Refreshing keeps your figures; Reset deal clears them.'
+            : 'Draft could not be saved on this device. Keep this page open until you copy or print your estimate.'}</p>
           <p>Michigan purchase estimates · v{APP_VERSION} · {BUILD_ID}</p>
         </footer>
         {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { if (!(result.salePrice > 0)) { summaryProps.onStartEstimate(); return; } dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}

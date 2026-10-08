@@ -170,6 +170,27 @@ test('a robots response from a canonical host also applies to the requesting ori
   expect(requests.filter(url => url.endsWith('/robots.txt'))).toEqual([`${site}robots.txt`]);
 });
 
+test('a redirected robots resource cannot substitute for its destination origin policy', async () => {
+  const www = 'https://www.dealer.example.com/';
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="${www}searchnew.aspx">New inventory</a>` }));
+  await context.route(`${www}**`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nDisallow: /' }));
+  const [worker] = context.serviceWorkers();
+  await worker.evaluate(({ source, final }) => {
+    const original = fetch;
+    globalThis.fetch = async (...args) => {
+      const response = await original(...args);
+      if (args[0] === source) Object.defineProperty(response, 'url', { value: final });
+      return response;
+    };
+  }, { source: `${site}robots.txt`, final: `${www}apex-robots.txt` });
+  await panel.locator('#dealership-site').fill(site);
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('error');
+  expect(requests).toContain(`${www}robots.txt`);
+  expect(requests).not.toContain(`${www}searchnew.aspx`);
+  expect((await saved()).error).toContain('excludes this inventory path');
+});
+
 test('discovery uses the fetched document URL and neutral vehicle URLs retain the feed condition', async () => {
   const results = await panel.evaluate(async () => {
     const { parseInventoryHtml } = await import('./inventoryParser.js');

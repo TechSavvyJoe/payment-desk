@@ -53,6 +53,8 @@ Leases, nonresident/exempt transactions, special registrations, and manufacturer
 
 The current worksheet draft is saved automatically in this browser's local storage on this device, including deal figures, products, grid settings, target values and unfinished numeric/date inputs. Refreshing restores it in Dealer view. **Reset deal** clears the draft; on a shared device, reset when finished. The website and companion have separate drafts. A storage failure is reported in the footer and leaves the current worksheet available; keep that page open until the estimate is copied or printed. Browser site-data removal or removing the extension can erase the draft.
 
+If another tab changes the saved draft, an older worksheet stops saving and shows a warning. Copy or print any figures you need, then reload to open the latest draft. Reset in that older tab does not erase the newer saved worksheet. Writes use the browser's shared lock; if locking is unavailable, the footer reports that the draft could not be saved. Crash recovery starts a blank worksheet and retains these same safeguards.
+
 Dealership name/logo, fees and the public identifier of a connected companion are stored separately. **Settings → Clear dealership settings** removes presentation and fees, while the inventory catalog remains in the companion until disconnected there. There is no saved-deal backend, cloud synchronization, analytics SDK or external font request. Hosting serves ordinary web requests. Installation metadata does not provide offline availability.
 
 [Handoff and release guide](docs/HANDOFF.md) · [Acceptance checklist](docs/ACCEPTANCE.md) · [Review resolution map](docs/REVIEW-RESOLUTION.md)

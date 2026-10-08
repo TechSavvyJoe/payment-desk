@@ -194,7 +194,9 @@ async function processBatch() {
       } else if (result.policy) {
         // A robots redirect delegates the requested origin to the returned policy.
         next.policies[origin] = result.policy;
-        next.policies[result.origin] = result.policy;
+        // A redirected resource governs the requesting origin. It also governs
+        // the destination only when that origin's own robots URL was fetched.
+        if (result.url === new URL('/robots.txt', result.url).href) next.policies[result.origin] = result.policy;
       } else if (result.redirect) {
         const trail = [...(task.redirectTrail ?? []), fetchUrl];
         if (trail.includes(result.redirect) || trail.length > 5) next.warnings.push('The inventory redirect chain loops or exceeds five steps. The previous catalog was kept.');

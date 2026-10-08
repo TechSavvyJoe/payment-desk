@@ -10,6 +10,7 @@ const date = value => typeof value === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(
 const fieldId = /^(?:sale-price|cash-down|trade-allowance|trade-payoff|apr|new-plate-amount|target-value|estimate-date|grid-down-[0-3]|grid-apr-(?:36|48|60|72|84)|product-add-on-\d+-amount)$/;
 export const isDeskDraftField = id => fieldId.test(id);
 const storageOnDevice = () => { try { return window.localStorage; } catch { return null; } };
+const locksOnDevice = () => { try { return navigator.locks; } catch { return null; } };
 
 export function normalizeDeskDraft(value) {
   try {
@@ -80,4 +81,41 @@ export function saveDeskDraft(value, storage = storageOnDevice()) {
     }
     return { ok: true };
   } catch { return { ok: false }; }
+}
+
+// One session remembers the exact draft it opened or last saved. The shared
+// browser lock makes comparison and mutation a single operation across tabs.
+// A stale session stays read-only until reload; Reset cannot erase newer work.
+export function createDeskDraftSession(storage = storageOnDevice(), locks = locksOnDevice()) {
+  let expected, unreadable = false, conflicted = false;
+  try { expected = storage?.getItem(DESK_DRAFT_KEY) ?? null; }
+  catch { unreadable = true; }
+  let draft = null;
+  try { if (expected && expected.length <= 200_000) draft = normalizeDeskDraft(JSON.parse(expected)); }
+  catch { /* Invalid drafts open a blank worksheet. */ }
+  const status = () => {
+    if (conflicted) return 'conflict';
+    if (!storage || unreadable) return 'error';
+    try {
+      if (storage.getItem(DESK_DRAFT_KEY) !== expected) { conflicted = true; return 'conflict'; }
+      return 'saved';
+    } catch { return 'error'; }
+  };
+  return {
+    draft, status,
+    async save(value) {
+      // Without cross-tab locking, retain the previous draft rather than risk
+      // replacing it. The app reports the existing save warning in that case.
+      if (!locks?.request) return { ok: false };
+      try {
+        return await locks.request(DESK_DRAFT_KEY, () => {
+          const current = status();
+          if (current !== 'saved') return { ok: false, conflict: current === 'conflict' };
+          const outcome = saveDeskDraft(value, storage);
+          if (outcome.ok) expected = storage.getItem(DESK_DRAFT_KEY);
+          return outcome;
+        });
+      } catch { return { ok: false }; }
+    },
+  };
 }

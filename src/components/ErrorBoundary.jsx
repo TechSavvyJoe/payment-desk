@@ -31,7 +31,7 @@ export default class ErrorBoundary extends React.Component {
     return (
       <div className="app-error" role="alert">
         <h1>Something went wrong</h1>
-        <p>The calculator hit an unexpected error. Reset the deal to keep working. No customer information was stored or sent.</p>
+        <p>The calculator hit an unexpected error. A worksheet draft may be saved on this device. Reset deal to start over and clear this draft. If storage is blocked or another tab updated it, follow the draft warning after resetting.</p>
         <button className="reset-button" onClick={this.handleReset} type="button">
           Reset deal
         </button>
