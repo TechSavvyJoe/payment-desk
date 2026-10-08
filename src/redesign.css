@@ -2343,10 +2343,11 @@ input[type="checkbox"] { flex:0 0 auto; }
 .deal-details>summary time { flex:0 0 auto; margin-left:auto; padding:3px 8px; border:1px solid var(--line-strong); border-radius:5px; background:var(--surface-alt); color:var(--navy); font-size:12px; font-variant-numeric:tabular-nums; }
 .equity-line>span { font-weight:700; }
 .deal-details[open]>summary { border-bottom:1px solid var(--line); }
-.deal-context { display:grid; grid-template-columns:minmax(0,1fr) minmax(140px,185px); gap:12px; margin:0; padding:12px 14px; }
-.deal-context label { display:flex; flex-wrap:wrap; gap:5px; color:var(--ink-soft); font-size:.82rem; font-weight:600; }
+.deal-context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:0; padding:12px 14px; }
+.deal-context label { display:flex; flex-wrap:wrap; align-content:start; min-width:0; gap:5px; color:var(--ink-soft); font-size:.82rem; font-weight:600; }
+.deal-context .vehicle-reference-field,.deal-context .transaction-scope-field { grid-column:1 / -1; }
 .deal-context label>span:not(.field-error) { font-size:.75rem; margin-left:auto; font-weight:500; }
-.deal-context label>input,.deal-context label>.field-error { flex:0 0 100%; }
+.deal-context label>input,.deal-context label>select,.deal-context label>.field-error { flex:0 0 100%; }
 .deal-context input { width:100%; min-width:0; min-height:44px; border:1.5px solid var(--input-border); border-radius:7px; padding:8px 10px; background:var(--input-bg); color:var(--ink); }
 .validation-banner { margin:0 0 14px; padding:12px 16px; border:1px solid #dc999b; border-left:5px solid var(--red); border-radius:8px; background:var(--red-bg); color:var(--red); font-size:.88rem; font-weight:600; }
 .validation-banner p { margin:0; }
@@ -3007,10 +3008,15 @@ input[type="checkbox"] { flex:0 0 auto; }
   .compact-height .deal-column { gap: 8px; }
 }
 
-.deal-tools { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 14px; }
-.deal-tools .deal-details { flex: 1; min-width: 0; margin-bottom: 0; }
-.inventory-picker-trigger { flex: none; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: var(--navy); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; min-height: 44px; }
-@media (max-width: 800px) { .compact-height .deal-tools { margin-bottom: 8px; } .compact-height .inventory-picker-trigger { min-height: 40px; padding-block: 6px; } .deal-tools .deal-details > summary { gap: 8px; } }
+.deal-tools { --deal-toolbar-height: 44px; --inventory-action-width: 84px; position: relative; margin-bottom: 14px; }
+.deal-tools .deal-details { min-width: 0; margin-bottom: 0; }
+.deal-tools .deal-details > summary { width: calc(100% - var(--inventory-action-width)); min-height: var(--deal-toolbar-height); gap: 8px; padding: 8px 10px; }
+.deal-tools .deal-details > summary > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-picker-trigger { position: absolute; top: 1px; right: 1px; width: var(--inventory-action-width); height: var(--deal-toolbar-height); min-height: var(--deal-toolbar-height); display: flex; align-items: center; justify-content: center; border: 0; border-left: 1px solid var(--line-strong); border-radius: 0 7px 7px 0; padding: 6px; background: var(--surface); color: var(--navy); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.deal-details[open] + .inventory-picker-trigger { border-bottom: 1px solid var(--line); border-bottom-right-radius: 0; }
+.inventory-picker-trigger:hover { background: var(--surface-alt); }
+.inventory-picker-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: -3px; }
+@media (max-width: 800px) { .compact-height .deal-tools { margin-bottom: 8px; } }
 .inventory-picker { width: min(720px, calc(100vw - 24px)); }
 .inventory-picker__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .inventory-picker__heading h2 { margin: 0; }

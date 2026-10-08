@@ -16,12 +16,12 @@ export const REGISTRATION_STATES = Object.freeze(Object.entries({
 }).map(([value, label]) => Object.freeze({ value, label })));
 
 export const TRANSACTION_SCOPES = Object.freeze([
-  { value: 'resident-retail', label: 'Taxable resident retail purchase' },
-  { value: 'nonresident', label: 'Nonresident / out-of-state transaction' },
-  { value: 'exempt', label: 'Tax-exempt transaction' },
-  { value: 'manufacturer-rebate', label: 'Purchase with a manufacturer rebate' },
+  { value: 'resident-retail', label: 'Taxable resident purchase' },
+  { value: 'nonresident', label: 'Nonresident / out-of-state' },
+  { value: 'exempt', label: 'Tax-exempt purchase' },
+  { value: 'manufacturer-rebate', label: 'Manufacturer rebate purchase' },
   { value: 'lease', label: 'Lease' },
-  { value: 'special-registration', label: 'Commercial / special registration' },
+  { value: 'special-registration', label: 'Commercial / special reg.' },
 ].map(Object.freeze));
 
 export const isRegistrationState = value => value === '' || REGISTRATION_STATES.some(state => state.value === value);

@@ -20,7 +20,7 @@ Source, final checks, review findings and deployment receipts belong to the rele
 | Operator information | Bundled staff guide, technical device/network data notice and generated runtime dependency license texts. | Build/package includes the same guide and notices. These do not substitute for business-approved legal/privacy materials. |
 | Density and accessibility | Visible worksheet focus returns, target-mode error isolation, labels matching their visible actions, named landmarks and compact scope notice. Financial figures and primary controls retain their legibility and tap size. | Phone/panel breakpoints, compact visible-height cases, keyboard focus and automated accessibility checks. |
 
-The research and implementation used 17 specialists before independent release and patch-risk review. Bounded implementation/test roles used medium effort; design, finance, jurisdiction, commercial and security reviews used high effort. The independent final release role uses GPT-6 Astra/high under the owner's routing policy; other roles inherit the session's Codex model. No maximum-effort or automatic delegation mode was requested or enabled.
+The research and implementation used 21 agents, including the independent release and patch-risk reviewers, bounded MV3 research and the Deal details regression worker. Bounded implementation/test roles used medium effort; design, finance, jurisdiction, commercial and security reviews used high effort. The MV3 research role used GPT-6 Luna/medium and the independent final release role uses GPT-6 Astra/high under the owner's routing policy; other roles inherit the session's Codex model. No maximum-effort or automatic delegation mode was requested or enabled.
 
 ## Research and missing-feature decisions
 

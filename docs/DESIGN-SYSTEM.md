@@ -32,6 +32,8 @@ The interface keeps the established navy-blue identity: a navy header and paymen
 - **Invalid input:** retain the user's draft and last valid calculation; show the error and focus its field before moving to a customer estimate.
 - **Section disclosure:** the header is a button with expanded state. Hidden inputs leave the keyboard order. A section shortcut focuses the header so Enter or Space can reopen it.
 - **Field instructions:** helper text and validation messages both remain associated with the input.
+- **Deal details:** the native disclosure and separate Inventory action share a header; opening it uses the full card width. Vehicle reference and transaction type span that width. Date and registration state share a row where space permits and stack below 441px. Keep the selected transaction readable, coverage instructions associated with both selectors, and invalid-field focus able to reopen the disclosure.
+- **Short companion worksheets:** when an open inventory drawer leaves at most 360px of worksheet height, the payment shortcuts move into normal document flow so they cannot cover the inputs or Inventory action. The regular laptop panel retains its fixed shortcuts.
 - **Estimate review:** navigates to the complete customer ledger and focuses its heading. Export restrictions continue to reflect whether the estimate is complete.
 - **Product choices:** Service Contract, Gap, and Other retain the same amounts and explicit tax-treatment rules.
 - **Motion:** focus navigation respects reduced-motion preferences. Color is never the only status indication.
