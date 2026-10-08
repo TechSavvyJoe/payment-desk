@@ -88,14 +88,40 @@ export function vehicleRecord(value, site, now) {
 }
 export function mergeInventory(previous, observed, complete) {
   const map = new Map(previous.map(vehicle => [vehicle.id, { ...vehicle, listed: complete ? false : vehicle.listed }]));
-  observed.forEach(vehicle => map.set(vehicle.id, vehicle));
+  const aliases = new Map();
+  for (const source of observed) {
+    let vehicle = source;
+    if (vehicle.url) {
+      const matches = [...map.values()].filter(existing => existing.url === vehicle.url);
+      if (!vehicle.vin) {
+        const identified = matches.filter(existing => existing.vin);
+        // A source can omit a previously supplied VIN. Keep the known identity
+        // only when that listing URL identifies a single VIN-backed record.
+        if (identified.length === 1) vehicle = { ...vehicle, id: identified[0].id, vin: identified[0].vin };
+      }
+      if (vehicle.vin) {
+        for (const existing of matches) {
+          if (!existing.vin && existing.id !== vehicle.id) {
+            map.delete(existing.id);
+            aliases.set(existing.id, vehicle.id);
+          }
+        }
+      }
+    }
+    map.set(vehicle.id, vehicle);
+  }
   // Preserve recently seen vehicles first. A partial run never implies a sale.
   const sorted = [...map.values()].sort((a, b) => Number(b.listed) - Number(a.listed) || b.lastSeenAt - a.lastSeenAt);
   if (complete) return sorted.slice(0, MAX_VEHICLES);
-  const previousIds = new Set(previous.map(vehicle => vehicle.id));
   // On partial runs, capacity is filled by the old catalog first. A newly seen
   // vehicle must not evict a missing old vehicle just because a run was interrupted.
-  return [...previous.map(vehicle => map.get(vehicle.id)), ...sorted.filter(vehicle => !previousIds.has(vehicle.id))].slice(0, MAX_VEHICLES);
+  const previousIds = new Set();
+  const retained = [];
+  for (const vehicle of previous) {
+    const id = aliases.get(vehicle.id) ?? vehicle.id;
+    if (!previousIds.has(id)) { previousIds.add(id); retained.push(map.get(id)); }
+  }
+  return [...retained, ...sorted.filter(vehicle => !previousIds.has(vehicle.id))].slice(0, MAX_VEHICLES);
 }
 
 export function robotsPolicy(text) {

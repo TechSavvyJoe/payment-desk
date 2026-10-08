@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanText, dealershipSite, inventoryFeedUrl, inventoryUrl, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
+import { cleanText, dealershipSite, inventoryFeedUrl, inventoryUrl, MAX_VEHICLES, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
 import { validateVehicle } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
 test('inventory connects only public HTTPS sites and scopes access to apex/www', () => {
@@ -81,6 +81,45 @@ test('partial refresh preserves missing vehicles and complete refresh says not l
   assert.equal(complete.find(v => v.id === 'B').listed, false);
   assert.equal(complete.find(v => v.id === 'B').lastSeenAt, 100);
   assert.equal(complete.some(v => v.sold), false);
+});
+
+test('a later VIN replaces the canonical URL identity in partial and complete catalogs', () => {
+  const site = 'https://dealer.example.com/';
+  const source = { name: '2024 Ford Explorer', url: '/used/123#photos', stock: 'U123', currency: 'USD', price: 20000 };
+  const original = vehicleRecord(source, site, 100);
+  const identified = vehicleRecord({ ...source, vin: '1FM5K8D80MGA12345', price: 21000 }, site, 200);
+  for (const complete of [false, true]) {
+    for (const previous of [[original], [original, identified]]) {
+      const merged = mergeInventory(previous, [identified], complete);
+      assert.equal(merged.length, 1);
+      assert.deepEqual(merged[0], identified);
+      const omitted = vehicleRecord({ ...source, price: 22000 }, site, 300);
+      assert.deepEqual(mergeInventory(merged, [omitted], complete), [{ ...omitted, id: identified.id, vin: identified.vin }]);
+    }
+    assert.equal(mergeInventory([], [identified, original], complete).length, 1);
+  }
+});
+
+test('VIN identity upgrades keep their old capacity slot without evicting cached vehicles', () => {
+  const site = 'https://dealer.example.com/';
+  const source = { name: '2024 Ford Explorer', url: '/used/123' };
+  const original = vehicleRecord(source, site, 100);
+  const previous = [original, ...Array.from({ length: MAX_VEHICLES - 1 }, (_, index) => ({ id: `cached-${index}`, listed: true, lastSeenAt: 100 }))];
+  const identified = vehicleRecord({ ...source, vin: '1FM5K8D80MGA12345' }, site, 200);
+  const result = mergeInventory(previous, [identified], false);
+  assert.equal(result.length, MAX_VEHICLES);
+  assert.deepEqual(result[0], identified);
+  assert.deepEqual(result.slice(1), previous.slice(1));
+});
+
+test('different known VINs at the same listing URL remain different vehicles', () => {
+  const source = { name: '2024 Ford Explorer', url: '/used/123' }, site = 'https://dealer.example.com/';
+  const original = vehicleRecord({ ...source, vin: '1FM5K8D80MGA12345' }, site, 100);
+  const replacement = vehicleRecord({ ...source, vin: '1FM5K8D80MGA12346' }, site, 200);
+  assert.deepEqual(mergeInventory([original], [replacement], false).map(v => v.id), [original.id, replacement.id]);
+  const complete = mergeInventory([original], [replacement], true);
+  assert.equal(complete.find(v => v.id === original.id).listed, false);
+  assert.equal(complete.find(v => v.id === replacement.id).listed, true);
 });
 
 test('nightly scheduling uses the next local calendar night and missed-run catch-up', () => {

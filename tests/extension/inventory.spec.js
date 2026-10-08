@@ -74,6 +74,59 @@ test('a direct used-inventory page discovers new inventory before reporting comp
   expect(requests).toContain(`${site}searchnew.aspx`);
 });
 
+for (const condition of ['new', 'used']) {
+  test(`a fresh ${condition}-only condition feed stays partial until both conditions are verified`, async () => {
+    await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="/search${condition}.aspx">${condition} inventory</a>` }));
+    await panel.locator('#dealership-site').fill(site);
+    await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+    await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+    const partial = await saved();
+    expect(partial.vehicles.length).toBe(condition === 'new' ? 1 : 2);
+    expect(partial.lastCompletedAt).toBeFalsy();
+    expect(partial.error).toContain('not verified');
+    await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchnew.aspx">New inventory</a><a href="/searchused.aspx">Used inventory</a>' }));
+    await panel.getByRole('button', { name: 'Refresh now' }).click();
+    await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('ready');
+    expect((await saved()).lastCompletedAt).toBeGreaterThan(0);
+    expect((await saved()).vehicles).toHaveLength(3);
+  });
+}
+
+test('VIN appearance reconciles a cached URL vehicle during partial and complete refreshes', async () => {
+  let provideVin = false;
+  await context.route(`${site}api/vhcliaa/**/10?*`, route => {
+    const data = response('new', 1);
+    if (!provideVin) delete data.DisplayCards[0].VehicleCard.VehicleVin;
+    return route.fulfill({ json: data });
+  });
+  await connect();
+  expect((await saved()).vehicles.find(v => v.stock === 'N1').id).toBe(`${site}new/vehicle-1`);
+  provideVin = true; failUsed = true;
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  for (const condition of ['partial', 'ready']) {
+    const state = await saved();
+    expect(state.status).toBe(condition);
+    expect(state.vehicles).toHaveLength(3);
+    expect(state.vehicles.filter(v => v.stock === 'N1')).toHaveLength(1);
+    expect(state.vehicles.find(v => v.stock === 'N1')).toMatchObject({ id: '1FM5K8D80MGA12341', vin: '1FM5K8D80MGA12341', listed: true });
+    if (condition === 'partial') {
+      failUsed = false;
+      await panel.getByRole('button', { name: 'Refresh now' }).click();
+      await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('ready');
+    }
+  }
+});
+
+test('DealerCarSearch certified listing URLs retain certified condition and retail pricing', async () => {
+  const result = await panel.evaluate(async site => {
+    const { parseInventoryHtml } = await import('./inventoryParser.js');
+    const html = '<span class="LabelCityStateZip1">Howell, MI 48843</span><span class="pager-summary">Page: 1 of 1 (1 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/vdp/123/Certified-2024-Ford-Explorer">2024 Ford Explorer</a></h4><div class="i18r_customPricing"><div class="price"><label class="price-label">Retail Price</label><span class="price-price">$24,995</span></div></div></div>';
+    return parseInventoryHtml(html, { url: `${site}inventory`, kind: 'html', condition: 'all' }, site, 123).vehicles[0];
+  }, site);
+  expect(result).toMatchObject({ condition: 'certified', price: 24995 });
+});
+
 for (const provider of ['DealerOn', 'DealerCarSearch']) {
   test(`a direct combined ${provider} feed completes without unsupported homepage discovery`, async () => {
     const feed = `${site}${provider === 'DealerOn' ? 'searchall.aspx' : 'inventory'}`;

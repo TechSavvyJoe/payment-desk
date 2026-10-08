@@ -119,7 +119,7 @@ export function parseInventoryHtml(html, task, site, now) {
       const priceRows = card.querySelector('.i18r_customPricing')?.innerHTML ?? '';
       const name = a?.getAttribute('aria-label') || text(a);
       const href = a?.getAttribute('href') ?? '';
-      const condition = /\/New-/i.test(href) ? 'new' : /\/(?:Used|Certified)-/i.test(href) ? 'used' : feedCondition;
+      const condition = /\/New-/i.test(href) ? 'new' : /\/Certified-/i.test(href) ? 'certified' : /\/Used-/i.test(href) ? 'used' : feedCondition;
       return vehicleRecord({ name, url: inventoryUrl(href, site, task.url),
         vin: card.querySelector('[data-vin]')?.getAttribute('data-vin') || details.match(/\bVIN\s*:?\s*(\S+)/i)?.[1],
         stock: details.match(/\bStock\s*(?:#|No\.?|Number)?\s*:\s*(\S+)/i)?.[1],
