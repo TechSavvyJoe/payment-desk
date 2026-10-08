@@ -69,6 +69,7 @@ async function getPage(url, site, policies) {
   }
   if (response.status === 404 && new URL(current).pathname === '/robots.txt') { await response.body?.cancel(); return { body: '', url: current }; }
   if (!response.ok) { await response.body?.cancel(); throw new Error(`The website refused the inventory request (${response.status}). The previous catalog was kept.`); }
+  if (!response.body && new URL(current).pathname === '/robots.txt') return { body: '', url: current };
   if (Number(response.headers.get('content-length')) > 4_000_000) { await response.body?.cancel(); throw new Error('The inventory response is too large.'); }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

@@ -36,6 +36,13 @@ function pricing(html, used) {
     priceNote: base ? `Source: ${base.label}. Verify the price, included fees and discount conditions.` : 'Confirm the selling price with the listing. Advertised totals may include fees or conditional rebates.',
   };
 }
+function feedConditionFor(task) {
+  if (['new', 'used', 'certified', 'all'].includes(task.condition)) return task.condition;
+  const path = new URL(task.url).pathname;
+  if (/\/(?:searchnew\.aspx|inventory\/new|new(?:-inventory)?)(?:\/index\.htm)?\/?$/i.test(path)) return 'new';
+  if (/\/(?:searchused\.aspx|inventory\/used|used(?:-inventory)?|pre-owned)(?:\/index\.htm)?\/?$/i.test(path) || /\/used-vehicle-inventory[^/]*\.html$/i.test(path)) return 'used';
+  return 'all';
+}
 
 export function parseDealerOn(data, task, site, now) {
   const paging = data?.Paging?.PaginationDataModel;
@@ -46,7 +53,7 @@ export function parseDealerOn(data, task, site, now) {
     const v = item.VehicleCard;
     const condition = v.VehicleCondition?.toLowerCase() ?? task.condition;
     const stack = v.WasabiVehiclePricingPanelViewModel?.PriceStakViewModel?.PriceStakTabsModel;
-    const prices = pricing(stack?.BuyContent, condition !== 'new');
+    const prices = pricing(stack?.BuyContent, condition === 'used' || condition === 'certified');
     const image = v.VehicleImageModel;
     return vehicleRecord({
       name: text(markup(image?.VehicleNameHtmlEncoded ?? '')) || [v.VehicleYear, v.VehicleMake, v.VehicleModel, v.VehicleTrim].filter(Boolean).join(' '),
@@ -60,7 +67,7 @@ export function parseDealerOn(data, task, site, now) {
     }, site, now);
   }).filter(Boolean);
   const next = task.page < paging.TotalPages ? [{ ...task, page: task.page + 1, url: dealerOnUrl(task.config, task.url, task.page + 1) }] : [];
-  return { vehicles, tasks: next, expected: paging.TotalCount, group: String(task.config.PageId), scope: task.condition === 'new' ? 'new' : 'used', finalPage: !next.length, provider: 'DealerOn' };
+  return { vehicles, tasks: next, expected: paging.TotalCount, group: String(task.config.PageId), scope: task.condition === 'new' ? 'new' : task.condition === 'used' || task.condition === 'certified' ? 'used' : 'all', finalPage: !next.length, provider: 'DealerOn' };
 }
 
 function discovery(root, url, site) {
@@ -93,14 +100,15 @@ export function parseInventoryHtml(html, task, site, now) {
     const config = JSON.parse(configNode.textContent);
     if (!Number.isInteger(config.DealerId) || config.DealerId <= 0 || !Number.isInteger(config.PageId) || config.PageId <= 0
       || typeof config.BaseFilter !== 'string' || config.BaseFilter.length > 1000 || !/^[\x20-\x7e]*$/.test(config.BaseFilter)) throw new Error('This inventory configuration is unsupported.');
-    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition: /new/i.test(config.PageVehicleType) ? 'new' : 'used' }, ...discoverMore()], provider: 'DealerOn' };
+    const condition = /new/i.test(config.PageVehicleType) ? 'new' : /used|certified/i.test(config.PageVehicleType) ? 'used' : /^all$/i.test(config.PageVehicleType) ? 'all' : feedConditionFor(task);
+    return { vehicles: [], tasks: [{ kind: 'dealeron', url: dealerOnUrl(config, task.url), page: 1, config: { DealerId: config.DealerId, PageId: config.PageId, BaseFilter: config.BaseFilter, DealerModel: { CurrencyCode: config.DealerModel?.CurrencyCode } }, condition }, ...discoverMore()], provider: 'DealerOn' };
   }
   const cards = [...root.querySelectorAll('.invMainCell')];
-  if (cards.length) {
-    const path = new URL(task.url).pathname;
-    const feedCondition = ['new', 'used', 'certified'].includes(task.condition) ? task.condition
-      : /\/(?:searchnew\.aspx|inventory\/new|new(?:-inventory)?)(?:\/index\.htm)?\/?$/i.test(path) ? 'new'
-      : /\/(?:searchused\.aspx|inventory\/used|used(?:-inventory)?|pre-owned)(?:\/index\.htm)?\/?$/i.test(path) || /\/used-vehicle-inventory[^/]*\.html$/i.test(path) ? 'used' : 'unknown';
+  const summary = text(root.querySelector('.pager-summary')).match(/Page:\s*(\d+)\s*of\s*(\d+)\s*\((\d+) vehicles\)/i);
+  const empty = !cards.length && (task.feed || inventoryFeedUrl(task.url)) && summary && Number(summary[3]) === 0
+    && Number(summary[1]) <= 1 && Number(summary[2]) <= 1 && (task.page ?? 1) === 1;
+  if (cards.length || empty) {
+    const feedCondition = feedConditionFor(task);
     const usAddress = /\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\s+\d{5}(?:-\d{4})?\b/.test(text(root.querySelector('.LabelCityStateZip1')));
     const vehicles = cards.map(card => {
       const a = card.querySelector('.vehicleTitleH4 a');
@@ -122,17 +130,16 @@ export function parseInventoryHtml(html, task, site, now) {
         currency: usAddress ? 'USD' : '', ...pricing(priceRows, condition === 'used' || condition === 'certified'),
       }, site, now);
     }).filter(Boolean);
-    const summary = text(root.querySelector('.pager-summary')).match(/Page:\s*(\d+)\s*of\s*(\d+)\s*\((\d+) vehicles\)/i);
     if (!summary) throw new Error('The inventory page count could not be verified.');
     const page = Number(summary[1]);
-    if (page !== (task.page ?? 1)) throw new Error('The website returned the wrong inventory page.');
+    if (!empty && page !== (task.page ?? 1)) throw new Error('The website returned the wrong inventory page.');
     const nextUrl = new URL(task.url);
     nextUrl.searchParams.set('page', String(page + 1));
-    const tasks = page < Number(summary[2]) ? [{ ...task, page: page + 1, url: nextUrl.href }] : [];
+    const tasks = !empty && page < Number(summary[2]) ? [{ ...task, page: page + 1, url: nextUrl.href }] : [];
     const groupUrl = new URL(task.url);
     groupUrl.searchParams.delete('page');
     groupUrl.hash = '';
-    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, scope: feedCondition === 'unknown' ? 'all' : feedCondition === 'new' ? 'new' : 'used', expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
+    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, scope: feedCondition === 'new' ? 'new' : feedCondition === 'used' || feedCondition === 'certified' ? 'used' : 'all', expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
   }
   if (task.feed || inventoryFeedUrl(task.url)) throw new Error('An inventory feed could not be verified. The previous catalog was kept.');
   const tasks = discovery(root, task.url, site);

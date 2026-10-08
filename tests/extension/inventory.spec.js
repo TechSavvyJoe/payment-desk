@@ -145,6 +145,59 @@ test('discovery uses the fetched document URL and neutral vehicle URLs retain th
   expect(results.usedVehicle).toMatchObject({ condition: 'used', price: 24995 });
 });
 
+test('combined DealerOn feeds verify both conditions when a cached new vehicle disappears', async () => {
+  const scopes = await panel.evaluate(async () => {
+    const { parseInventoryHtml, parseDealerOn } = await import('./inventoryParser.js');
+    return [['All', 'all'], [undefined, 'all'], [undefined, 'new'], [undefined, 'used']].map(([PageVehicleType, path]) => {
+      const config = { DealerId: 123, PageId: 30, BaseFilter: '', PageVehicleType };
+      const parsed = parseInventoryHtml(`<script id="dlron-srp-model">${JSON.stringify(config)}</script>`, { url: `https://dealer.example.com/search${path}.aspx` }, 'https://dealer.example.com/', 123);
+      const task = parsed.tasks.find(task => task.kind === 'dealeron');
+      const empty = parseDealerOn({ DisplayCards: [], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 0, TotalCount: 0 } } }, task, 'https://dealer.example.com/', 123);
+      return { condition: task.condition, scope: empty.scope };
+    });
+  });
+  expect(scopes).toEqual([{ condition: 'all', scope: 'all' }, { condition: 'all', scope: 'all' }, { condition: 'new', scope: 'new' }, { condition: 'used', scope: 'used' }]);
+  await connect();
+  const previous = await saved();
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchall.aspx">All inventory</a>' }));
+  await context.route(`${site}searchall.aspx`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, BaseFilter: '', PageVehicleType: 'All' })}</script>` }));
+  await context.route(`${site}api/vhcliaa/**`, route => route.fulfill({ json: { DisplayCards: [card('used', 2), card('used', 3)], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 1, TotalCount: 2 } } } }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.lastCompletedAt, { timeout: 30_000 }).not.toBe(previous.lastCompletedAt);
+  const state = await saved();
+  expect(state.status).toBe('ready');
+  expect(state.vehicles.filter(vehicle => vehicle.listed)).toHaveLength(2);
+  expect(state.vehicles.find(vehicle => vehicle.condition === 'new').listed).toBe(false);
+});
+
+test('verified empty DealerCarSearch feeds complete and unlist only absent vehicles', async () => {
+  const emptyGroups = await panel.evaluate(async () => {
+    const { parseInventoryHtml } = await import('./inventoryParser.js');
+    return ['1 of 1', '1 of 0', '0 of 0'].map(paging => {
+      const result = parseInventoryHtml(`<span class="pager-summary">Page: ${paging} (0 vehicles)</span>`, { url: 'https://dealer.example.com/inventory/used', condition: 'used', feed: true }, 'https://dealer.example.com/', 123);
+      return { count: result.vehicles.length, expected: result.expected, finalPage: result.finalPage, scope: result.scope };
+    });
+  });
+  expect(emptyGroups).toEqual(Array(3).fill({ count: 0, expected: 0, finalPage: true, scope: 'used' }));
+  await connect();
+  const previous = await saved();
+  await context.route(`${site}searchused.aspx`, route => route.fulfill({ contentType: 'text/html', body: '<span class="pager-summary">Page: 1 of 1 (0 vehicles)</span><a href="/searchnew.aspx">New</a>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.lastCompletedAt, { timeout: 30_000 }).not.toBe(previous.lastCompletedAt);
+  const state = await saved();
+  expect(state.status).toBe('ready');
+  expect(state.vehicles.filter(vehicle => vehicle.listed).map(vehicle => vehicle.condition)).toEqual(['new']);
+  expect(state.vehicles.filter(vehicle => vehicle.condition === 'used').every(vehicle => !vehicle.listed)).toBe(true);
+});
+
+test('a no-content robots response permits the verified inventory refresh', async () => {
+  await context.route(`${site}robots.txt`, route => route.fulfill({ status: 204 }));
+  await connect();
+  expect((await saved()).vehicles).toHaveLength(3);
+  expect(requests).toContain(`${site}searchnew.aspx`);
+  expect(requests).toContain(`${site}searchused.aspx`);
+});
+
 test('unparsed feed navigation cannot complete a refresh or unlist its cached vehicles', async () => {
   await connect();
   const previous = await saved();
