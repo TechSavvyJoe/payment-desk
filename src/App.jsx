@@ -290,7 +290,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#calculator-top'}>Skip to calculator</a>
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
         {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
-        {view === 'dealer' ? <p className="coverage-note">Michigan resident purchases only. <button type="button" onClick={() => { setContextOpen(true); focusDestination('registration-state'); }}>Review tax coverage</button></p> : null}
+        {view === 'dealer' ? <p className="coverage-note" role="region" aria-label="Supported tax coverage"><span>Michigan resident purchases only.</span> <button type="button" onClick={() => { setContextOpen(true); focusDestination('registration-state'); }}>Review tax coverage</button></p> : null}
         {settingsChanged ? <div className="validation-banner" role="alert" id="settings-changed" tabIndex={-1}><strong>Dealership settings changed in another tab.</strong> Reload to use the saved name, logo and fees before comparing or sharing an estimate. <button type="button" onClick={() => window.location.reload()}>Reload settings</button></div> : null}
         {draftStatus === 'rejected' ? <div className="validation-banner" role="alert"><strong>The saved worksheet could not be restored.</strong> Its saved data has been kept. This worksheet will not overwrite it. Use a compatible app version or explicitly discard it to save this worksheet. <button type="button" onClick={discardRejectedDraft}>Discard unreadable draft</button></div> : null}
         {settingsOpen ? <DealershipSettingsDialog externalChange={settingsChanged} feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
@@ -300,7 +300,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
           <strong>{purchaseScope.supported ? 'Check the highlighted figures.' : 'Tax rules unavailable.'}</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length || calculation.errorField ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
         </div> : null}
-        <div className="calculator-shell" id="calculator-top" tabIndex={-1} key={`desk-${resetCount}`}>
+        <main className="calculator-shell" id="calculator-top" aria-label={view === 'dealer' ? 'Deal workspace' : 'Customer estimate workspace'} tabIndex={-1} key={`desk-${resetCount}`}>
           {view === 'dealer' ? <>
             <div className="calculator-layout">
               <div className="calculator-left">
@@ -337,7 +337,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
             <div className="page-intro page-intro--customer"><h1 id="customer-heading" tabIndex={-1}>Your purchase estimate</h1><p>The selected vehicle, products, and payment — together in one place.</p></div>
             <CustomerView brand={brand} dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} />
           </>}
-        </div>
+        </main>
         {view === 'dealer' && result.isFinanced ? <PaymentGrid key={`grid-${resetCount}`} dealInput={dealInput} downPayments={gridDownPayments}
           onApplyScenario={patch => { if (hasInputErrors) { focusFirstError(); return; } if (!canCompare) return; dispatch({ type: 'grid', patch }); if (isMobile()) focusDestination('payment-results-mobile'); }}
           onMobileClose={closeGrid} onDownPaymentChange={(index, value) => dispatch({ type: 'down', index, value })}

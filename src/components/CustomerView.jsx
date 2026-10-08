@@ -88,7 +88,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
 
   return (
     <><div className="customer-layout">
-      <main className="customer-content">
+      <section className="customer-content" aria-label="Itemized customer estimate">
         <header className="proposal-identity">
           {snapshot.brand.logo ? <img alt={brandLine ? "" : "Dealership logo"} className="proposal-logo" src={snapshot.brand.logo} /> : null}
           {brandLine ? <p className="proposal-brand">{brandLine}</p> : null}
@@ -165,7 +165,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
           <p><strong>{snapshot.qualification}</strong></p>
           <p className="proposal-meta">{snapshot.brand.name} · {snapshot.reference} · App {snapshot.version}</p>
         </footer>
-      </main>
+      </section>
       <ResultsPanel customer dealInput={dealInput} result={result} hasInputErrors={hasInputErrors} />
     </div><CustomerPrintout snapshot={snapshot} result={result} /></>
   );

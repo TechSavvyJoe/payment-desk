@@ -3089,6 +3089,15 @@ input[type="checkbox"] { flex:0 0 auto; }
   font: inherit;
   cursor: pointer;
 }
+@media screen and (max-width: 800px) {
+  .coverage-note { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 10px; font-size: 0.7rem; line-height: 1.2; }
+  .coverage-note button { flex: none; min-height: 24px; padding: 0 2px; }
+  .calculator-shell { padding-top: 0; }
+  .deal-tools { margin-bottom: 6px; }
+  .compact-height .deal-tools { margin-bottom: 0; }
+  .compact-height .mobile-results { margin-bottom: 2px; }
+  .app-frame.has-mobile-grid-open:has(.payment-grid-section.is-mobile-open) .coverage-note { display: none; }
+}
 .coverage-description {
   grid-column: 1 / -1;
   margin: 0;

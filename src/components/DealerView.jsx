@@ -70,7 +70,7 @@ export default function DealerView({
   };
 
   return (
-    <main className="dealer-workspace" aria-label="Deal worksheet">
+    <section className="dealer-workspace" aria-label="Deal worksheet">
       <div className="worksheet-panel">
         <div className="deal-grid">
           <div className="deal-column">
@@ -216,6 +216,6 @@ export default function DealerView({
         </div>
       </div>
       <TargetSolver dealInput={dealInput} result={result} {...targetProps} />
-    </main>
+    </section>
   );
 }

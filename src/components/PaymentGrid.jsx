@@ -53,7 +53,7 @@ export default function PaymentGrid({
   });
 
   return (
-    <section className={`payment-grid-section ${mobileOpen ? "is-mobile-open" : ""}`} id="payment-grid">
+    <section className={`payment-grid-section ${mobileOpen ? "is-mobile-open" : ""}`} id="payment-grid" aria-labelledby="payment-grid-heading">
       <div className="grid-heading">
         <div>
             <h2 id="payment-grid-heading" tabIndex={-1}>Payment grid</h2>
