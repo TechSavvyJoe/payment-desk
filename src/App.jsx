@@ -249,7 +249,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
         {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
         {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
         {inventoryOpen ? <InventoryPicker onClose={() => { setInventoryOpen(false); requestAnimationFrame(() => document.getElementById('inventory-picker-trigger')?.focus()); }} onChoose={vehicle => { setInventoryOpen(false); setVehicleImport({ vehicle, error: null }); }} /> : null}
-        {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDeal={hasDeal} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
+        {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDraftEdits={hasDraftEdits} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}

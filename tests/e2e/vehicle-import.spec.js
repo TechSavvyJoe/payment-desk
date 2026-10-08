@@ -46,6 +46,24 @@ test('replacing an existing deal requires review and preserves device settings',
   await expect(page.locator('#apr')).toHaveValue('6.50');
   expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.draft.v1']);
 });
+test('a vehicle import warns before replacing a target-only worksheet and Cancel retains the target', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#target-value').fill('450');
+  await page.locator('#target-value').blur();
+  await expect(page.locator('#sale-price')).toHaveValue('');
+  await page.evaluate(hash => { location.hash = hash; }, fragment());
+  const dialog = page.getByRole('dialog', { name: 'Review captured vehicle' });
+  await expect(dialog.locator('.vehicle-import__warning')).toContainText('targets');
+  await expect(page.locator('#target-value')).toHaveValue('450');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.locator('#target-value')).toHaveValue('450');
+  await expect(page.locator('#sale-price')).toHaveValue('');
+  await page.evaluate(hash => { location.hash = hash; }, fragment());
+  await expect(dialog.locator('.vehicle-import__warning')).toContainText('targets');
+  await dialog.getByRole('button', { name: 'Start new estimate', exact: true }).click();
+  await expect(page.locator('#sale-price')).toHaveValue('29,995');
+  await expect(page.locator('#target-value')).toHaveValue('');
+});
 test('bad imported data cannot apply a price, and reference-only imports remain usable', async ({ page }) => {
   await page.goto('/' + fragment({ salePrice: 1_000_001 }));
   await expect(page.getByRole('dialog')).toContainText('could not be imported');
