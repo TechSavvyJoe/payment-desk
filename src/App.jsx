@@ -54,8 +54,8 @@ function useEasternToday() {
   return today;
 }
 
-export default function App() {
-  const [restoredDraft] = useState(loadDeskDraft);
+export default function App({ restoreDraft = true }) {
+  const [restoredDraft] = useState(() => restoreDraft ? loadDeskDraft() : null);
   const [state, dispatch] = useReducer(deskReducer, undefined, () => restoredDraft?.desk ?? createDeskState());
   const [inputDrafts, setInputDrafts] = useState(() => restoredDraft?.inputDrafts ?? {});
   const [draftSaved, setDraftSaved] = useState(true);

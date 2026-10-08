@@ -2,7 +2,7 @@ import React from "react";
 
 /**
  * Last-resort guard so a calculation or render error never leaves the desk
- * with a blank screen. The reset handler is supplied by App so the boundary
+ * with a blank screen. The reset handler is supplied by the root so the boundary
  * can clear the deal state that caused the failure.
  */
 export default class ErrorBoundary extends React.Component {

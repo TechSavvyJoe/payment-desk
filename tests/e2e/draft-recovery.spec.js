@@ -88,6 +88,51 @@ test('blocked draft storage gives an honest warning while the current worksheet 
   await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled();
 });
 
+for (const blockedRemoval of [false, true]) {
+  test(`crash recovery starts a blank worksheet when draft removal is ${blockedRemoval ? 'blocked' : 'available'}`, async ({ page }) => {
+    await page.locator('#sale-price').fill('30000');
+    await page.locator('#sale-price').blur();
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.desk.deal.salePrice, KEY)).toBe(30000);
+    await page.addInitScript(({ key, blockedRemoval }) => {
+      // A deterministic render fault tied to the saved deal exercises the real
+      // React boundary. A new blank deal must recover with this fault still active.
+      const descriptor = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, 'format');
+      Object.defineProperty(Intl.NumberFormat.prototype, 'format', {
+        ...descriptor, get() {
+          const format = descriptor.get.call(this);
+          return value => {
+            if (value === 30000) throw new Error('Synthetic saved-deal render fault');
+            return format(value);
+          };
+        },
+      });
+      if (blockedRemoval) {
+        const remove = Storage.prototype.removeItem;
+        Storage.prototype.removeItem = function (name) {
+          if (name === key) throw new Error('Draft removal blocked');
+          return remove.call(this, name);
+        };
+      }
+    }, { key: KEY, blockedRemoval });
+    await page.reload();
+    await expect(page.getByRole('alert')).toContainText('Something went wrong');
+    await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+    await expect(page.locator('#sale-price')).toHaveValue('');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    if (blockedRemoval) {
+      await expect(page.locator('.app-footer')).toContainText('Draft could not be saved');
+      expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.salePrice, KEY)).toBe(30000);
+    } else {
+      await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+      await page.reload();
+      await expect(page.locator('#sale-price')).toHaveValue('');
+    }
+    await page.locator('#sale-price').fill('20000');
+    await page.locator('#sale-price').blur();
+    await expect(page.locator('#sale-price')).toHaveValue('20,000');
+  });
+}
+
 test('an invalid grid rate survives refresh and blocks an estimate until corrected', async ({ page }) => {
   await page.locator('#sale-price').fill('30000');
   await openGrid(page);

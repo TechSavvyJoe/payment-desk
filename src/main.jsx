@@ -10,11 +10,12 @@ import "./redesign.css";
 import "./customer-print.css";
 
 function Root() {
-  // Remounting App on reset clears whatever deal state triggered the crash.
+  // Crash recovery bypasses the saved draft even if browser storage cannot
+  // remove it. The blank worksheet's normal save effect clears it when possible.
   const [appKey, setAppKey] = useState(0);
   return (
     <ErrorBoundary onReset={() => setAppKey((current) => current + 1)}>
-      <App key={appKey} />
+      <App key={appKey} restoreDraft={appKey === 0} />
     </ErrorBoundary>
   );
 }
