@@ -14,7 +14,13 @@ const desk = document.getElementById('desk');
 const notice = document.getElementById('notice');
 const reviewButton = document.getElementById('start-estimate');
 let worksheetReady = false;
+let captureSequence = 0;
 const updateReviewButton = () => { reviewButton.disabled = !worksheetReady || captureButton.disabled; };
+const cancelCapture = () => {
+  captureSequence++;
+  captureButton.disabled = false;
+  updateReviewButton();
+};
 const showNotice = (text, error = false) => {
   notice.textContent = text;
   notice.classList.toggle('is-error', error);
@@ -25,6 +31,7 @@ const showControls = open => {
   toggleButton.textContent = open ? 'Hide vehicle' : 'Enter vehicle';
 };
 const inventory = installInventoryPanel(vehicle => {
+  cancelCapture();
   document.getElementById('vehicle-form').reset();
   priceInput.removeAttribute('aria-invalid');
   nameInput.value = vehicle.name.slice(0, 67);
@@ -34,7 +41,7 @@ const inventory = installInventoryPanel(vehicle => {
   showNotice(vehicle.priceNote || 'Confirm the selling price and availability before reviewing in the worksheet.');
   showControls(true);
   (vehicle.price === null ? priceInput : nameInput).focus();
-}, () => showControls(false));
+}, () => { cancelCapture(); showControls(false); });
 installWorksheet(() => {
   worksheetReady = true;
   updateReviewButton();
@@ -49,6 +56,7 @@ document.getElementById('open-desk').addEventListener('click', async () => {
   catch { showControls(true); showNotice('The web app could not be opened. You can continue in the worksheet below.', true); }
 });
 captureButton.addEventListener('click', async () => {
+  const sequence = ++captureSequence;
   inventory.close();
   showControls(true);
   captureButton.disabled = true;
@@ -61,8 +69,10 @@ captureButton.addEventListener('click', async () => {
   showNotice('Reading vehicle details…');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (sequence !== captureSequence) return;
     if (!tab?.id || !/^https?:\/\//i.test(tab.url ?? '')) throw new Error('Restricted page');
     const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureListing });
+    if (sequence !== captureSequence) return;
     const details = injection?.result;
     if (!details) throw new Error('No details');
     nameInput.value = details.name;
@@ -72,11 +82,14 @@ captureButton.addEventListener('click', async () => {
     document.getElementById('source').textContent = `From ${details.sourceHost}`;
     showNotice(details.notice);
   } catch {
+    if (sequence !== captureSequence) return;
     document.getElementById('source').textContent = 'Enter the vehicle details manually.';
     showNotice('This page cannot be read. Open a vehicle listing and click the toolbar icon to allow capture on that tab, or enter the details here.', true);
   } finally {
-    captureButton.disabled = false;
-    updateReviewButton();
+    if (sequence === captureSequence) {
+      captureButton.disabled = false;
+      updateReviewButton();
+    }
   }
 });
 document.getElementById('vehicle-form').addEventListener('submit', event => {

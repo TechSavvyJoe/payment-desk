@@ -5,7 +5,7 @@ export const DESK_DRAFT_KEY = 'payment-desk.draft.v1';
 const terms = RATE_GRID_DEFAULTS.termMonths;
 const targets = ['payment', 'outTheDoor', 'amountFinanced', 'cashDue'];
 const money = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= CALCULATION_LIMITS.maxAmount && Math.abs(value * 100 - Math.round(value * 100)) < .00001;
-const rate = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= CALCULATION_LIMITS.maxApr;
+const rate = value => money(value) && value <= CALCULATION_LIMITS.maxApr;
 const date = value => typeof value === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const fieldId = /^(?:sale-price|cash-down|trade-allowance|trade-payoff|apr|new-plate-amount|target-value|estimate-date|grid-down-[0-3]|grid-apr-(?:36|48|60|72|84)|product-add-on-\d+-amount)$/;
 export const isDeskDraftField = id => fieldId.test(id);

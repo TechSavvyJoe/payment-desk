@@ -208,11 +208,57 @@ for (const reason of ['blocked', 'conflicted']) {
   });
 }
 
+for (const reason of ['queued', 'blocked']) {
+  test(`Reset warns before leaving until draft removal is confirmed when saves are ${reason}`, async ({ page }) => {
+    await page.locator('#sale-price').fill('30000');
+    await page.locator('#sale-price').blur();
+    await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
+    if (reason === 'queued') {
+      await page.evaluate(async key => {
+        let acquired;
+        const ready = new Promise(resolve => { acquired = resolve; });
+        void navigator.locks.request(key, async () => {
+          acquired();
+          await new Promise(resolve => { window.releaseDraftLock = resolve; });
+        });
+        await ready;
+      }, KEY);
+      await page.locator('#cash-down').fill('2500');
+      await page.locator('#cash-down').blur();
+    } else await page.evaluate(key => {
+      const remove = Storage.prototype.removeItem;
+      Storage.prototype.removeItem = function (name) {
+        if (name === key) throw new Error('Draft removal blocked');
+        return remove.call(this, name);
+      };
+    }, KEY);
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+    await expect(page.locator('#sale-price')).toHaveValue('');
+    await expect(page.locator('.app-footer')).toContainText(reason === 'queued' ? 'Saving draft' : 'Draft could not be saved');
+    expect(await page.evaluate(key => localStorage.getItem(key), KEY)).not.toBeNull();
+    const prompt = page.waitForEvent('dialog', { timeout: 10_000 });
+    await page.close({ runBeforeUnload: true });
+    const dialog = await prompt;
+    expect(dialog.type()).toBe('beforeunload');
+    await dialog.dismiss();
+    if (reason === 'queued') {
+      await page.evaluate(() => window.releaseDraftLock());
+      await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+      await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
+      await page.reload();
+      await expect(page.locator('#sale-price')).toHaveValue('');
+    }
+  });
+}
+
 test('an invalid grid rate survives refresh and blocks an estimate until corrected', async ({ page }) => {
   await page.locator('#sale-price').fill('30000');
   await openGrid(page);
   await page.locator('#grid-apr-60').fill('bad rate');
   await page.getByRole('button', { name: 'Back to calculator', exact: true }).click();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.inputDrafts['grid-apr-60']?.raw, KEY)).toBe('bad rate');
+  await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
   await page.reload();
   await expect(page.locator('#grid-apr-60')).toHaveAttribute('aria-invalid', 'true');
   await page.getByRole('button', { name: 'Customer view', exact: true }).click();

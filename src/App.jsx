@@ -145,6 +145,8 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
   const hasDraftEdits = hasDeal || hasDeskDraftEdits({ desk: state, targetValues, inputDrafts });
+  // A blank reset still needs confirmation that the old stored draft was removed.
+  const needsDraftConfirmation = hasDraftEdits || resetCount > 0 || !restoreDraft;
   const canCompare = getProposalStatus({ dealInput, result, hasInputErrors }).canExport;
   const today = useEasternToday();
 
@@ -153,11 +155,11 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   }, [hasDeal, today]);
 
   useEffect(() => {
-    if (!hasDraftEdits || draftSaved) return;
+    if (!needsDraftConfirmation || draftSaved) return;
     const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [hasDraftEdits, draftSaved]);
+  }, [needsDraftConfirmation, draftSaved]);
 
   const focusFirstError = () => {
     setAccordions(allOpen());
@@ -190,6 +192,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     focusDestination('payment-grid-heading');
   };
   const clearDeal = () => {
+    setDraftStatus(status => status === 'conflict' ? status : 'saving');
     dispatch({ type: 'reset' });
     setInputDrafts({});
     setTargetType('payment'); setTargetValues({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });

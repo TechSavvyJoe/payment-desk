@@ -198,6 +198,39 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   await browserSession.detach();
 });
 
+test('choosing inventory invalidates a pending listing capture before reviewing the saved vehicle', async () => {
+  await worker.evaluate(async () => chrome.storage.local.set({ 'payment-desk.inventory.v1': {
+    config: { site: 'https://dealer.example.com/', nightly: false },
+    vehicles: [{ name: 'Saved Explorer', stock: 'S100', price: 25000, url: 'https://dealer.example.com/vehicles/100', condition: 'used', mileage: 12000, listed: true, lastSeenAt: 1000 }],
+  } }));
+  const panel = await context.newPage();
+  await panel.addInitScript(() => {
+    chrome.tabs.query = async () => [{ id: 1, url: 'https://listing.example.com/car' }];
+    chrome.scripting.executeScript = () => new Promise((resolve, reject) => { window.finishCapture = fail => fail ? reject(new Error('Late capture failure')) : resolve([{ result: { name: 'Late capture', stock: 'L999', price: 19000, sourceHost: 'listing.example.com', notice: 'Late listing details' } }]); });
+  });
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const desk = panel.frameLocator('#desk');
+  await expect(desk.locator('#sale-price')).toBeVisible();
+  for (const fail of [false, true]) {
+    await panel.getByRole('button', { name: 'Capture listing' }).click();
+    await expect.poll(() => panel.evaluate(() => typeof window.finishCapture)).toBe('function');
+    await expect(panel.getByRole('button', { name: 'Review in worksheet' })).toBeDisabled();
+    await panel.getByRole('button', { name: 'Inventory', exact: true }).click();
+    await panel.getByRole('button', { name: 'Use vehicle' }).click();
+    await expect(panel.locator('#vehicle-name')).toHaveValue('Saved Explorer');
+    await panel.evaluate(fail => window.finishCapture(fail), fail);
+    await expect(panel.locator('#vehicle-name')).toHaveValue('Saved Explorer');
+    await expect(panel.locator('#stock')).toHaveValue('S100');
+    await expect(panel.locator('#price')).toHaveValue('25000');
+    await expect(panel.locator('#notice')).not.toContainText('Late listing');
+    await expect(panel.locator('#notice')).not.toContainText('cannot be read');
+    await expect(panel.getByRole('button', { name: 'Review in worksheet' })).toBeEnabled();
+  }
+  await panel.getByRole('button', { name: 'Review in worksheet' }).click();
+  await expect(desk.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('Saved Explorer');
+  await expect(desk.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('$25,000');
+});
+
 test('manual entry validates, reviews in place, and cancellation preserves an existing deal', async () => {
   const panel = await openPanelDocument();
   const desk = panel.frameLocator('#desk');

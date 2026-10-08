@@ -102,6 +102,21 @@ test('corrupt, unsupported, oversized and out-of-range drafts are ignored', () =
   ]) { const value = empty(); mutate(value); assert.equal(normalizeDeskDraft(value), null); }
 });
 
+test('saved APRs require cent precision in both the deal and every grid term', () => {
+  const value = empty();
+  value.desk.deal.apr = 6.55;
+  for (const term of Object.keys(value.desk.gridRates)) value.desk.gridRates[term] = 6.55;
+  assert.notEqual(normalizeDeskDraft(value), null);
+  for (const mutate of [
+    draft => { draft.desk.deal.apr = 6.555; },
+    ...Object.keys(value.desk.gridRates).map(term => draft => { draft.desk.gridRates[term] = 6.555; }),
+  ]) {
+    const malformed = structuredClone(value);
+    mutate(malformed);
+    assert.equal(normalizeDeskDraft(malformed), null);
+  }
+});
+
 test('storage failures never throw or overwrite the previous saved draft', () => {
   const value = empty(); value.desk.deal.salePrice = 30000;
   const device = storage(); saveDeskDraft(value, device);
