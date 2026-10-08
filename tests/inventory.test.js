@@ -159,6 +159,16 @@ test('global robots records do not split consecutive agents and missing groups a
   }
 });
 
+test('robots selects Chrome groups case-insensitively, merges them and honors their crawl delay', () => {
+  const policy = robotsPolicy('User-agent: *\nAllow: /\nCrawl-delay: 1\nUser-agent: Chrome\nDisallow: /inventory\nCrawl-delay: 10\nUser-agent: cHrOmE\nAllow: /inventory/public\nDisallow: /private/\nCrawl-delay: 12');
+  assert.equal(policy.delay, 12);
+  assert.equal(robotsAllows(policy, 'https://dealer.example.com/inventory'), false);
+  assert.equal(robotsAllows(policy, 'https://dealer.example.com/private/list'), false);
+  assert.equal(robotsAllows(policy, 'https://dealer.example.com/inventory/public'), true);
+  const fallback = robotsPolicy('User-agent: Chrome\nDisallow: /\nUser-agent: *\nAllow: /', 'OtherClient');
+  assert.equal(robotsAllows(fallback, 'https://dealer.example.com/inventory'), true);
+});
+
 test('robots matching normalizes encoded unreserved and Unicode paths without decoding reserved octets', () => {
   const policy = robotsPolicy('User-agent: *\nDisallow: /private/\nAllow: /private/public/\nDisallow: /%72estricted/\nDisallow: /café/\nDisallow: /literal%2A$\nDisallow: /literal%24$');
   for (const path of ['/%70rivate/inventory', '/private/%69nventory', '/restricted/list', '/caf%C3%A9/list', '/literal*', '/literal$']) {

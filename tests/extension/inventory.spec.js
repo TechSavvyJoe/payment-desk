@@ -134,6 +134,21 @@ test('inventory validation errors are exposed through a live status region', asy
   expect((await saved())?.config).toBeFalsy();
 });
 
+test('Chrome-specific robots exclusions override a permissive wildcard and preserve cached vehicles', async () => {
+  await connect();
+  const previous = await saved();
+  requests = [];
+  await context.route(`${site}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /\nUser-agent: Chrome\nDisallow: /searchused.aspx' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  const state = await saved();
+  expect(state.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(state.vehicles).toHaveLength(3);
+  expect(state.vehicles.filter(v => v.condition === 'used').every(v => v.listed)).toBe(true);
+  expect(state.error).toContain('excludes this inventory path');
+  expect(requests).not.toContain(`${site}searchused.aspx`);
+});
+
 for (const provider of ['DealerOn', 'DealerCarSearch']) {
   test(`a direct combined ${provider} feed completes without unsupported homepage discovery`, async () => {
     const feed = `${site}${provider === 'DealerOn' ? 'searchall.aspx' : 'inventory'}`;

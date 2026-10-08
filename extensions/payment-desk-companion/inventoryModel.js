@@ -124,7 +124,7 @@ export function mergeInventory(previous, observed, complete) {
   return [...retained, ...sorted.filter(vehicle => !previousIds.has(vehicle.id))].slice(0, MAX_VEHICLES);
 }
 
-export function robotsPolicy(text) {
+export function robotsPolicy(text, productToken = 'Chrome') {
   const groups = [];
   let group = { agents: [], rules: [], delay: 1 };
   let hadRule = false;
@@ -144,8 +144,10 @@ export function robotsPolicy(text) {
     }
   }
   groups.push(group);
-  // Fetch sends Chrome's ordinary user agent, not a named crawler identity.
-  const selected = groups.filter(g => g.agents.includes('*'));
+  // Chrome is present in fetch's browser user agent. RFC 9309 selects matching
+  // product-token groups before the wildcard, and merges repeated matches.
+  const matching = groups.filter(g => g.agents.includes(productToken.toLowerCase()));
+  const selected = matching.length ? matching : groups.filter(g => g.agents.includes('*'));
   return { rules: selected.flatMap(g => g.rules), delay: Math.max(1, ...selected.map(g => g.delay)) };
 }
 // RFC 9309 compares equivalent unreserved octets, while escaped reserved
