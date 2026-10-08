@@ -12,15 +12,15 @@
   .compact-height .mobile-results,
   .mobile-results { margin-bottom: 6px; }
   .compact-height .mobile-results .results-payment,
-  .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 6px 10px; }
-  .mobile-results .results-payment__label-row { grid-column: 1; grid-row: 1; }
+  .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; padding: 10px 12px; }
+  .mobile-results .results-payment__label-row { grid-column: 1 / -1; grid-row: 1; }
   .compact-height .mobile-results .payment-number,
-  .mobile-results .payment-number { grid-column: 2; grid-row: 1; min-height: 28px; margin: 0; }
+  .mobile-results .payment-number { grid-column: 1 / -1; grid-row: 2; min-height: 40px; margin: 2px 0; }
   .compact-height .mobile-results .payment-number strong,
-  .mobile-results .payment-number strong { font-size: 25px; }
-  .mobile-results .results-payment > p { grid-column: 1; grid-row: 2; font-size: .72rem; }
-  .mobile-results .payment-edit-button { grid-column: 2; grid-row: 2; width: auto; min-height: 32px; padding: 4px 6px; }
-  .mobile-results .estimate-actions--compact { gap: 6px; padding: 0 10px 6px; }
+  .mobile-results .payment-number strong { width: auto; max-width: 100%; font-size: 34px; }
+  .mobile-results .results-payment > p { grid-column: 1; grid-row: 3; font-size: .76rem; }
+  .mobile-results .payment-edit-button { grid-column: 2; grid-row: 3; width: auto; min-height: 32px; padding: 4px 8px; }
+  .mobile-results .estimate-actions--compact { gap: 6px; padding: 0 12px 8px; }
   .mobile-results .estimate-details-toggle,
   .mobile-results .estimate-review { min-height: 36px; padding-block: 4px; font-size: .75rem; line-height: 1.15; }
   .compact-height .deal-details,

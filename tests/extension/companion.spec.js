@@ -72,7 +72,7 @@ test('a worksheet startup failure offers retry and recovers without losing a loa
   await expect(page.frameLocator('#desk').locator('#sale-price')).toHaveValue('30000');
 });
 
-test('laptop panel shows selling price and trade fields above its fixed payment bar', async ({ browserName }, testInfo) => {
+test('laptop panel keeps a readable estimate and initial deal inputs above its fixed payment bar', async ({ browserName }, testInfo) => {
   expect(browserName).toBe('chromium');
   const page = await openPanelDocument(390, 650);
   const desk = page.frameLocator('#desk');
@@ -82,7 +82,10 @@ test('laptop panel shows selling price and trade fields above its fixed payment 
   const metrics = await frame.evaluate(() => ({
     header: document.querySelector('.app-header').getBoundingClientRect().height,
     payment: document.querySelector('.mobile-results .results-panel').getBoundingClientRect().height,
-    trade: document.getElementById('trade-allowance').getBoundingClientRect().bottom,
+    cashDown: document.getElementById('cash-down').getBoundingClientRect().bottom,
+    paymentFont: parseFloat(getComputedStyle(document.querySelector('.mobile-results .payment-number strong')).fontSize),
+    amountTop: document.querySelector('.mobile-results .payment-number').getBoundingClientRect().top,
+    labelBottom: document.querySelector('.mobile-results .results-payment__label-row').getBoundingClientRect().bottom,
     bar: document.querySelector('.mobile-nav').getBoundingClientRect().top,
     cardWidth: document.querySelector('.deal-section').getBoundingClientRect().width,
     viewportWidth: document.documentElement.clientWidth,
@@ -91,8 +94,10 @@ test('laptop panel shows selling price and trade fields above its fixed payment 
   await testInfo.attach('laptop-layout-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
   await page.screenshot({ path: testInfo.outputPath('laptop-panel.png') });
   expect(metrics.header).toBeLessThan(60);
-  expect(metrics.payment).toBeLessThan(125);
-  expect(metrics.trade).toBeLessThan(metrics.bar);
+  expect(metrics.payment).toBeLessThan(170);
+  expect(metrics.paymentFont).toBeGreaterThanOrEqual(32);
+  expect(metrics.amountTop).toBeGreaterThanOrEqual(metrics.labelBottom);
+  expect(metrics.cashDown).toBeLessThan(metrics.bar);
   expect(metrics.cardWidth).toBeGreaterThan(metrics.viewportWidth * .95);
   expect(metrics.overflow).toBe(false);
 });
