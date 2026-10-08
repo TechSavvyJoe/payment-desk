@@ -78,6 +78,11 @@ test('a blank desk left open overnight moves to the new day and still resets and
   // A click gives the page the user activation browsers require before warning on leave.
   await price(page).click();
   await price(page).blur();
+  for (const id of ['cash-down', 'trade-allowance', 'trade-payoff', 'apr', 'target-value']) {
+    await page.locator(`#${id}`).click();
+    await page.locator(`#${id}`).blur();
+  }
+  expect(await page.evaluate(() => localStorage.getItem('payment-desk.draft.v1'))).toBeNull();
   await page.clock.runFor(90_000);
   await expect(estimateDate(page)).toHaveValue('10/07/26');
   await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
@@ -92,7 +97,7 @@ test('a blank desk left open overnight moves to the new day and still resets and
   expect(dialogs).toEqual([]);
 });
 
-test('a desk with a deal keeps its date overnight and still asks before Reset and leaving', async ({ page }) => {
+test('a saved deal keeps its date overnight and asks before Reset but can safely close', async ({ page }) => {
   const dialogs = [];
   page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
   await page.clock.install({ time: BEFORE_MIDNIGHT });
@@ -106,7 +111,7 @@ test('a desk with a deal keeps its date overnight and still asks before Reset an
   await expect.poll(() => dialogs).toEqual(['confirm']);
   await expect(price(page)).toHaveValue('30,000');
   await page.close({ runBeforeUnload: true });
-  await expect.poll(() => dialogs).toEqual(['confirm', 'beforeunload']);
+  expect(dialogs).toEqual(['confirm']);
 });
 
 test('Reset in the first minute after midnight starts the new day, not yesterday', async ({ page }) => {

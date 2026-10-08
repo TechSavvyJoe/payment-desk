@@ -9,10 +9,40 @@
   </head>
   <body>
     <header aria-label="Listing tools">
+      <h1 class="sr-only">Payment Desk Companion</h1>
       <button id="capture" class="capture" type="button">Capture listing</button>
       <button id="toggle-vehicle" class="quiet" type="button" aria-expanded="false" aria-controls="vehicle-controls">Enter vehicle</button>
+      <button id="toggle-inventory" class="quiet" type="button" aria-expanded="false" aria-controls="inventory-controls">Inventory</button>
       <button id="open-desk" class="quiet" type="button">Web app ↗</button>
     </header>
+    <main class="panel-main">
+    <section id="inventory-controls" aria-label="Dealership inventory" hidden>
+      <div class="inventory-heading"><h2>Dealership inventory</h2><button id="inventory-close" class="quiet" type="button" aria-label="Close inventory">Close</button></div>
+      <details id="inventory-settings" open>
+        <summary>Dealership website</summary>
+        <form id="inventory-form" novalidate>
+          <label for="dealership-site">Website or inventory page</label>
+          <input id="dealership-site" type="url" placeholder="https://www.yourdealership.com/" autocomplete="url" maxlength="1000" aria-describedby="inventory-permission-note">
+          <label class="inventory-check"><input id="inventory-nightly" type="checkbox" checked> Refresh nightly while Chrome is running</label>
+          <p id="inventory-permission-note" class="source">Chrome will ask for access to this dealership website. The catalog stays on this computer. Some website platforms require a different connector.</p>
+          <button id="inventory-connect" class="primary" type="submit">Connect and refresh</button>
+          <button id="inventory-disconnect" class="quiet" type="button" hidden>Disconnect and clear inventory</button>
+        </form>
+      </details>
+      <p id="inventory-status" role="status" aria-live="polite" class="source"></p>
+      <p id="inventory-notice" role="status" aria-live="polite" aria-atomic="true" class="source"></p>
+      <button id="inventory-refresh" class="quiet" type="button" hidden>Refresh now</button>
+      <div class="inventory-filters">
+        <label for="inventory-search">Search vehicle, stock or VIN</label>
+        <input id="inventory-search" type="search" placeholder="Explorer, H12345 or VIN" autocomplete="off">
+        <label for="inventory-condition">Inventory</label>
+        <select id="inventory-condition"><option value="">New and used</option><option value="new">New</option><option value="used">Used / certified</option></select>
+        <label class="inventory-check"><input id="inventory-include-old" type="checkbox"> Include previously listed vehicles</label>
+      </div>
+      <p id="inventory-count" class="source"></p>
+      <div id="inventory-list"></div>
+      <button id="inventory-more" class="quiet" type="button" hidden>Show more vehicles</button>
+    </section>
     <section id="vehicle-controls" aria-label="Vehicle capture" hidden>
       <p id="source" class="source">Read a listing or enter the vehicle details.</p>
       <form id="vehicle-form" novalidate>
@@ -26,7 +56,12 @@
         <button id="start-estimate" class="primary" type="submit" disabled>Review in worksheet</button>
       </form>
     </section>
-    <iframe id="desk" title="Payment Desk worksheet" src="desk/index.html" allow="clipboard-write"></iframe>
+    <div id="worksheet-loading" role="status" aria-live="polite">
+      <p id="worksheet-loading-message">Opening Payment Desk…</p>
+      <button id="worksheet-retry" class="quiet" type="button" hidden>Try again</button>
+    </div>
+    <iframe id="desk" title="Payment Desk worksheet" allow="clipboard-write"></iframe>
+    </main>
     <noscript>Enable JavaScript to use the worksheet.</noscript>
   </body>
 </html>

@@ -1,5 +1,4 @@
-// The optional dealership name and logo are the only things Payment Desk saves,
-// and only in this browser. Customer figures are never stored.
+// Dealership presentation is stored separately from fees and the worksheet draft.
 export const BRAND_STORAGE_KEY = "payment-desk.dealership.v1";
 export const DEFAULT_BRAND_NAME = "Payment Desk";
 export const MAX_DEALERSHIP_NAME_LENGTH = 60;

@@ -1,6 +1,8 @@
 import { test, expect, chromium } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { resolve, sep } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 
 let context;
@@ -11,7 +13,7 @@ const source = fileURLToPath(new URL('../../extension-dist/payment-desk-companio
 test.beforeEach(async () => {
   context = await chromium.launchPersistentContext('', {
     channel: 'chromium', headless: true,
-    args: [`--disable-extensions-except=${source}`, `--load-extension=${source}`, '--enable-unsafe-extension-debugging'],
+    args: [`--disable-extensions-except=${source}`, `--load-extension=${source}`, '--enable-unsafe-extension-debugging', '--disable-background-mode'],
   });
   [worker] = context.serviceWorkers();
   worker ??= await context.waitForEvent('serviceworker');
@@ -19,14 +21,92 @@ test.beforeEach(async () => {
 });
 test.afterEach(async () => { if (context) await context.close(); });
 
-const openPanelDocument = async (width = 390) => {
+const openPanelDocument = async (width = 390, height = 850) => {
   const page = await context.newPage();
-  await page.setViewportSize({ width, height: 850 });
+  await page.setViewportSize({ width, height });
   await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await expect(page.frameLocator('#desk').locator('#sale-price')).toBeVisible();
   await expect(page.locator('#start-estimate')).toBeEnabled();
   return page;
 };
+
+test('panel finishes loading before starting the worksheet', async () => {
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.stack ?? error.message));
+  await page.addInitScript(() => {
+    if (window !== window.top) return;
+    window.addEventListener('load', () => {
+      window.panelStartup = {
+        frameSource: document.getElementById('desk').getAttribute('src'),
+        loadingVisible: Boolean(document.getElementById('worksheet-loading')?.getBoundingClientRect().height),
+      };
+    }, { once: true });
+  });
+  await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await expect(page.frameLocator('#desk').locator('#sale-price')).toBeVisible();
+  expect(await page.evaluate(() => window.panelStartup)).toEqual({ frameSource: null, loadingVisible: true });
+  await expect(page.locator('#worksheet-loading')).toBeHidden();
+  await expect(page.locator('#start-estimate')).toBeEnabled();
+  await expect(page.locator('#inventory-notice')).toContainText('Automatic refresh is off');
+  expect(errors).toEqual([]);
+});
+
+test('a worksheet startup failure offers retry and recovers without losing a loaded deal', async () => {
+  const page = await context.newPage();
+  await page.clock.install();
+  await page.addInitScript(() => {
+    const source = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src');
+    let first = true;
+    Object.defineProperty(HTMLIFrameElement.prototype, 'src', { ...source, set(value) {
+      if (first && value === 'desk/index.html') { first = false; window.worksheetStartBlocked = true; return; }
+      source.set.call(this, value);
+    } });
+  });
+  await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await expect.poll(() => page.evaluate(() => window.worksheetStartBlocked)).toBe(true);
+  await expect(page.locator('#start-estimate')).toBeDisabled();
+  await page.clock.fastForward(16_000);
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.frameLocator('#desk').locator('#sale-price')).toBeVisible();
+  await expect(page.locator('#worksheet-loading')).toBeHidden();
+  await page.frameLocator('#desk').locator('#sale-price').fill('30000');
+  // A stale retry event is harmless after the worksheet is ready.
+  await page.locator('#worksheet-retry').dispatchEvent('click');
+  await expect(page.frameLocator('#desk').locator('#sale-price')).toHaveValue('30000');
+});
+
+test('laptop panel keeps a readable estimate and initial deal inputs above its fixed payment bar', async ({ browserName }, testInfo) => {
+  expect(browserName).toBe('chromium');
+  const page = await openPanelDocument(390, 650);
+  const desk = page.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('30000');
+  const frame = page.frames().find(frame => frame.url().endsWith('/desk/index.html'));
+  await frame.evaluate(() => document.fonts.ready);
+  const metrics = await frame.evaluate(() => ({
+    header: document.querySelector('.app-header').getBoundingClientRect().height,
+    payment: document.querySelector('.mobile-results .results-panel').getBoundingClientRect().height,
+    cashDown: document.getElementById('cash-down').getBoundingClientRect().bottom,
+    paymentFont: parseFloat(getComputedStyle(document.querySelector('.mobile-results .payment-number strong')).fontSize),
+    amountTop: document.querySelector('.mobile-results .payment-number').getBoundingClientRect().top,
+    labelBottom: document.querySelector('.mobile-results .results-payment__label-row').getBoundingClientRect().bottom,
+    bar: document.querySelector('.mobile-nav').getBoundingClientRect().top,
+    cardWidth: document.querySelector('.deal-section').getBoundingClientRect().width,
+    viewportWidth: document.documentElement.clientWidth,
+    overflow: document.documentElement.scrollWidth > innerWidth,
+  }));
+  await testInfo.attach('laptop-layout-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
+  await page.screenshot({ path: testInfo.outputPath('laptop-panel.png') });
+  expect(metrics.header).toBeLessThan(60);
+  expect(metrics.payment).toBeLessThan(170);
+  expect(metrics.paymentFont).toBeGreaterThanOrEqual(32);
+  expect(metrics.amountTop).toBeGreaterThanOrEqual(metrics.labelBottom);
+  expect(metrics.cashDown).toBeLessThan(metrics.bar);
+  expect(metrics.cardWidth).toBeGreaterThan(metrics.viewportWidth * .95);
+  expect(metrics.overflow).toBe(false);
+});
+
 // Native panels are page targets outside Playwright's tab inventory. Use CDP for
 // the real toolbar/panel test; the other cases use the identical panel document.
 const attachNativePanel = async (browserSession, targetId) => {
@@ -75,7 +155,12 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   // Headless Chrome creates the native panel at 0×0 until its first paint.
   // Give that real panel a visible viewport so the iframe can render normally.
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 800, deviceScaleFactor: 1, mobile: false });
-  await call('Page.captureScreenshot');
+  // The native compositor can lag the renderer on a busy machine. Wait for an
+  // actual painted frame rather than treating the first paint as synchronous.
+  await expect.poll(async () => {
+    try { return Boolean((await call('Page.captureScreenshot')).data); }
+    catch (error) { if (error.message === 'Unable to capture screenshot') return false; throw error; }
+  }, { timeout: 20_000 }).toBe(true);
   const evaluate = async expression => {
     const result = await call('Runtime.evaluate', { expression, returnByValue: true, userGesture: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
@@ -118,6 +203,39 @@ test('toolbar opens a real side panel and captures into its worksheet without ch
   await browserSession.detach();
 });
 
+test('choosing inventory invalidates a pending listing capture before reviewing the saved vehicle', async () => {
+  await worker.evaluate(async () => chrome.storage.local.set({ 'payment-desk.inventory.v1': {
+    config: { site: 'https://dealer.example.com/', nightly: false },
+    vehicles: [{ name: 'Saved Explorer', stock: 'S100', price: 25000, url: 'https://dealer.example.com/vehicles/100', condition: 'used', mileage: 12000, listed: true, lastSeenAt: 1000 }],
+  } }));
+  const panel = await context.newPage();
+  await panel.addInitScript(() => {
+    chrome.tabs.query = async () => [{ id: 1, url: 'https://listing.example.com/car' }];
+    chrome.scripting.executeScript = () => new Promise((resolve, reject) => { window.finishCapture = fail => fail ? reject(new Error('Late capture failure')) : resolve([{ result: { name: 'Late capture', stock: 'L999', price: 19000, sourceHost: 'listing.example.com', notice: 'Late listing details' } }]); });
+  });
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const desk = panel.frameLocator('#desk');
+  await expect(desk.locator('#sale-price')).toBeVisible();
+  for (const fail of [false, true]) {
+    await panel.getByRole('button', { name: 'Capture listing' }).click();
+    await expect.poll(() => panel.evaluate(() => typeof window.finishCapture)).toBe('function');
+    await expect(panel.getByRole('button', { name: 'Review in worksheet' })).toBeDisabled();
+    await panel.getByRole('button', { name: 'Inventory', exact: true }).click();
+    await panel.getByRole('button', { name: 'Use vehicle' }).click();
+    await expect(panel.locator('#vehicle-name')).toHaveValue('Saved Explorer');
+    await panel.evaluate(fail => window.finishCapture(fail), fail);
+    await expect(panel.locator('#vehicle-name')).toHaveValue('Saved Explorer');
+    await expect(panel.locator('#stock')).toHaveValue('S100');
+    await expect(panel.locator('#price')).toHaveValue('25000');
+    await expect(panel.locator('#notice')).not.toContainText('Late listing');
+    await expect(panel.locator('#notice')).not.toContainText('cannot be read');
+    await expect(panel.getByRole('button', { name: 'Review in worksheet' })).toBeEnabled();
+  }
+  await panel.getByRole('button', { name: 'Review in worksheet' }).click();
+  await expect(desk.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('Saved Explorer');
+  await expect(desk.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('$25,000');
+});
+
 test('manual entry validates, reviews in place, and cancellation preserves an existing deal', async () => {
   const panel = await openPanelDocument();
   const desk = panel.frameLocator('#desk');
@@ -151,7 +269,8 @@ test('unsupported-page fallback and narrow worksheet remain accessible', async (
   await expect(panel.locator('#notice')).toContainText('cannot be read');
   await panel.locator('#vehicle-name').fill('2024 Explorer');
   expect((await new AxeBuilder({ page: panel }).analyze()).violations).toEqual([]);
-  expect(await panel.evaluate(() => chrome.runtime.getManifest().permissions)).toEqual(['activeTab', 'scripting', 'sidePanel']);
+  expect(await panel.evaluate(() => chrome.runtime.getManifest().permissions)).toEqual(['activeTab', 'scripting', 'sidePanel', 'storage', 'alarms', 'offscreen', 'webRequest']);
+  expect(await panel.evaluate(() => chrome.runtime.getManifest().optional_host_permissions)).toEqual(['https://*/*']);
   expect(await panel.evaluate(() => chrome.runtime.getManifest().host_permissions)).toBeUndefined();
   await panel.getByRole('button', { name: 'Hide vehicle' }).click();
   await expect(panel.frameLocator('#desk').locator('#sale-price')).toBeVisible();
@@ -161,7 +280,7 @@ test('packaged worksheet works offline, calculates, compares, copies and prints 
   expect(browserName).toBe('chromium');
   const panel = await openPanelDocument(420);
   const errors = [];
-  panel.on('pageerror', error => errors.push(error.message));
+  panel.on('pageerror', error => errors.push(error.stack ?? error.message));
   await context.setOffline(true);
   await panel.reload();
   const desk = panel.frameLocator('#desk');
@@ -210,11 +329,99 @@ test('web app button opens the fixed blank site and retains the panel deal', asy
   await panel.getByRole('button', { name: 'Web app' }).click();
   const web = await nextPage;
   await web.waitForLoadState();
-  expect(web.url()).toBe('https://desking.mysoldlog.com/');
+  expect(web.url()).toBe(`https://desking.mysoldlog.com/#pd-companion=${extensionId}`);
   await expect(desk.locator('#sale-price')).toHaveValue('30,000');
 });
 
-test('panel dealership and fees survive Reset deal and reload without saving deal figures', async () => {
+test('production-origin web app searches the companion catalog and reviews vehicles before changing a deal', async ({ browserName }, testInfo) => {
+  expect(browserName).toBe('chromium');
+  test.setTimeout(180_000);
+  const site = 'https://dealer.example.com/';
+  const record = (number, overrides = {}) => ({ name: `2024 Ford Explorer ${number}`, stock: `S${number}`, url: `${site}vehicles/${number}`, condition: 'used', price: 25000, websitePrice: 25280, mileage: 12000, listed: true, lastSeenAt: 1000, features: ['Rear camera'], ...overrides });
+  await worker.evaluate(async state => { await chrome.storage.local.set({ 'payment-desk.inventory.v1': state }); }, {
+    config: { site, nightly: false }, vehicles: [record(1, { condition: 'new' }), record(2, { price: null }), record(3, { listed: false })], lastCompletedAt: 1000,
+    customer: 'private-value-must-not-be-shared',
+  });
+  const dist = resolve(fileURLToPath(new URL('../../dist/', import.meta.url)));
+  const headersText = await readFile(fileURLToPath(new URL('../../public/_headers', import.meta.url)), 'utf8');
+  const csp = headersText.split('\n').find(line => line.includes('Content-Security-Policy:')).split('Content-Security-Policy:')[1].trim();
+  // Serve this build at the real allowlisted origin inside an isolated browser.
+  // No production request or change is made by this test.
+  const loadErrors = [];
+  context.on('console', message => { if (message.type() === 'error') loadErrors.push(message.text()); });
+  context.on('requestfailed', request => loadErrors.push(`${request.url()}: ${request.failure()?.errorText}`));
+  await context.route('https://desking.mysoldlog.com/**', async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const path = resolve(dist, pathname === '/' ? 'index.html' : `.${pathname}`);
+    if (!path.startsWith(dist + sep)) return route.fulfill({ status: 404, body: '' });
+    const contentType = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.woff2') ? 'font/woff2' : path.endsWith('.woff') ? 'font/woff' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/html';
+    try { await route.fulfill({ body: await readFile(path), contentType, headers: { 'Content-Security-Policy': csp } }); }
+    catch { loadErrors.push(`Missing fixture: ${path}`); await route.fulfill({ status: 404, body: '' }); }
+  });
+  // Explicit navigation is routeable from its first request. Chrome-created
+  // tabs can begin their initial navigation before Playwright attaches; the
+  // preceding test separately checks the toolbar's exact handoff URL.
+  const web = await context.newPage();
+  await web.goto(`https://desking.mysoldlog.com/#pd-companion=${extensionId}`);
+  await web.waitForLoadState('domcontentloaded');
+  try { await expect(web.locator('#sale-price')).toBeVisible({ timeout: 30_000 }); }
+  catch (error) {
+    await testInfo.attach('web-load-errors', { body: JSON.stringify(loadErrors), contentType: 'application/json' });
+    console.log(loadErrors);
+    await web.screenshot({ path: testInfo.outputPath('web-load-failure.png') });
+    throw error;
+  }
+  await expect.poll(() => web.url()).toBe('https://desking.mysoldlog.com/');
+  await web.locator('#sale-price').fill('40000');
+  await web.locator('#cash-down').fill('2000');
+  await web.getByRole('button', { name: 'Inventory', exact: true }).click();
+  const picker = web.getByRole('dialog', { name: 'Dealership inventory' });
+  const expectVehicles = async count => {
+    try { await expect(picker.locator('article')).toHaveCount(count, { timeout: 60_000 }); }
+    catch (error) {
+      await testInfo.attach('inventory-read-errors', { body: JSON.stringify(loadErrors), contentType: 'application/json' });
+      throw error;
+    }
+  };
+  await expectVehicles(2);
+  await picker.getByRole('searchbox').fill('S1');
+  await expectVehicles(1);
+  await picker.getByRole('button', { name: 'Use vehicle' }).click();
+  await expect(web.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('clear the current deal figures');
+  await expect(web.locator('#sale-price')).toHaveValue('40,000');
+  await web.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(web.locator('#cash-down')).toHaveValue('2,000');
+  await web.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await expectVehicles(2);
+  await picker.getByRole('combobox').selectOption('used');
+  await expectVehicles(1);
+  await expect(picker.locator('article')).toContainText('$25,280 advertised');
+  await picker.getByRole('button', { name: 'Use vehicle' }).click();
+  await expect(web.getByRole('dialog', { name: 'Review captured vehicle' })).toContainText('Not provided');
+  await web.getByRole('button', { name: 'Start new estimate' }).click();
+  await expect(web.locator('#sale-price')).toHaveValue('');
+  await expect(web.locator('#vehicle-reference')).toHaveValue('2024 Ford Explorer 2 · Stock S2');
+  await web.reload();
+  await web.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await expectVehicles(2);
+  await picker.getByRole('checkbox', { name: 'Include previously listed vehicles' }).check();
+  await expectVehicles(3);
+  const exported = await web.evaluate(id => new Promise(resolve => chrome.runtime.sendMessage(id, { target: 'inventory.catalog', action: 'read' }, result => resolve(JSON.stringify(result)))), extensionId);
+  expect(exported).not.toContain('private-value');
+  const refused = await web.evaluate(id => new Promise(resolve => chrome.runtime.sendMessage(id, { target: 'inventory.background', action: 'disconnect' }, result => { const error = chrome.runtime.lastError; resolve({ result, error: Boolean(error) }); })), extensionId);
+  expect(refused.result).toBeUndefined();
+  expect(await worker.evaluate(async () => (await chrome.storage.local.get('payment-desk.inventory.v1'))['payment-desk.inventory.v1'].config.site)).toBe(site);
+  // A crafted link must not replace the verified connection or break reads.
+  const brokenLink = await context.newPage();
+  await brokenLink.goto(`https://desking.mysoldlog.com/#pd-companion=${'a'.repeat(32)}`);
+  await expect(brokenLink.locator('#sale-price')).toBeVisible();
+  expect(await brokenLink.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
+  await brokenLink.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await expect(brokenLink.getByRole('dialog', { name: 'Dealership inventory' }).locator('article')).toHaveCount(2, { timeout: 60_000 });
+  expect(await brokenLink.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
+});
+
+test('panel dealership and fees survive Reset deal and reload after the draft is cleared', async () => {
   const panel = await openPanelDocument();
   const desk = panel.frameLocator('#desk');
   await desk.getByRole('button', { name: 'Dealership settings' }).click();
@@ -235,4 +442,27 @@ test('panel dealership and fees survive Reset deal and reload without saving dea
   await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('125.5');
   const frame = panel.frames().find(frame => frame.url().endsWith('/desk/index.html'));
   expect(await frame.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.fees.v1']);
+});
+
+test('the companion draft survives panel reload and reopening until Reset deal', async () => {
+  let panel = await openPanelDocument();
+  let desk = panel.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('30000');
+  await desk.locator('#cash-down').fill('2500');
+  await desk.locator('#target-value').fill('450');
+  await desk.locator('#target-value').blur();
+  await panel.reload();
+  await expect(desk.locator('#sale-price')).toHaveValue('30,000');
+  await expect(desk.locator('#cash-down')).toHaveValue('2,500');
+  await expect(desk.locator('#target-value')).toHaveValue('450');
+  await panel.close();
+  panel = await openPanelDocument();
+  desk = panel.frameLocator('#desk');
+  await expect(desk.locator('#sale-price')).toHaveValue('30,000');
+  await expect(desk.locator('#cash-down')).toHaveValue('2,500');
+  panel.once('dialog', dialog => dialog.accept());
+  await desk.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  await panel.reload();
+  await expect(desk.locator('#sale-price')).toHaveValue('');
+  await expect(desk.locator('#cash-down')).toHaveValue('0');
 });

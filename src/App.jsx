@@ -20,6 +20,10 @@ import EstimateDateField from './components/EstimateDateField.jsx';
 import DealershipSettingsDialog from './components/DealershipSettingsDialog.jsx';
 import PolicyReminder from './components/PolicyReminder.jsx';
 import VehicleImportDialog from './components/VehicleImportDialog.jsx';
+import InventoryPicker from './components/InventoryPicker.jsx';
+import { rememberCompanion } from './lib/companionInventory.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, isBaselineDeskInput, isDeskDraftField } from './lib/deskDraft.js';
+import { DraftContext } from './components/DraftContext.jsx';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
@@ -50,8 +54,26 @@ function useEasternToday() {
   return today;
 }
 
-export default function App() {
-  const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
+export default function App({ restoreDraft = true, savedDraftSession }) {
+  const [draftSession] = useState(() => savedDraftSession ?? createDeskDraftSession());
+  const [restoredDraft] = useState(() => restoreDraft ? draftSession.draft : null);
+  const [state, dispatch] = useReducer(deskReducer, undefined, () => restoredDraft?.desk ?? createDeskState());
+  const [inputDrafts, setInputDrafts] = useState(() => restoredDraft?.inputDrafts ?? {});
+  const [draftStatus, setDraftStatus] = useState('saving');
+  const draftSaved = draftStatus === 'saved';
+  const rememberInput = useCallback((id, raw) => {
+    if (!isDeskDraftField(id)) return;
+    setInputDrafts(current => {
+      if (isBaselineDeskInput(id, raw, state.startDate)) {
+        if (!(id in current)) return current;
+        const next = { ...current };
+        delete next[id];
+        return next;
+      }
+      return current[id]?.raw === raw ? current : { ...current, [id]: { raw } };
+    });
+  }, [state.startDate]);
+  const draftContext = useMemo(() => ({ values: inputDrafts, remember: rememberInput }), [inputDrafts, rememberInput]);
   const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
   const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
   const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
@@ -61,6 +83,8 @@ export default function App() {
   const dealershipFees = useMemo(() => resolveFees(feeSettings), [feeSettings]);
   const dealInput = useMemo(() => ({ ...deal, dealershipFees }), [deal, dealershipFees]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  useEffect(rememberCompanion, []);
   const [vehicleImport, setVehicleImport] = useState(() => parseVehicleHandoff(window.location.hash));
   useEffect(() => {
     const scrubFragment = () => {
@@ -90,11 +114,32 @@ export default function App() {
   const saveSettings = (nextBrand, nextFees) => applySettings(saveDeviceSettings(nextBrand, nextFees));
   const clearSettings = () => applySettings(clearDeviceSettings());
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
-  const [targetType, setTargetType] = useState('payment');
-  const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
+  const [targetType, setTargetType] = useState(() => restoredDraft?.targetType ?? 'payment');
+  const [targetValues, setTargetValues] = useState(() => restoredDraft?.targetValues ?? { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
   const [solverExpanded, setSolverExpanded] = useState(false);
   const [accordions, setAccordions] = useState(allOpen);
   const [contextOpen, setContextOpen] = useState(false);
+  useEffect(() => {
+    const changed = event => {
+      if (event.key !== null && event.key !== DESK_DRAFT_KEY) return;
+      const status = draftSession.status();
+      if (status !== 'saved') setDraftStatus(status);
+    };
+    window.addEventListener('storage', changed);
+    return () => window.removeEventListener('storage', changed);
+  }, [draftSession]);
+  useEffect(() => {
+    let current = true;
+    // This status describes external storage work, not derived deal state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraftStatus(status => status === 'conflict' ? status : 'saving');
+    void draftSession.save({ desk: state, targetType, targetValues, inputDrafts }).then(outcome => {
+      if (!current) return;
+      const status = draftSession.status();
+      setDraftStatus(outcome.conflict || status === 'conflict' ? 'conflict' : outcome.ok && status === 'saved' ? 'saved' : 'error');
+    });
+    return () => { current = false; };
+  }, [draftSession, state, targetType, targetValues, inputDrafts]);
   const [fieldErrors, setFieldErrors] = useState({});
   const targetInputRef = useRef(null);
   const reportError = useCallback((id, error) => setFieldErrors(current => {
@@ -110,6 +155,9 @@ export default function App() {
   const result = calculation.result;
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
+  const hasDraftEdits = hasDeal || hasDeskDraftEdits({ desk: state, targetValues, inputDrafts });
+  // A blank reset still needs confirmation that the old stored draft was removed.
+  const needsDraftConfirmation = hasDraftEdits || resetCount > 0 || !restoreDraft;
   const canCompare = getProposalStatus({ dealInput, result, hasInputErrors }).canExport;
   const today = useEasternToday();
 
@@ -118,11 +166,11 @@ export default function App() {
   }, [hasDeal, today]);
 
   useEffect(() => {
-    if (!hasDeal) return;
+    if (!needsDraftConfirmation || draftSaved) return;
     const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [hasDeal]);
+  }, [needsDraftConfirmation, draftSaved]);
 
   const focusFirstError = () => {
     setAccordions(allOpen());
@@ -155,12 +203,14 @@ export default function App() {
     focusDestination('payment-grid-heading');
   };
   const clearDeal = () => {
+    setDraftStatus(status => status === 'conflict' ? status : 'saving');
     dispatch({ type: 'reset' });
+    setInputDrafts({});
     setTargetType('payment'); setTargetValues({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
     setSolverExpanded(false); setAccordions(allOpen()); setFieldErrors({}); setContextOpen(false);
   };
   const resetDeal = () => {
-    if (hasDeal && !window.confirm('Reset this deal? All figures, trade, and products will be cleared.')) return;
+    if (hasDraftEdits && !window.confirm('Reset this deal? All figures, trade, products, targets and the selected date will be cleared.')) return;
     clearDeal();
     focusDestination('worksheet-heading');
   };
@@ -203,13 +253,14 @@ export default function App() {
     onStartEstimate: () => { dispatch({ type: 'grid-visibility', open: false }); setAccordions(current => ({ ...current, vehicle: true })); focusDestination('sale-price'); } };
 
   return (
-    <ValidationContext.Provider value={reportError}>
+    <ValidationContext.Provider value={reportError}><DraftContext.Provider value={draftContext}>
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
         {view === 'dealer' ? <PolicyReminder shortText={policyReviewReminderShort(today)} text={policyReviewReminder(today)} /> : null}
         {settingsOpen ? <DealershipSettingsDialog feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
-        {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDeal={hasDeal} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
+        {inventoryOpen ? <InventoryPicker onClose={() => { setInventoryOpen(false); requestAnimationFrame(() => document.getElementById('inventory-picker-trigger')?.focus()); }} onChoose={vehicle => { setInventoryOpen(false); setVehicleImport({ vehicle, error: null }); }} /> : null}
+        {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDraftEdits={hasDraftEdits} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
         {hasInputErrors ? <div className="validation-banner" role="alert">
           <strong>Check the highlighted figures.</strong> {calculation.error || 'The estimate uses the last valid values. Correct the input before comparing or creating a proposal.'}
           {Object.keys(fieldErrors).length ? <button type="button" onClick={focusFirstError}>Go to field</button> : null}
@@ -221,6 +272,7 @@ export default function App() {
                 <div className="page-intro" role="region" aria-label="Worksheet introduction"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
                 <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
+                <div className="deal-tools">
                 <details className="deal-details" open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)}>
                 <summary><strong>Deal details</strong><span>{dealInput.vehicleDescription || 'Vehicle reference & estimate date'}</span><time dateTime={dealInput.dealDate}>{formatShortDate(dealInput.dealDate)}</time></summary>
                 <div className="deal-context">
@@ -228,8 +280,15 @@ export default function App() {
                   <EstimateDateField value={dealInput.dealDate} onChange={value => updateField('dealDate', value)} />
                 </div>
                 </details>
+                <button className="inventory-picker-trigger" id="inventory-picker-trigger" onClick={() => setInventoryOpen(true)} type="button">Inventory</button>
+                </div>
                 <DealerView accordions={accordions} addItem={preset => dispatch({ type: 'add-item', preset })} dealInput={dealInput}
-                  removeItem={index => dispatch({ type: 'remove-item', index })} result={result} targetProps={targetProps}
+                  removeItem={index => {
+                    const item = deal.optionalItems[index];
+                    if (!item) return;
+                    setInputDrafts(current => { const next = { ...current }; delete next[`product-${item.id}-amount`]; return next; });
+                    dispatch({ type: 'remove-item', index });
+                  }} result={result} targetProps={targetProps}
                   toggleAccordion={name => setAccordions(current => ({ ...current, [name]: !current[name] }))}
                   updateField={updateField} updateItem={(index, patch) => dispatch({ type: 'item', index, patch })} />
               </div>
@@ -248,11 +307,14 @@ export default function App() {
           rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onStartEstimate={summaryProps.onStartEstimate} /> : null}
         <footer className="app-footer">
           <p>Estimates only. Subject to lender approval and final taxes, fees, and deal structure.</p>
-          <p>Figures stay in this browser unless you share or print. Refreshing clears the deal.</p>
+          <p>{draftStatus === 'conflict' ? 'Another tab changed the saved draft. This worksheet has not been saved. Copy or print it, then reload to open the latest draft.'
+            : draftStatus === 'saving' ? 'Saving draft on this device…'
+            : draftSaved ? 'Draft saved on this device. Refreshing keeps your figures; Reset deal clears them.'
+            : 'Draft could not be saved on this device. Keep this page open until you copy or print your estimate.'}</p>
           <p>Michigan purchase estimates · v{APP_VERSION} · {BUILD_ID}</p>
         </footer>
         {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { if (!(result.salePrice > 0)) { summaryProps.onStartEstimate(); return; } dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}
       </div>
-    </ValidationContext.Provider>
+    </DraftContext.Provider></ValidationContext.Provider>
   );
 }

@@ -61,6 +61,38 @@ test('product categories, explicit Other tax treatment, and complete customer ex
   }
 });
 
+test('cash down and every grid down-payment input retain focus through complete amounts', async ({ page }) => {
+  test.setTimeout(90_000);
+  const cashDown = page.getByLabel('Cash down', { exact: true });
+  await cashDown.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type('1234.56', { delay: 30 });
+  await expect(cashDown).toBeFocused();
+  await expect(cashDown).toHaveValue('1234.56');
+  await cashDown.blur();
+  await expect(cashDown).toHaveValue('1,234.56');
+
+  const mobile = page.viewportSize().width <= 800;
+  await (mobile ? page.locator('#mobile-grid-trigger') : page.locator('.grid-jump')).click();
+  const amounts = ['1234.56', '2345.67', '3456.78', '4567.89'];
+  for (const [index, amount] of amounts.entries()) {
+    const input = page.getByLabel(`Down payment ${mobile ? 'option' : 'column'} ${index + 1}`, { exact: true });
+    await input.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type(amount, { delay: 30 });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(amount);
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type(String(2000 + index * 1000), { delay: 30 });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(String(2000 + index * 1000));
+    await input.blur();
+    await expect(input).toHaveValue(`${index + 2},000`);
+  }
+  await page.getByRole('button', { name: /Use 60 months.*5,000.*down/ }).filter({ visible: true }).click();
+  await expect(cashDown).toHaveValue('5,000');
+});
+
 test('grid selection and customer navigation retain visible totals on every device', async ({ page }) => {
   const mobile = page.viewportSize().width <= 800;
   await (mobile ? page.locator('#mobile-grid-trigger') : page.locator('.grid-jump')).click();

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { formatCurrency } from '../lib/formatters.js';
 
-export default function VehicleImportDialog({ vehicle, error, hasDeal, onAccept, onClose }) {
+export default function VehicleImportDialog({ vehicle, error, hasDraftEdits, onAccept, onClose }) {
   const dialogRef = useRef(null);
   const titleId = useId();
   useEffect(() => {
@@ -17,7 +17,7 @@ export default function VehicleImportDialog({ vehicle, error, hasDeal, onAccept,
             <div><dt>Vehicle / stock reference</dt><dd>{vehicle.vehicleDescription || 'Not provided'}</dd></div>
             <div><dt>Selling price</dt><dd>{vehicle.salePrice === null ? 'Not provided — enter it in the worksheet' : formatCurrency(vehicle.salePrice)}</dd></div>
           </dl>
-          {hasDeal ? <p className="vehicle-import__warning">Starting this estimate will clear the current deal figures, trade and products. Your dealership settings stay saved.</p> : null}
+          {hasDraftEdits ? <p className="vehicle-import__warning">Starting this estimate will clear the current deal figures, trade, products, targets and selected date. Your dealership settings stay saved.</p> : null}
         </>}
         <div className="settings-dialog__actions">
           <button className="settings-dialog__button" onClick={() => dialogRef.current.close()} type="button">{error ? 'Dismiss' : 'Cancel'}</button>

@@ -116,7 +116,7 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
     <dialog aria-labelledby={titleId} className="settings-dialog" onClose={onClose} ref={dialogRef}>
       <form className="settings-dialog__form" noValidate onSubmit={save}>
         <h2 id={titleId}>Dealership settings</h2>
-        <p className="settings-dialog__note">Saved on this device only. Customer figures are never saved.</p>
+        <p className="settings-dialog__note">Saved on this device only. Reset deal clears the worksheet draft.</p>
         <div className="settings-dialog__field">
           <label htmlFor={nameId}>Dealership name <span>Optional</span></label>
           <input autoComplete="organization" className="text-input" disabled={finished} id={nameId} maxLength={MAX_DEALERSHIP_NAME_LENGTH}

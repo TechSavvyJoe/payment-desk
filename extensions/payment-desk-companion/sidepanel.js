@@ -1,5 +1,8 @@
 import { captureListing } from './captureListing.js';
 import { parseAdvertisedPrice, PAYMENT_DESK_URL, vehicleHandoffUrl } from './vehicleHandoff.js';
+import { installInventoryPanel } from './inventoryPanel.js';
+import { installWorksheet } from './worksheetLoader.js';
+import { COMPANION_PREFIX } from './inventoryWeb.js';
 
 const nameInput = document.getElementById('vehicle-name');
 const stockInput = document.getElementById('stock');
@@ -11,7 +14,13 @@ const desk = document.getElementById('desk');
 const notice = document.getElementById('notice');
 const reviewButton = document.getElementById('start-estimate');
 let worksheetReady = false;
+let captureSequence = 0;
 const updateReviewButton = () => { reviewButton.disabled = !worksheetReady || captureButton.disabled; };
+const cancelCapture = () => {
+  captureSequence++;
+  captureButton.disabled = false;
+  updateReviewButton();
+};
 const showNotice = (text, error = false) => {
   notice.textContent = text;
   notice.classList.toggle('is-error', error);
@@ -21,25 +30,34 @@ const showControls = open => {
   toggleButton.setAttribute('aria-expanded', String(open));
   toggleButton.textContent = open ? 'Hide vehicle' : 'Enter vehicle';
 };
-const enableWorksheet = () => {
-  // A cached worksheet may finish loading before this module's imports finish.
-  // Do not mistake the iframe's initial about:blank document for the worksheet.
-  if (desk.contentWindow.location.pathname === '/desk/index.html' && desk.contentDocument.readyState === 'complete') {
-    worksheetReady = true;
-    updateReviewButton();
-  }
-};
-desk.addEventListener('load', enableWorksheet);
-enableWorksheet();
+const inventory = installInventoryPanel(vehicle => {
+  cancelCapture();
+  document.getElementById('vehicle-form').reset();
+  priceInput.removeAttribute('aria-invalid');
+  nameInput.value = vehicle.name.slice(0, 67);
+  stockInput.value = vehicle.stock.slice(0, 24);
+  priceInput.value = vehicle.price === null ? '' : String(vehicle.price);
+  document.getElementById('source').textContent = `Saved from ${new URL(vehicle.url).hostname} · Last seen ${new Date(vehicle.lastSeenAt).toLocaleString()}`;
+  showNotice(vehicle.priceNote || 'Confirm the selling price and availability before reviewing in the worksheet.');
+  showControls(true);
+  (vehicle.price === null ? priceInput : nameInput).focus();
+}, () => { cancelCapture(); showControls(false); });
+installWorksheet(() => {
+  worksheetReady = true;
+  updateReviewButton();
+});
 toggleButton.addEventListener('click', () => {
+  inventory.close();
   showControls(controls.hidden);
   if (!controls.hidden) nameInput.focus();
 });
 document.getElementById('open-desk').addEventListener('click', async () => {
-  try { await chrome.tabs.create({ url: PAYMENT_DESK_URL }); }
+  try { await chrome.tabs.create({ url: PAYMENT_DESK_URL + COMPANION_PREFIX + chrome.runtime.id }); }
   catch { showControls(true); showNotice('The web app could not be opened. You can continue in the worksheet below.', true); }
 });
 captureButton.addEventListener('click', async () => {
+  const sequence = ++captureSequence;
+  inventory.close();
   showControls(true);
   captureButton.disabled = true;
   updateReviewButton();
@@ -51,8 +69,10 @@ captureButton.addEventListener('click', async () => {
   showNotice('Reading vehicle details…');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (sequence !== captureSequence) return;
     if (!tab?.id || !/^https?:\/\//i.test(tab.url ?? '')) throw new Error('Restricted page');
     const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: captureListing });
+    if (sequence !== captureSequence) return;
     const details = injection?.result;
     if (!details) throw new Error('No details');
     nameInput.value = details.name;
@@ -62,11 +82,14 @@ captureButton.addEventListener('click', async () => {
     document.getElementById('source').textContent = `From ${details.sourceHost}`;
     showNotice(details.notice);
   } catch {
+    if (sequence !== captureSequence) return;
     document.getElementById('source').textContent = 'Enter the vehicle details manually.';
     showNotice('This page cannot be read. Open a vehicle listing and click the toolbar icon to allow capture on that tab, or enter the details here.', true);
   } finally {
-    captureButton.disabled = false;
-    updateReviewButton();
+    if (sequence === captureSequence) {
+      captureButton.disabled = false;
+      updateReviewButton();
+    }
   }
 });
 document.getElementById('vehicle-form').addEventListener('submit', event => {
