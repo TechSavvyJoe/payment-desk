@@ -119,6 +119,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const clearSettings = () => applySettings(clearDeviceSettings());
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState(() => restoredDraft?.targetType ?? 'payment');
+  const [targetInputRevision, setTargetInputRevision] = useState(0);
   const [targetValues, setTargetValues] = useState(() => restoredDraft?.targetValues ?? { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
   const [solverExpanded, setSolverExpanded] = useState(false);
   const [accordions, setAccordions] = useState(allOpen);
@@ -201,10 +202,13 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
       destination?.scrollIntoView({ block: 'center' });
     });
   };
-  const changeTargetType = next => {
-    if (next === targetType) return;
+  const clearTargetDraft = () => {
     setInputDrafts(current => { const updated = { ...current }; delete updated['target-value']; return updated; });
     setFieldErrors(current => { const updated = { ...current }; delete updated['target-value']; return updated; });
+  };
+  const changeTargetType = next => {
+    if (next === targetType) return;
+    clearTargetDraft();
     setTargetType(next);
   };
   const updateField = (field, value) => {
@@ -254,8 +258,10 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     closeVehicleImport();
   };
   const activatePaymentTarget = value => {
+    clearTargetDraft();
     setTargetType('payment');
     setTargetValues(current => ({ ...current, payment: value }));
+    setTargetInputRevision(current => current + 1);
     requestAnimationFrame(() => {
       targetInputRef.current?.focus();
       targetInputRef.current?.select();
@@ -263,7 +269,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     });
   };
   const targetProps = {
-    targetType, targetValues, gridRates, lastRoll, targetInputRef, hasInputErrors, canCompare,
+    targetType, targetValues, gridRates, lastRoll, targetInputRef, targetInputRevision, hasInputErrors, canCompare,
     onTargetTypeChange: changeTargetType,
     onTargetValueChange: (type, value) => setTargetValues(current => ({ ...current, [type]: value })),
     expanded: solverExpanded, onExpandedChange: setSolverExpanded,

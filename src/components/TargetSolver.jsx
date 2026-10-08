@@ -16,7 +16,7 @@ const explanations = {
 
 export default function TargetSolver({ dealInput, result, targetType, targetValues, onTargetTypeChange,
   onTargetValueChange, gridRates, expanded, onExpandedChange, onApplyPatch, onApplyItemPatch,
-  onAddRoomItem, lastRoll, onUndoRoll, targetInputRef, hasInputErrors = false, canCompare = true }) {
+  onAddRoomItem, lastRoll, onUndoRoll, targetInputRef, targetInputRevision = 0, hasInputErrors = false, canCompare = true }) {
   const targetValue = targetValues[targetType];
   const solution = useMemo(() => getPurchaseScope(dealInput).supported
     ? buildSuggestions({ dealInput, result, targetType, targetValue, gridRates })
@@ -48,7 +48,7 @@ export default function TargetSolver({ dealInput, result, targetType, targetValu
     <div className={`target-panel__body ${solution.empty ? 'is-empty' : ''}`}>
       <div className="target-setup">
         <SegmentedControl className="target-tabs" label="Target type" onChange={onTargetTypeChange} options={result.isFinanced ? [{ label: 'Payment', value: 'payment' }, { label: 'Out-the-door', value: 'outTheDoor' }, { label: 'Loan balance', value: 'amountFinanced' }] : [{ label: 'Cash due after trade', value: 'cashDue' }, { label: 'Out-the-door', value: 'outTheDoor' }]} value={targetType} />
-        <div className="target-input-row"><label htmlFor="target-value">Target {labels[targetType]}</label><MoneyInput key={targetType} ariaLabel={`Target ${labels[targetType]}`} id="target-value" onChange={value => onTargetValueChange(targetType, value)} ref={targetInputRef} value={targetValue} /><span>{targetType === 'payment' ? 'per month' : ''}</span></div>
+        <div className="target-input-row"><label htmlFor="target-value">Target {labels[targetType]}</label><MoneyInput key={`${targetType}-${targetInputRevision}`} ariaLabel={`Target ${labels[targetType]}`} id="target-value" onChange={value => onTargetValueChange(targetType, value)} ref={targetInputRef} value={targetValue} /><span>{targetType === 'payment' ? 'per month' : ''}</span></div>
         <p className="target-summary" aria-live="polite">{summary}</p>
         <p className="target-definition">{explanations[targetType]} Each scenario changes one part of the deal; Apply recalculates the remaining options.</p>
         {targetValue !== '' && result.salePrice > 0 ? <p className="target-current">Current {labels[targetType]}: <strong>{formatCurrency(targetType === 'payment' ? result.monthlyPayment : targetType === 'cashDue' ? result.dueAtSigning : result[targetType])}</strong></p> : null}

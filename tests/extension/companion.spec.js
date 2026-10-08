@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
+import { DESK_DRAFT_KEY, LEGACY_DESK_DRAFT_KEY } from '../../src/lib/deskDraft.js';
 
 let context;
 let extensionId;
@@ -441,7 +442,12 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
   await expect(settings.getByRole('textbox', { name: 'Document fee', exact: true })).toHaveValue('200');
   await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('125.5');
   const frame = panel.frames().find(frame => frame.url().endsWith('/desk/index.html'));
-  expect(await frame.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.fees.v1']);
+  const saved = await frame.evaluate(({ key, legacy }) => ({
+    keys: Object.keys(localStorage).sort(), marker: JSON.parse(localStorage.getItem(key)), legacy: localStorage.getItem(legacy),
+  }), { key: DESK_DRAFT_KEY, legacy: LEGACY_DESK_DRAFT_KEY });
+  expect(saved.keys).toEqual(['payment-desk.dealership.v1', DESK_DRAFT_KEY, 'payment-desk.fees.v1'].sort());
+  expect(saved.marker).toEqual({ version: 2, discarded: true, revision: expect.any(String) });
+  expect(saved.legacy).toBeNull();
 });
 
 test('the companion draft survives panel reload and reopening until Reset deal', async () => {

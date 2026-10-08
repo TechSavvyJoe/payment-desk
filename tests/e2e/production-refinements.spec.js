@@ -89,3 +89,33 @@ test('phone and panel worksheet return focus is visible', async ({ page }) => {
     await expect(page.locator('#calculator-top')).toBeFocused();
   }
 });
+
+test('Set payment target replaces stale raw errors and retains other committed targets', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#sale-price').fill('25000');
+  await page.locator('#sale-price').blur();
+  const input = page.locator('#target-value');
+  for (const mode of ['Out-the-door', 'Loan balance']) {
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await input.fill('23000.25'); await input.blur();
+    await input.fill('abc'); await input.blur();
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await page.locator('.payment-edit-button:visible').click();
+    await expect(input).toHaveAccessibleName('Target payment');
+    await expect(input).toHaveValue('451.58');
+    await expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(input).toBeFocused();
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await expect(input).toHaveValue('23,000.25');
+    await page.locator('.payment-edit-button:visible').click();
+  }
+  for (let repeat = 0; repeat < 2; repeat++) {
+    await input.fill('abc'); await input.blur();
+    await page.locator('.payment-edit-button:visible').click();
+    await expect(input).toHaveValue('451.58');
+    await expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(input).toBeFocused();
+  }
+  await input.fill(''); await input.pressSequentially('450.25');
+  await expect(input).toBeFocused(); await expect(input).toHaveValue('450.25');
+});
