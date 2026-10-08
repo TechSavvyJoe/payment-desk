@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDeskState, deskReducer } from '../src/lib/dealState.js';
-import { createDeskDraftSession, DESK_DRAFT_KEY, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
 
 const empty = () => ({ version: 1, desk: createDeskState('2026-10-07'), targetType: 'payment', targetValues: { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' }, inputDrafts: {} });
 const storage = () => {
@@ -12,6 +12,18 @@ const locks = () => {
   let pending = Promise.resolve();
   return { request: (_name, callback) => { pending = pending.then(callback); return pending; } };
 };
+
+test('draft-only targets, dates and unfinished inputs count as meaningful edits', () => {
+  assert.equal(hasDeskDraftEdits(empty()), false);
+  for (const target of ['payment', 'outTheDoor', 'amountFinanced', 'cashDue']) {
+    const value = empty(); value.targetValues[target] = 0;
+    assert.equal(hasDeskDraftEdits(value), true);
+  }
+  const dated = empty(); dated.desk.dateChosen = true;
+  assert.equal(hasDeskDraftEdits(dated), true);
+  const unfinished = empty(); unfinished.inputDrafts['target-value'] = { raw: '5.' };
+  assert.equal(hasDeskDraftEdits(unfinished), true);
+});
 
 test('draft sessions serialize simultaneous writes and refuse stale saves and resets', async () => {
   const device = storage(), coordinator = locks();

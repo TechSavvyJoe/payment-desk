@@ -22,7 +22,7 @@ import PolicyReminder from './components/PolicyReminder.jsx';
 import VehicleImportDialog from './components/VehicleImportDialog.jsx';
 import InventoryPicker from './components/InventoryPicker.jsx';
 import { rememberCompanion } from './lib/companionInventory.js';
-import { createDeskDraftSession, DESK_DRAFT_KEY, isDeskDraftField } from './lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, isDeskDraftField } from './lib/deskDraft.js';
 import { DraftContext } from './components/DraftContext.jsx';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
@@ -144,6 +144,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const result = calculation.result;
   const hasInputErrors = Object.keys(fieldErrors).length > 0 || Boolean(calculation.error);
   const hasDeal = hasDealEdits(state) || hasInputErrors;
+  const hasDraftEdits = hasDeal || hasDeskDraftEdits({ desk: state, targetValues, inputDrafts });
   const canCompare = getProposalStatus({ dealInput, result, hasInputErrors }).canExport;
   const today = useEasternToday();
 
@@ -152,11 +153,11 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   }, [hasDeal, today]);
 
   useEffect(() => {
-    if (!hasDeal || draftSaved) return;
+    if (!hasDraftEdits || draftSaved) return;
     const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [hasDeal, draftSaved]);
+  }, [hasDraftEdits, draftSaved]);
 
   const focusFirstError = () => {
     setAccordions(allOpen());

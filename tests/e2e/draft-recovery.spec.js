@@ -181,6 +181,33 @@ test('simultaneous tab edits keep one saved draft and warn the other tab', async
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.cashDown, KEY)).toBe(0);
 });
 
+for (const reason of ['blocked', 'conflicted']) {
+  test(`unsaved target-only work warns before leaving when storage is ${reason}`, async ({ page, context }) => {
+    if (reason === 'blocked') {
+      await page.addInitScript(() => { Storage.prototype.setItem = () => { throw new Error('blocked'); }; });
+      await page.reload();
+    }
+    await page.locator('#target-value').click();
+    await page.locator('#target-value').fill('500');
+    await page.locator('#target-value').blur();
+    if (reason === 'conflicted') {
+      await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');
+      const other = await context.newPage();
+      await other.goto('/');
+      await other.locator('#sale-price').fill('30000');
+      await other.locator('#sale-price').blur();
+      await expect(page.locator('.app-footer')).toContainText('Another tab changed the saved draft');
+    } else await expect(page.locator('.app-footer')).toContainText('Draft could not be saved');
+    await expect(page.locator('#sale-price')).toHaveValue('');
+    const prompt = page.waitForEvent('dialog', { timeout: 3000 });
+    await page.close({ runBeforeUnload: true });
+    const dialog = await prompt;
+    expect(dialog.type()).toBe('beforeunload');
+    await dialog.dismiss();
+    await expect(page.locator('#target-value')).toHaveValue('500');
+  });
+}
+
 test('an invalid grid rate survives refresh and blocks an estimate until corrected', async ({ page }) => {
   await page.locator('#sale-price').fill('30000');
   await openGrid(page);

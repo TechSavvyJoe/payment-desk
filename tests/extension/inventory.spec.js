@@ -425,6 +425,42 @@ test('a failed connection withdraws only newly approved website access', async (
   expect((await saved()).config).toEqual(previous.config);
 });
 
+test('unknown cached conditions require all or both verified condition feeds before unlisting', async () => {
+  await connect();
+  await panel.evaluate(async key => {
+    const state = (await chrome.storage.local.get(key))[key];
+    const { vehicleRecord } = await import('./inventoryModel.js');
+    const unknown = vehicleRecord({ ...state.vehicles[0], vin: '1FM5K8D80MGA19999', stock: 'X999', condition: 'unknown' }, state.config.site, Date.now());
+    state.vehicles = [state.vehicles.find(vehicle => vehicle.condition === 'new'), unknown];
+    await chrome.storage.local.set({ [key]: state });
+  }, KEY);
+  const previous = await saved();
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchnew.aspx">New inventory</a>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  const partial = await saved();
+  expect(partial.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(partial.vehicles.find(vehicle => vehicle.condition === 'unknown').listed).toBe(true);
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchnew.aspx">New</a><a href="/searchused.aspx">Used</a>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.lastCompletedAt, { timeout: 30_000 }).not.toBe(previous.lastCompletedAt);
+  expect((await saved()).status).toBe('ready');
+  expect((await saved()).vehicles.find(vehicle => vehicle.condition === 'unknown').listed).toBe(false);
+  await panel.evaluate(async key => {
+    const state = (await chrome.storage.local.get(key))[key];
+    state.vehicles.find(vehicle => vehicle.condition === 'unknown').listed = true;
+    await chrome.storage.local.set({ [key]: state });
+  }, KEY);
+  const complete = await saved();
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchall.aspx">All</a>' }));
+  await context.route(`${site}searchall.aspx`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config('used'), PageId: 30, BaseFilter: '', PageVehicleType: 'All' })}</script>` }));
+  await context.route(`${site}api/vhcliaa/**/30?*`, route => route.fulfill({ json: { DisplayCards: [card('new', 1)], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 1, TotalCount: 1 } } } }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.lastCompletedAt, { timeout: 30_000 }).not.toBe(complete.lastCompletedAt);
+  expect((await saved()).status).toBe('ready');
+  expect((await saved()).vehicles.find(vehicle => vehicle.condition === 'unknown').listed).toBe(false);
+});
+
 test('connects both inventories, follows all pages, shows data, and reviews without clearing a deal', async () => {
   await connect();
   const state = await saved();

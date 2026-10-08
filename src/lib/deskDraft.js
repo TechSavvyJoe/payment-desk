@@ -67,12 +67,15 @@ export function loadDeskDraft(storage = storageOnDevice()) {
   } catch { return null; }
 }
 
+export function hasDeskDraftEdits({ desk, targetValues, inputDrafts }) {
+  return hasDealEdits(desk) || desk.dateChosen || targets.some(type => targetValues[type] !== '') || Object.keys(inputDrafts).length > 0;
+}
+
 export function saveDeskDraft(value, storage = storageOnDevice()) {
   const draft = normalizeDeskDraft({ ...value, version: 1 });
   if (!storage || !draft) return { ok: false };
   try {
-    const empty = !hasDealEdits(draft.desk) && !draft.desk.dateChosen
-      && targets.every(type => draft.targetValues[type] === '') && !Object.keys(draft.inputDrafts).length;
+    const empty = !hasDeskDraftEdits(draft);
     if (empty) storage.removeItem(DESK_DRAFT_KEY);
     else {
       const raw = JSON.stringify(draft);
