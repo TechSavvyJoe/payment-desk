@@ -29,7 +29,7 @@ export function createDeskState(dealDate = todayDealDate()) {
     deal: { salePrice: null, cashDown: 0, tradeAllowance: 0, tradePayoff: 0,
       dealType: 'finance', plateMode: 'transfer', newPlateAmount: null,
       rollNegativeEquity: true, apr: 6.5, termMonths: 72, optionalItems: [],
-      dealDate, vehicleDescription: '' },
+      dealDate, vehicleDescription: '', registrationState: 'MI', transactionScope: 'resident-retail' },
     gridRates: { ...DEFAULT_APR_BY_TERM }, gridDownPayments: [0, 1000, 2000, 3000],
     view: 'dealer', mobileGridOpen: false, lastRoll: null, nextItemId: 1, resetCount: 0,
     // The day this desk was started. Edits are measured against a blank desk from

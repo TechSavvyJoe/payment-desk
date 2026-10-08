@@ -1,6 +1,6 @@
 # Payment Desk Companion
 
-Chrome extension, version 1.2.2, for Chrome 116 or later. The toolbar icon opens the full Payment Desk worksheet in Chrome's side panel so you can desk beside a vehicle listing. The worksheet, calculations and fonts are bundled with the extension and work offline. Listing capture requires an open listing. Optional dealership inventory connects a website and keeps a public vehicle catalog on this computer.
+Chrome extension, version 1.3.0, for Chrome 116 or later. The toolbar icon opens the full Payment Desk worksheet in Chrome's side panel so you can desk beside a vehicle listing. The worksheet, calculations, PDF export and fonts are bundled with the extension and work offline. Listing capture requires an open listing. Optional dealership inventory connects a website and keeps a public vehicle catalog on this computer.
 
 ## Install in Chrome
 
@@ -17,7 +17,9 @@ The panel opens its listing tools before loading the worksheet. If the worksheet
 
 For a wider worksheet, drag the panel's left edge toward the webpage. Chrome controls the outer panel width; the worksheet fills the space available. See [Chrome's side panel controls](https://support.google.com/chrome/answer/13156494?hl=en).
 
-Click the extension icon and use the worksheet directly: enter selling price, trade, cash down, products and financing; compare payments; switch to Customer view to copy or print an estimate. The open global panel retains the current worksheet when you switch browser tabs. Its draft is saved automatically on this device and restored after reload or reopening. **Reset deal** clears the saved draft; reset when finished on a shared device. Storage failures appear in the worksheet footer. Removing the extension or clearing its site data can erase the draft.
+Click the extension icon and use the worksheet directly: enter selling price, trade, cash down, products and financing; compare payments; switch to Customer view to download a PDF, share its file through a supported system sharing menu, copy a summary or print an estimate. Share PDF does not substitute text for the attachment. A browser without file sharing offers Download PDF. The sharing app determines its available destinations; a successful handoff is not confirmation of customer delivery. The open global panel retains the current worksheet when you switch browser tabs. Its draft is saved automatically on this device and restored after reload or reopening. **Reset deal** clears the saved draft; reset when finished on a shared device. Storage failures appear in the worksheet footer. Removing the extension or clearing its site data can erase the draft.
+
+Review **tax coverage** before using an estimate: the current calculator supports the reviewed Michigan resident retail scope. Automatic nationwide tax/title/registration data is not connected. Unsupported jurisdictions and transactions block customer estimates. The footer links bundled staff instructions, technical data handling and dependency notices.
 
 For capture, open a single vehicle listing, click the extension icon to grant access on that tab, then **Capture listing**. Review or edit Vehicle, Stock # and Selling price. Select **Review in worksheet** and confirm **Start new estimate** below. The app clears the import fragment and applies only the price and reference; taxes, fees, trade and financing use the worksheet's own rules. A missing price can be entered there. Existing deals require confirmation before being cleared. **Enter vehicle** opens the same fields for manual entry. **Hide vehicle** restores the worksheet's full height.
 
@@ -45,7 +47,7 @@ Search by vehicle, stock or VIN, filter new/used, and expand **Vehicle details**
 
 **Refresh nightly while Chrome is running** schedules about 2 AM in this computer's local time zone. Chrome must be running and the computer awake/online to perform a read. A missed scheduled run is checked at the next Chrome start; an interrupted run can resume from its saved page queue. **Refresh now** is available at any time. Turn the checkbox off to use manual updates. Closing the side panel does not stop a scheduled read. There is no server running when Chrome is closed.
 
-A full refresh compares page counts and deduplicates by VIN or listing URL. A partial/blocked refresh keeps the old catalog and clearly reports its incomplete state. Missing vehicles are marked **not seen**, never inferred to be sold; **Include previously listed vehicles** reveals them. Check last-seen dates when using cached data. Catalogs are limited to 3,000 records and 80 source requests per run; reaching a limit reports a partial refresh. Disconnect affects inventory only; Reset deal affects the worksheet only.
+A full refresh compares page counts and deduplicates by VIN or listing URL. Repeated pages, restrictive filters, redirects outside the permitted source, and uncertain new/used coverage cannot certify a complete catalog. Retry-After pauses are retained between runs. A partial/blocked refresh keeps the old catalog and clearly reports its incomplete state. Missing vehicles are marked **not seen**, never inferred to be sold; **Include previously listed vehicles** reveals them. Check last-seen dates when using cached data. If the catalog changes while paging on the website, reload it before continuing. Catalogs are limited to 3,000 records and 80 source requests per run; reaching a limit reports a partial refresh. Disconnect affects inventory only; Reset deal affects the worksheet only.
 
 ## Develop and verify
 

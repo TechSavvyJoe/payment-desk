@@ -62,7 +62,7 @@ test('finance term is a visible target option and only Apply changes the workshe
   await expect(termOption).toContainText('84 months');
   await expect(termOption).toContainText('remaining to target');
   await expect(page.getByRole('button', { name: 'See all options', exact: true })).toBeVisible();
-  await expect(currentSummary(page)).toContainText('72 months at 6.50% APR');
+  await expect(currentSummary(page)).toContainText('72 months at 6.50% interest rate');
   await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toHaveValue('30,000');
   await expect(page.getByRole('textbox', { name: 'Cash down', exact: true })).toHaveValue('0');
   await target(page).fill('500');
@@ -70,11 +70,11 @@ test('finance term is a visible target option and only Apply changes the workshe
   const previewPayment = await termOption.locator('.suggestion-preview>strong').innerText();
   await termOption.getByRole('button', { name: 'Apply Change finance term', exact: true }).click();
   await expect(selectedPayment(page)).toHaveText(previewPayment.replace('/mo', ''));
-  await expect(currentSummary(page)).toContainText('84 months at 7.00% APR');
+  await expect(currentSummary(page)).toContainText('84 months at 7.00% interest rate');
   await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toHaveValue('30,000');
   await expect(page.getByRole('textbox', { name: 'Cash down', exact: true })).toHaveValue('0');
   await page.getByRole('button', { name: 'Undo adjustment', exact: true }).click();
-  await expect(currentSummary(page)).toContainText('72 months at 6.50% APR');
+  await expect(currentSummary(page)).toContainText('72 months at 6.50% interest rate');
   await expect(selectedPayment(page)).toHaveText('$540.67');
 });
 
@@ -119,16 +119,23 @@ test('a later payoff edit expires Undo without removing the new payoff', async (
   await expect(page.getByRole('textbox', { name: 'Trade payoff', exact: true })).toHaveValue('3,000');
 });
 
-test('APR input, selected payment and customer caption agree after rounding', async ({ page }) => {
+test('excess rate precision blocks exports until the entered rate is corrected', async ({ page }) => {
   await enterVehicle(page);
-  const apr = page.getByRole('textbox', { name: 'Annual percentage rate', exact: true });
+  const apr = page.getByRole('textbox', { name: 'Annual interest rate', exact: true });
   await apr.fill('6.005');
   await apr.press('Tab');
-  await expect(apr).toHaveValue('6.01');
-  await expect(currentSummary(page)).toContainText('72 months at 6.01% APR');
+  await expect(apr).toHaveValue('6.005');
+  await expect(apr).toHaveAttribute('aria-invalid', 'true');
+  await page.getByRole('button', { name: 'Customer view', exact: true }).click();
+  await expect(apr).toBeFocused();
+  await expect(page.locator('.customer-layout')).toHaveCount(0);
+  await apr.fill('6.01');
+  await apr.press('Tab');
+  await expect(apr).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(currentSummary(page)).toContainText('72 months at 6.01% interest rate');
   await expect(selectedPayment(page)).toHaveText('$533.20');
   await page.getByRole('button', { name: 'Customer view', exact: true }).click();
-  await expect(page.locator('.results-panel--customer')).toContainText('72 months at 6.01% APR');
+  await expect(page.locator('.results-panel--customer')).toContainText('72 months at 6.01% interest rate');
   await expect(page.locator('.results-panel--customer .payment-number strong')).toHaveText('$533.20');
 });
 

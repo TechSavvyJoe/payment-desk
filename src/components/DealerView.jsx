@@ -39,7 +39,7 @@ function OtherTaxField({ item, index, updateItem }) {
 
 export default function DealerView({
   dealInput, result, updateField, updateItem, addItem, removeItem,
-  accordions, toggleAccordion, targetProps,
+  accordions, toggleAccordion, targetProps, purchaseScope,
 }) {
   const equitySummary = result.tradeEquity < 0
     ? `${formatWholeCurrency(Math.abs(result.tradeEquity))} negative equity`
@@ -70,7 +70,7 @@ export default function DealerView({
   };
 
   return (
-    <main className="dealer-workspace" aria-label="Deal worksheet">
+    <section className="dealer-workspace" aria-label="Deal worksheet">
       <div className="worksheet-panel">
         <div className="deal-grid">
           <div className="deal-column">
@@ -120,8 +120,8 @@ export default function DealerView({
             <section className="financing-panel" aria-labelledby="financing-heading">
               <div className="financing-panel__heading"><PercentIcon size={22} /><h2 id="financing-heading">Financing</h2></div>
               <div className="financing-panel__body">
-                <FieldRow htmlFor="apr" label="APR" helper="Assumed annual percentage rate">
-                  <PercentInput ariaLabel="Annual percentage rate" id="apr" value={dealInput.apr}
+                <FieldRow htmlFor="apr" label="Interest rate" helper="Assumed annual rate · up to 2 decimals">
+                  <PercentInput ariaLabel="Annual interest rate" id="apr" value={dealInput.apr}
                     onChange={(value) => updateField("apr", value)} />
                 </FieldRow>
                 <div className="term-control">
@@ -141,7 +141,8 @@ export default function DealerView({
           <div className="deal-column">
           <DealSection id="taxes-fees" className="deal-section--taxes" title="Taxes & registration" icon={ReceiptIcon}
             open={accordions.taxes} onToggle={() => toggleAccordion("taxes")}
-            summary={`${formatWholeCurrency(taxesAndFees)} total`}>
+            summary={purchaseScope?.supported === false ? 'Rules unavailable' : `${formatWholeCurrency(taxesAndFees)} total`}>
+            {purchaseScope?.supported === false ? <p className="scope-unavailable">{purchaseScope.reason}</p> : <>
             <TradeTaxBreakdown result={result} />
             <dl className="fixed-fees">
               <div><dt>Michigan sales tax <small>{CALCULATION_DEFAULTS.salesTaxRate * 100}%</small></dt><dd>{formatCurrency(result.salesTax)}</dd></div>
@@ -165,6 +166,7 @@ export default function DealerView({
                 {" · "}State fee {formatCurrency(result.fees.additionalTransferFee)}
                 {" · "}Title {formatCurrency(result.fees.titleFee)}</p>
             )}
+            </>}
           </DealSection>
           <DealSection id="products-addons" className="deal-section--products" title="Products & add-ons" icon={AddCircleIcon}
             open={accordions.roll} onToggle={() => toggleAccordion("roll")}
@@ -185,7 +187,7 @@ export default function DealerView({
                   {categoryFor(item) === "other" ? (
                     <label className="product-name-label">
                       <span>Product name</span>
-                      <input aria-label={`Name for product or add-on ${index + 1}`} className="text-input"
+                      <input aria-label={`Product name for add-on ${index + 1}`} className="text-input"
                         value={item.name} placeholder="Describe the product" type="text" maxLength={120}
                         onChange={(event) => updateItem(index, { name: event.target.value })} />
                     </label>
@@ -214,6 +216,6 @@ export default function DealerView({
         </div>
       </div>
       <TargetSolver dealInput={dealInput} result={result} {...targetProps} />
-    </main>
+    </section>
   );
 }

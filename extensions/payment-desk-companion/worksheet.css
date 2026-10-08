@@ -10,7 +10,7 @@
   .calculator-shell { width: 100%; padding: 6px; }
   .quick-jump-nav { display: none; }
   .compact-height .mobile-results,
-  .mobile-results { margin-bottom: 6px; }
+  .mobile-results { margin-bottom: 2px; }
   .compact-height .mobile-results .results-payment,
   .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; padding: 10px 12px; }
   .mobile-results .results-payment__label-row { grid-column: 1 / -1; grid-row: 1; }
@@ -26,12 +26,12 @@
   .compact-height .deal-details,
   .deal-details { margin-bottom: 6px; }
   .compact-height .deal-tools,
-  .deal-tools { margin-bottom: 6px; }
+  .deal-tools { margin-bottom: 2px; }
   .deal-tools .deal-details { margin-bottom: 0; }
   .compact-height .inventory-picker-trigger,
-  .inventory-picker-trigger { min-height: 36px; padding-block: 6px; }
+  .inventory-picker-trigger { min-height: 44px; padding-block: 6px; }
   .compact-height .deal-details > summary,
-  .deal-details > summary { min-height: 36px; padding: 6px 10px; }
+  .deal-details > summary { min-height: 44px; padding: 6px 10px; }
   .compact-height .deal-section__header,
   .deal-section__header { min-height: 36px; padding: 5px 10px; }
   .deal-section__content { padding: 4px 10px 6px; }
@@ -53,4 +53,12 @@
   .deal-column { gap: 6px; }
   .mobile-nav { left: 6px; right: 6px; bottom: 4px; min-height: 52px; padding: 4px; }
   .mobile-nav button { min-height: 40px; padding-block: 6px; }
+}
+
+/* The inventory drawer can leave a very short worksheet viewport. Keep the
+   shortcuts in normal flow there so they cannot cover the worksheet controls. */
+@media screen and (max-width: 800px) and (max-height: 360px) {
+  html { scroll-padding-top: 56px; scroll-padding-bottom: 8px; }
+  body { padding-bottom: 8px; }
+  .mobile-nav { position: static; width: calc(100% - 12px); margin: 8px 6px; }
 }

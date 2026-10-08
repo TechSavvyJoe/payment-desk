@@ -241,7 +241,10 @@ test.describe('dealership on customer estimates', () => {
 
   test('estimate card, copied text, share title, and printout use the dealership literally', async ({ page }, testInfo) => {
     await seedBrand(page, { name: NAME, logo: LOGO });
-    await page.addInitScript(() => Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.testSharedEstimate = data; } }));
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+      Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.testSharedEstimate = data; } });
+    });
     await openEstimate(page);
     const identity = page.locator('.proposal-identity');
     await expect(identity.locator('img.proposal-logo')).toHaveAttribute('src', LOGO);
@@ -250,7 +253,7 @@ test.describe('dealership on customer estimates', () => {
     await expect(page.locator('.proposal-qualification .proposal-meta')).toContainText(`${NAME} · PD-`);
     const copied = await copySummary(page);
     expect(copied.split('\n').slice(0, 2)).toEqual([NAME, 'Vehicle purchase estimate']);
-    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('button', { name: 'Share PDF', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.testSharedEstimate?.title)).toBe(`${NAME} — Vehicle purchase estimate`);
     await page.emulateMedia({ media: 'print' });
     const masthead = page.locator('.print-brand');

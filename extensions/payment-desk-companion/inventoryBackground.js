@@ -1,5 +1,20 @@
 import { INVENTORY_KEY, MAX_PAGES, MAX_VEHICLES, NIGHT_ALARM, WORK_ALARM, dealershipSite, inventoryFeedUrl, inventoryUrl, mergeInventory, nextNightAt, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl } from './inventoryModel.js';
 
+const JOB_DURATION = 24 * 60 * 60_000;
+const MAX_RETRIES = 2;
+// RFC 9110: delay-seconds or HTTP-date. Unusable headers use bounded fallback.
+function retryAfterAt(value, now = Date.now()) {
+  if (!value?.trim()) return null;
+  const text = value.trim();
+  const at = /^\d+$/.test(text) ? now + Number(text) * 1000
+    : /^(?:[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT|[A-Za-z]+, \d{2}-[A-Za-z]{3}-\d{2} \d{2}:\d{2}:\d{2} GMT|[A-Za-z]{3} [A-Za-z]{3} [ \d]\d \d{2}:\d{2}:\d{2} \d{4})$/.test(text) ? Date.parse(text) : NaN;
+  return Number.isFinite(at) ? Math.min(8_640_000_000_000_000, Math.max(now, at)) : /^\d+$/.test(text) ? 8_640_000_000_000_000 : null;
+}
+function workAt(job) {
+  const task = job.queue[0];
+  const origin = task && new URL(task.url).origin;
+  return Math.min(job.startedAt + JOB_DURATION + 1, Math.max(Date.now() + 1000, job.nextRequestAt ?? 0, job.originWaits?.[origin] ?? 0, task?.waitUntil ?? 0));
+}
 let running;
 let mutation = Promise.resolve();
 let creatingParser;
@@ -23,11 +38,11 @@ async function ensureParser() {
 async function schedule(state) {
   if (state.config?.nightly) await chrome.alarms.create(NIGHT_ALARM, { when: state.nextRefreshAt ?? nextNightAt() });
   else await chrome.alarms.clear(NIGHT_ALARM);
-  if (state.job) await chrome.alarms.create(WORK_ALARM, { delayInMinutes: 1 });
+  if (state.job) await chrome.alarms.create(WORK_ALARM, { when: workAt(state.job) });
   else await chrome.alarms.clear(WORK_ALARM);
 }
-function newJob(config) {
-  return { id: crypto.randomUUID(), startedAt: Date.now(), queue: [{ url: config.site, kind: 'robots' }, { url: config.site, kind: 'html', condition: 'unknown' }], visited: [], vehicles: [], groups: {}, policies: {}, warnings: [], provider: '', nextRequestAt: 0 };
+function newJob(config, originWaits = {}) {
+  return { id: crypto.randomUUID(), startedAt: Date.now(), queue: [{ url: config.site, kind: 'robots' }, { url: config.site, kind: 'html', condition: 'unknown' }], visited: [], vehicles: [], groups: {}, policies: {}, warnings: [], provider: '', nextRequestAt: 0, originWaits: { ...originWaits } };
 }
 async function releaseWebsite(site) {
   // Chrome cannot withdraw permissions required by a manifest. Production uses
@@ -41,7 +56,7 @@ async function releaseWebsite(site) {
 async function startRefresh() {
   const state = await transaction(async state => {
     if (!state.config || state.job) return state;
-    const next = { ...state, job: newJob(state.config), status: 'syncing', error: '', lastAttemptAt: Date.now(), nextRefreshAt: nextNightAt() };
+    const next = { ...state, job: newJob(state.config, state.requestWaits), status: 'syncing', error: '', lastAttemptAt: Date.now(), nextRefreshAt: nextNightAt() };
     await write(next);
     return next;
   });
@@ -59,16 +74,18 @@ async function inventoryResponse(url) {
   const initiator = chrome.runtime.getURL('').replace(/\/$/, '');
   const observe = details => {
     if (details.url !== url || details.initiator !== initiator || details.method !== 'GET' || details.tabId !== -1) return;
-    resolveHeaders(details.responseHeaders?.find(header => header.name.toLowerCase() === 'location')?.value ?? null);
+    resolveHeaders(details.responseHeaders ?? []);
   };
   event?.addListener(observe, { urls: [`${new URL(url).origin}/*`], types: ['xmlhttprequest'], tabId: -1 }, ['responseHeaders']);
   let timer;
   try {
     const response = await fetch(url, { credentials: 'omit', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' });
     if (response.type === 'opaqueredirect' || [301, 302, 303, 307, 308].includes(response.status)) {
-      const location = response.headers.get('location') ?? (event ? await Promise.race([headers, new Promise(resolve => { timer = setTimeout(() => resolve(null), 1000); })]) : null);
+      const observed = event ? await Promise.race([headers, new Promise(resolve => { timer = setTimeout(() => resolve([]), 1000); })]) : [];
+      const location = response.headers.get('location') ?? observed.find(header => header.name.toLowerCase() === 'location')?.value;
+      const retryAfter = response.headers.get('retry-after') ?? observed.find(header => header.name.toLowerCase() === 'retry-after')?.value;
       await response.body?.cancel();
-      return { location };
+      return { location, waitUntil: retryAfterAt(retryAfter) };
     }
     return { response };
   } finally {
@@ -82,12 +99,12 @@ async function getPage(url, site, policies) {
   if (!current || !await chrome.permissions.contains({ origins: [`${new URL(current).origin}/*`] })) throw new Error('Website access is missing. Reconnect the dealership to allow it.');
   const policy = policies?.[new URL(current).origin];
   if (policy && !robotsAllows(policy, current)) throw new Error('The website excludes this inventory path from automated reads.');
-  const fetched = policies ? await inventoryResponse(current) : { response: await fetch(current, { credentials: 'omit', redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' }) };
+  const fetched = await inventoryResponse(current);
   if ('location' in fetched) {
     if (!fetched.location) throw new Error(`The inventory URL redirects (${new URL(current).pathname}), but its final address could not be read. Open it in Chrome and connect the final inventory address. The previous catalog was kept.`);
     const redirect = inventoryUrl(fetched.location, site, current);
     if (!redirect) throw new Error('The inventory URL redirects outside this dealership. Connect the actual inventory website. The previous catalog was kept.');
-    return { redirect };
+    return { redirect, waitUntil: fetched.waitUntil };
   }
   const response = fetched.response;
   current = inventoryUrl(response.url, site);
@@ -100,6 +117,11 @@ async function getPage(url, site, policies) {
   }
   // Policy reads omit policies; their final pathname can change after a redirect.
   if (response.status === 404 && !policies) { await response.body?.cancel(); return { body: '', url: current }; }
+  if ([429, 503].includes(response.status)) {
+    const waitUntil = retryAfterAt(response.headers.get('retry-after')) ?? Date.now() + 60_000;
+    await response.body?.cancel();
+    return { retry: true, waitUntil, failure: `The website refused the inventory request (${response.status}). The previous catalog was kept.` };
+  }
   if (!response.ok) { await response.body?.cancel(); throw new Error(`The website refused the inventory request (${response.status}). The previous catalog was kept.`); }
   if (!response.body) {
     if (!policies) return { body: '', url: current };
@@ -125,7 +147,7 @@ async function finish(jobId, error = '') {
   const state = await transaction(async state => {
     if (state.job?.id !== jobId) return state;
     const job = state.job;
-    const countsMatch = Object.values(job.groups).every(group => group.finalPage && group.acceptedRows === group.expected);
+    const countsMatch = Object.values(job.groups).every(group => group.finalPage && group.acceptedRows === group.expected && group.rows?.length === group.acceptedRows && group.fullScope === true);
     const seen = new Set(job.vehicles.map(vehicle => vehicle.id));
     const scopes = new Set(Object.values(job.groups).map(group => group.scope));
     const fullScope = scopes.has('all') || scopes.has('new') && scopes.has('used');
@@ -154,17 +176,19 @@ async function processBatch() {
     const task = job.queue[0];
     if (!task) { await finish(job.id); return; }
     if (job.visited.length >= MAX_PAGES || job.vehicles.length >= MAX_VEHICLES) { await finish(job.id, 'The refresh reached its size limit; the catalog may be incomplete.'); return; }
-    if (Date.now() - job.startedAt > 24 * 60 * 60_000) { await finish(job.id, 'The refresh was interrupted for more than a day. Select Refresh now.'); return; }
-    const delay = job.nextRequestAt - Date.now();
+    if (Date.now() - job.startedAt > JOB_DURATION) { await finish(job.id, 'The refresh was interrupted for more than a day. Select Refresh now.'); return; }
+    const fetchUrl = task.kind === 'robots' && !task.redirectTrail?.length ? new URL('/robots.txt', task.url).href : task.url;
+    const origin = new URL(fetchUrl).origin;
+    const waitUntil = Math.max(job.nextRequestAt ?? 0, job.originWaits?.[origin] ?? 0, task.waitUntil ?? 0);
+    if (waitUntil > job.startedAt + JOB_DURATION) { await finish(job.id, 'The website requested a wait beyond the one-day refresh limit. The previous catalog was kept.'); return; }
+    const delay = waitUntil - Date.now();
     if (delay > 0) {
       // A long site Crawl-delay is resumed by the persisted work alarm.
-      if (delay > 15_000 || Date.now() + delay >= deadline) return;
+      if (delay > 15_000 || Date.now() + delay >= deadline) { await chrome.alarms.create(WORK_ALARM, { when: workAt(job) }); return; }
       await new Promise(resolve => setTimeout(resolve, delay));
     }
     const fresh = await read();
     if (fresh.job?.id !== job.id) continue;
-    const fetchUrl = task.kind === 'robots' ? new URL('/robots.txt', task.url).href : task.url;
-    const origin = new URL(fetchUrl).origin;
     if (task.kind !== 'robots' && !job.policies[origin]) {
       await transaction(async current => {
         if (current.job?.id !== job.id) return;
@@ -176,7 +200,7 @@ async function processBatch() {
     let result;
     try {
       const fetched = await getPage(fetchUrl, state.config.site, task.kind === 'robots' ? null : job.policies);
-      if (fetched.redirect) result = { redirect: fetched.redirect };
+      if (fetched.retry || fetched.redirect) result = fetched;
       else if (task.kind === 'robots') {
         // Robots comments have no policy meaning, even when they mention HTML.
         const policyText = fetched.body.replace(/#.*$/gm, '');
@@ -196,6 +220,20 @@ async function processBatch() {
     await transaction(async current => {
       if (current.job?.id !== job.id) return;
       const next = current.job;
+      if (result.waitUntil) {
+        next.originWaits ??= {};
+        next.originWaits[origin] = Math.max(next.originWaits[origin] ?? 0, result.waitUntil);
+        current.requestWaits = { ...(current.requestWaits ?? {}), ...next.originWaits };
+      }
+      if (result.retry && (task.retries ?? 0) < MAX_RETRIES) {
+        next.queue[0] = { ...task, retries: (task.retries ?? 0) + 1 };
+        next.nextRequestAt = Math.min(8_640_000_000_000_000, Date.now() + Math.max(1, ...Object.values(next.policies).map(policy => policy.delay)) * 1000);
+        next.originWaits[origin] = Math.max(next.originWaits[origin], next.nextRequestAt);
+        current.requestWaits = { ...(current.requestWaits ?? {}), ...next.originWaits };
+        await write(current);
+        await chrome.alarms.create(WORK_ALARM, { when: workAt(next) });
+        return;
+      }
       next.queue.shift();
       next.visited.push(fetchUrl);
       if (result.failure) {
@@ -204,14 +242,17 @@ async function processBatch() {
         if (task.kind === 'robots') next.queue = [];
       } else if (result.policy) {
         // A robots redirect delegates the requested origin to the returned policy.
-        next.policies[origin] = result.policy;
+        next.policies[task.policyOrigin ?? origin] = result.policy;
         // A redirected resource governs the requesting origin. It also governs
         // the destination only when that origin's own robots URL was fetched.
         if (result.url === new URL('/robots.txt', result.url).href) next.policies[result.origin] = result.policy;
       } else if (result.redirect) {
         const trail = [...(task.redirectTrail ?? []), fetchUrl];
-        if (trail.includes(result.redirect) || trail.length > 5) next.warnings.push('The inventory redirect chain loops or exceeds five steps. The previous catalog was kept.');
-        else if (!next.visited.includes(result.redirect) && !next.queue.some(item => item.url === result.redirect)) next.queue.unshift({ ...task, url: result.redirect, redirectTrail: trail });
+        if (trail.includes(result.redirect) || trail.length > 5) {
+          next.warnings.push('The inventory redirect chain loops or exceeds five steps. The previous catalog was kept.');
+          if (task.kind === 'robots') next.queue = [];
+        }
+        else if (task.kind === 'robots' || !next.visited.includes(result.redirect) && !next.queue.some(item => item.url === result.redirect)) next.queue.unshift({ ...task, url: result.redirect, redirectTrail: trail, policyOrigin: task.policyOrigin ?? origin, retries: 0, waitUntil: result.waitUntil ?? 0 });
       }
       else {
         if (result.provider) next.provider = result.provider;
@@ -226,7 +267,18 @@ async function processBatch() {
         next.vehicles = [...records.values()];
         if (next.vehicles.length > MAX_VEHICLES) next.warnings.push('The inventory exceeded the catalog size limit.');
         if (result.group) {
-          const group = next.groups[result.group] ?? { ids: [], acceptedRows: 0, expected: result.expected };
+          const group = next.groups[result.group] ?? { ids: [], rows: [], acceptedRows: 0, expected: result.expected };
+          if (result.fullScope === false) next.warnings.push('The inventory source filter did not verify a complete condition scope. The previous vehicles were kept.');
+          // Identity includes the source listing URL so location-specific rows
+          // sharing a VIN are valid, while repeated listings cannot prove absence.
+          if (!group.rows && (group.acceptedRows || group.ids.length)) next.warnings.push('Earlier source rows could not be verified. The previous vehicles were kept.');
+          const rows = new Set(group.rows ?? []);
+          for (const vehicle of result.vehicles ?? []) {
+            const row = JSON.stringify([vehicle.id, vehicle.url]);
+            if (rows.has(row)) next.warnings.push('The website repeated inventory source rows; coverage is incomplete. The previous vehicles were kept.');
+            rows.add(row);
+          }
+          group.rows = [...rows];
           if (group.expected !== result.expected) next.warnings.push('Inventory changed during this refresh; counts are incomplete.');
           // Source totals count listing rows, including syndicated or location
           // duplicates. Catalog IDs are deduplicated independently for display.
@@ -234,13 +286,17 @@ async function processBatch() {
           group.acceptedRows = (group.acceptedRows ?? group.ids.length) + (result.vehicles ?? []).length;
           group.ids = [...new Set([...group.ids, ...(result.vehicles ?? []).map(vehicle => vehicle.id)])];
           group.scope = result.scope;
+          group.fullScope = result.fullScope !== false && (group.fullScope ?? true);
           group.finalPage = result.finalPage;
           next.groups[result.group] = group;
         }
       }
-      next.nextRequestAt = Date.now() + Math.max(1, ...Object.values(next.policies).map(policy => policy.delay)) * 1000;
+      next.nextRequestAt = Math.min(8_640_000_000_000_000, Date.now() + Math.max(1, ...Object.values(next.policies).map(policy => policy.delay)) * 1000);
+      next.originWaits ??= {};
+      next.originWaits[origin] = Math.max(next.originWaits[origin] ?? 0, next.nextRequestAt);
+      current.requestWaits = { ...(current.requestWaits ?? {}), ...next.originWaits };
       await write(current);
-      await chrome.alarms.create(WORK_ALARM, { delayInMinutes: 1 });
+      await chrome.alarms.create(WORK_ALARM, { when: workAt(next) });
     });
   }
 }
@@ -261,7 +317,7 @@ async function command(message) {
       const previousSite = previous.config?.site;
       const same = previous.config?.site === site;
       const config = { site, nightly: Boolean(message.nightly) };
-      const next = { ...(same ? previous : {}), config, job: newJob(config), status: 'syncing', error: '', permissionWarning: '', lastAttemptAt: Date.now(), nextRefreshAt: nextNightAt() };
+      const next = { ...(same ? previous : {}), config, job: newJob(config, previous.requestWaits), status: 'syncing', error: '', permissionWarning: '', lastAttemptAt: Date.now(), nextRefreshAt: nextNightAt() };
       // Prepare alarms and the refresh job before replacing the working catalog.
       // No old website access is withdrawn until this setup has committed.
       try { await schedule(next); await write(next); }

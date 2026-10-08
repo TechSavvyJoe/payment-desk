@@ -25,7 +25,7 @@ test('product categories, explicit Other tax treatment, and complete customer ex
   await page.getByLabel('Gap amount').fill('900');
   await page.getByRole('button', { name: 'Add product', exact: true }).click();
   await page.getByLabel('Product 3 type').selectOption('other');
-  await page.getByLabel('Name for product or add-on 3').fill('Accessories');
+  await page.getByLabel('Product name for add-on 3').fill('Accessories');
   await page.getByLabel('Accessories amount').fill('1000');
   await page.getByRole('button', { name: 'Customer view', exact: true }).click();
   await expect(page.locator('#worksheet-heading')).toBeVisible();
@@ -35,7 +35,7 @@ test('product categories, explicit Other tax treatment, and complete customer ex
   await expect(page.getByRole('button', { name: 'Copy summary' })).toBeEnabled();
   await expect(page.locator('.customer-ledger').filter({ hasText: 'Service Contract' })).toContainText('Accessories');
   await expect(page.getByRole('table', { name: 'Customer payment options' })).toContainText('Selected');
-  await expect(page.getByRole('table', { name: 'Customer payment options' })).not.toContainText(/interest|total (?:loan )?payments/i);
+  await expect(page.getByRole('table', { name: 'Customer payment options' })).not.toContainText(/total interest|interest paid|total (?:loan )?payments/i);
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.testCopiedEstimate = text; } } }));
   await page.getByRole('button', { name: 'Copy summary' }).click();
   await expect(page.getByRole('status')).toContainText('copied');
@@ -45,13 +45,13 @@ test('product categories, explicit Other tax treatment, and complete customer ex
   expect(copied).toContain('Accessories');
   expect(copied).toContain('does not restore this proposal');
   expect(copied).toContain('not a financing approval or contract');
-  expect(copied).not.toMatch(/interest|total (?:loan )?payments/i);
+  expect(copied).not.toMatch(/total interest|interest paid|total (?:loan )?payments/i);
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('.print-qualification')).toBeVisible();
   await expect(page.locator('.customer-actions')).toBeHidden();
   await expect(page.locator('.print-brand')).toContainText('Payment Desk');
   await expect(page.locator('.customer-print-root')).toBeVisible();
-  await expect(page.locator('.customer-print-root')).not.toContainText(/interest|total (?:loan )?payments/i);
+  await expect(page.locator('.customer-print-root')).not.toContainText(/total interest|interest paid|total (?:loan )?payments/i);
   await expect(page.locator('.print-tax-credit')).toContainText('2026 trade deduction limit: $12,000.00');
   if (testInfo.project.name === 'chromium') {
     const pdf = await page.pdf({ path: testInfo.outputPath('customer-estimate.pdf'), printBackground: false, preferCSSPageSize: true });
@@ -104,7 +104,7 @@ test('grid selection and customer navigation retain visible totals on every devi
   await page.getByRole('button', { name: 'Customer view', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your purchase estimate' })).toBeVisible();
   const summary = page.getByRole('complementary', { name: 'Selected estimate summary' });
-  for (const text of ['Amount financed', 'Out-the-door total', 'Due at signing']) await expect(summary).toContainText(text);
+  for (const text of ['Estimated loan balance', 'Out-the-door total', 'Due at signing']) await expect(summary).toContainText(text);
   await expect(summary).toBeVisible();
 });
 
@@ -127,7 +127,7 @@ test('maximum product estimate prints one complete page and returns to editing',
     await page.getByRole('button', { name: 'Add product', exact: true }).click();
     const row = page.locator('.option-row').nth(index);
     await row.getByLabel(`Product ${index + 1} type`, { exact: true }).selectOption('other');
-    await row.getByLabel(`Name for product or add-on ${index + 1}`, { exact: true }).fill(name);
+    await row.getByLabel(`Product name for add-on ${index + 1}`, { exact: true }).fill(name);
     await row.getByLabel(`Tax treatment for ${name}`, { exact: true }).selectOption(index % 2 ? 'taxable' : 'not-taxable');
     await row.getByLabel(`${name} amount`, { exact: true }).fill(String(100 + index));
   }
@@ -175,13 +175,14 @@ test('copy fallback is explicit and share failure does not invoke print', async 
     window.testPrintCount = 0;
     window.print = () => window.testPrintCount++;
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('blocked'); } } });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
     Object.defineProperty(navigator, 'share', { configurable: true, value: async () => { throw new Error('unavailable'); } });
   });
   await page.getByRole('button', { name: 'Customer view', exact: true }).click();
   await page.getByRole('button', { name: 'Copy summary' }).click();
   await expect(page.getByLabel('Copyable estimate summary')).toBeVisible();
-  await page.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Sharing is unavailable');
+  await page.getByRole('button', { name: 'Share PDF', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('PDF sharing failed');
   expect(await page.evaluate(() => window.testPrintCount)).toBe(0);
 });
 
@@ -231,7 +232,7 @@ test('automated accessibility scan covers dealer, products, grid, and customer',
 test('an invalid mobile grid rate can be recovered after returning to the worksheet', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Hidden grid recovery is a mobile navigation regression.');
   await page.locator('#mobile-grid-trigger').click();
-  const rate = page.getByLabel('APR for 60 months', { exact: true }).filter({ visible: true });
+  const rate = page.getByLabel('Interest rate for 60 months', { exact: true }).filter({ visible: true });
   await rate.fill('6x');
   await page.getByRole('button', { name: 'Back to calculator' }).click();
   await expect(page.locator('#worksheet-heading')).toBeVisible();
@@ -239,7 +240,7 @@ test('an invalid mobile grid rate can be recovered after returning to the worksh
   await expect(page.getByRole('heading', { name: 'Payment grid', exact: true })).toBeVisible();
   await expect(rate).toBeFocused();
   await page.setViewportSize({ width: 1024, height: 900 });
-  const desktopRate = page.getByLabel('APR for 60 months', { exact: true }).filter({ visible: true });
+  const desktopRate = page.getByLabel('Interest rate for 60 months', { exact: true }).filter({ visible: true });
   await expect(desktopRate).toHaveValue('6x');
   await expect(desktopRate).toHaveAttribute('aria-invalid', 'true');
   await page.getByRole('button', { name: 'Go to field' }).click();

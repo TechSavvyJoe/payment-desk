@@ -22,14 +22,14 @@ test('a keyboard section jump focuses its accordion control so Space can reopen 
 test('financial inputs expose helper instructions together with validation errors', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Selling price', { exact: true }).fill('30000');
-  const apr = page.getByLabel('Annual percentage rate', { exact: true });
-  await expect(apr).toHaveAccessibleDescription('Assumed annual percentage rate');
+  const apr = page.getByLabel('Annual interest rate', { exact: true });
+  await expect(apr).toHaveAccessibleDescription('Assumed annual rate · up to 2 decimals');
   await apr.fill('6x');
   await apr.blur();
-  await expect(apr).toHaveAccessibleDescription(/Assumed annual percentage rate.*Enter a number/);
+  await expect(apr).toHaveAccessibleDescription(/Assumed annual rate · up to 2 decimals.*Enter a number/);
   await apr.fill('6.5');
   await apr.blur();
-  await expect(apr).toHaveAccessibleDescription('Assumed annual percentage rate');
+  await expect(apr).toHaveAccessibleDescription('Assumed annual rate · up to 2 decimals');
 
   await page.getByRole('button', { name: 'New plate', exact: true }).click();
   const plate = page.getByLabel('New plate amount', { exact: true });

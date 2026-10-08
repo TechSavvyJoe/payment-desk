@@ -22,7 +22,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
 
   const totals = !isStarting ? (
     <section className="result-totals" aria-label="Key deal totals">
-      {summary.isFinanced ? <BreakdownRow label="Amount financed" value={money(summary.amountFinanced)} /> : null}
+      {summary.isFinanced ? <BreakdownRow label="Estimated loan balance" value={money(summary.amountFinanced)} /> : null}
       <BreakdownRow label="Out-the-door total" value={money(summary.outTheDoor)} />
       <BreakdownRow label={summary.isFinanced ? "Due at signing" : "Cash due after trade"} value={money(summary.dueAtSigning)} />
       {summary.hasCashCredit ? <BreakdownRow label="Customer credit" value={money(summary.customerCredit)} /> : null}
@@ -57,7 +57,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
           {summary.isFinanced && !isStarting ? <span className="payment-number__suffix">/mo</span> : null}
         </div>
         {isStarting ? <p>Start with the vehicle selling price.</p> : summary.isFinanced ? (
-          <p>{summary.termMonths} months at {formatNumber(summary.apr)}% APR</p>
+          <p>{summary.termMonths} months at {formatNumber(summary.apr)}% interest rate</p>
         ) : <p>{summary.hasCashCredit ? "Amount in the customer's favor after trade settlement" : "Includes trade payoff or equity"}</p>}
         {!customer && !isStarting && summary.isFinanced && onActivatePaymentTarget ? (
           <button className="payment-edit-button" onClick={() => onActivatePaymentTarget(result.monthlyPayment)} type="button">

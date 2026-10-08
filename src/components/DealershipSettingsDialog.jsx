@@ -29,7 +29,7 @@ function FeeField({ label, helper, max, placeholder, value, onChange }) {
 }
 
 /** Edits a draft of the dealership name, logo and fees. Nothing changes until Save. */
-export default function DealershipSettingsDialog({ settings, feeSettings, onSave, onClear, onClose }) {
+export default function DealershipSettingsDialog({ settings, feeSettings, onSave, onClear, onClose, externalChange = false }) {
   const dialogRef = useRef(null);
   const feesRef = useRef(null);
   const titleId = useId();
@@ -81,7 +81,7 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
 
   const save = (event) => {
     event.preventDefault();
-    if (processing) return;
+    if (processing || externalChange) return;
     if (hasFeeErrors) {
       [...(feesRef.current?.querySelectorAll("input") ?? [])].find((input) => feeErrors[input.id])?.focus();
       setNotice({ tone: "error", text: FEES_INVALID });
@@ -90,10 +90,11 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
     const outcome = onSave({ name, logo }, { documentFee: orNull(documentFee), crvFee: orNull(crvFee) });
     if (outcome.ok) { close(); return; }
     setFinished(true);
-    setNotice({ tone: "error", text: SAVE_FAILED });
+    setNotice({ tone: "error", text: outcome.persistence === "rollback-failed" ? "The saved settings could not be fully restored. Reload and check both dealership fees and branding before using another estimate." : SAVE_FAILED });
   };
 
   const clear = () => {
+    if (externalChange) return;
     if (!window.confirm("Clear the dealership name, logo, and fees on this device? Fees return to the defaults.")) return;
     const outcome = onClear();
     if (outcome.ok) { close(); return; }
@@ -104,7 +105,7 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
     // Remounting the fee fields drops any half-typed or invalid draft.
     setFeeFieldsKey((key) => key + 1);
     setFinished(true);
-    setNotice({ tone: "error", text: CLEAR_FAILED });
+    setNotice({ tone: "error", text: outcome.persistence === "rollback-failed" ? "The saved settings could not be fully restored. Reload and check both dealership fees and branding before using another estimate." : CLEAR_FAILED });
   };
 
   const removeLogo = () => {
@@ -116,6 +117,7 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
     <dialog aria-labelledby={titleId} className="settings-dialog" onClose={onClose} ref={dialogRef}>
       <form className="settings-dialog__form" noValidate onSubmit={save}>
         <h2 id={titleId}>Dealership settings</h2>
+        {externalChange ? <p className="settings-dialog__note" role="alert">Settings changed in another tab. Close this dialog and reload before saving.</p> : null}
         <p className="settings-dialog__note">Saved on this device only. Reset deal clears the worksheet draft.</p>
         <div className="settings-dialog__field">
           <label htmlFor={nameId}>Dealership name <span>Optional</span></label>
@@ -134,7 +136,7 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
               {logo ? "Replace logo" : "Choose logo"}
               <input accept={LOGO_ACCEPT} className="sr-only" disabled={processing || finished} onChange={chooseLogo} type="file" />
             </label>
-            {logo ? <button className="settings-dialog__button" disabled={processing} onClick={removeLogo} type="button">Remove logo</button> : null}
+            {logo ? <button className="settings-dialog__button" disabled={processing || externalChange} onClick={removeLogo} type="button">Remove logo</button> : null}
           </div>
           <p className="settings-dialog__hint">PNG, JPG, WebP, GIF, or SVG up to 10 MB. Large logos are resized to fit 600 × 200 pixels.</p>
         </fieldset>
@@ -150,10 +152,10 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
         </ValidationContext.Provider>
         <p aria-live="polite" className={"settings-dialog__notice" + (shownNotice?.tone === "error" ? " is-error" : "")} role="status">{shownNotice?.text ?? ""}</p>
         <div className="settings-dialog__actions">
-          {!finished ? <button className="settings-dialog__button settings-dialog__button--danger" disabled={processing} onClick={clear} type="button">Clear dealership settings</button> : null}
+          {!finished ? <button className="settings-dialog__button settings-dialog__button--danger" disabled={processing || externalChange} onClick={clear} type="button">Clear dealership settings</button> : null}
           <span>
             <button className="settings-dialog__button" onClick={close} type="button">{finished ? "Done" : "Cancel"}</button>
-            {!finished ? <button className="settings-dialog__button settings-dialog__button--primary" disabled={processing} type="submit">Save</button> : null}
+            {!finished ? <button className="settings-dialog__button settings-dialog__button--primary" disabled={processing || externalChange} type="submit">Save</button> : null}
           </span>
         </div>
       </form>

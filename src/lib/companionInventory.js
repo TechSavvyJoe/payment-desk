@@ -32,6 +32,10 @@ function requestCatalog(id, query) {
       settled = true;
       clearTimeout(timer);
       if (error) { reject(new Error('The companion is unavailable. Open the updated companion and select Web app, then try again.')); return; }
+      if (result?.ok === false && result.code === 'catalog_changed') {
+        reject(new Error('Inventory changed while you were browsing. Select Reload catalog to start with the updated vehicles.'));
+        return;
+      }
       const page = validateCatalogPage(result);
       if (!page) { reject(new Error('The companion could not provide inventory. Update the companion and try again.')); return; }
       resolve(page);

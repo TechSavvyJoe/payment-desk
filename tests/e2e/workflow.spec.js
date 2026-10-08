@@ -33,7 +33,7 @@ test('a new deal leads from selling price to customer review and back to editing
   await expect(page.locator('.results-panel--customer .payment-number strong')).toHaveText('$540.67');
 
   await page.getByRole('button', { name: 'Edit deal', exact: true }).click();
-  await expect(page.locator('#worksheet-heading')).toBeFocused();
+  await expect(page.locator((await page.evaluate(() => matchMedia('(max-width: 800px)').matches)) ? '#calculator-top' : '#worksheet-heading')).toBeFocused();
   await expect(price).toHaveValue('30,000');
   await expect(currentSummary(page).locator('.payment-number strong')).toHaveText('$540.67');
 });

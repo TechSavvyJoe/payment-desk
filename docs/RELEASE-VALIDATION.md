@@ -1,5 +1,7 @@
 # Production-readiness validation — September 25, 2026
 
+Historical evidence for the September release, not current-source acceptance. October changes include local draft persistence, PDF file sharing, clarified interest-rate labels and explicit supported-purchase controls. Use the current [README](../README.md), [operating handoff](HANDOFF.md) and [October readiness dossier](PRODUCTION-READINESS-2026-10-08.md). In particular, `pdf-lib` is now a runtime PDF dependency; earlier text-sharing and no-persistence statements below describe their dated release.
+
 The September 24 audit was implemented on `codex/production-ready-payment-desk`. The application was published to Cloudflare Pages on September 24 and to `https://desking.mysoldlog.com/` on September 25. Subsequent production releases include reverse targets, professional customer printouts, calendar selection, and visible Michigan trade tax savings. Pull request #10 records final source, CI, merge, and deployment evidence; deployment status must not be inferred from this document alone.
 
 The visual direction retains the established navy-blue identity: raised individual section cards, shaded icon headers, bold labels, a complete navy payment summary, and compact financing/target sections. IBM Plex Sans is bundled locally with its SIL Open Font License. Vehicle reference/date fields are available under Deal details. Calculation and validation repairs remain in place.

@@ -6,7 +6,13 @@ import { catalogPage } from '../extensions/payment-desk-companion/inventoryWeb.j
 const KEY = 'payment-desk.companion.v1';
 const candidate = 'a'.repeat(32);
 const previous = 'b'.repeat(32);
-const page = catalogPage({});
+const page = await catalogPage({});
+
+test('a changed catalog produces an actionable recovery error without accepting a new connection', async t => {
+  const storage = browser(t, null, (_runtime, _id, _message, callback) => callback({ ok: false, code: 'catalog_changed' }));
+  await assert.rejects(readCompanionInventory({ offset: 100, revision: 'a'.repeat(64) }), /Inventory changed.*Reload catalog/);
+  assert.equal(storage.has(KEY), false);
+});
 
 function browser(t, savedId, send) {
   const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');

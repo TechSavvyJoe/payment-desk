@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
+import { DESK_DRAFT_KEY, LEGACY_DESK_DRAFT_KEY } from '../../src/lib/deskDraft.js';
 
 let context;
 let extensionId;
@@ -441,7 +442,12 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
   await expect(settings.getByRole('textbox', { name: 'Document fee', exact: true })).toHaveValue('200');
   await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('125.5');
   const frame = panel.frames().find(frame => frame.url().endsWith('/desk/index.html'));
-  expect(await frame.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.fees.v1']);
+  const saved = await frame.evaluate(({ key, legacy }) => ({
+    keys: Object.keys(localStorage).sort(), marker: JSON.parse(localStorage.getItem(key)), legacy: localStorage.getItem(legacy),
+  }), { key: DESK_DRAFT_KEY, legacy: LEGACY_DESK_DRAFT_KEY });
+  expect(saved.keys).toEqual(['payment-desk.dealership.v1', DESK_DRAFT_KEY, 'payment-desk.fees.v1'].sort());
+  expect(saved.marker).toEqual({ version: 2, discarded: true, revision: expect.any(String) });
+  expect(saved.legacy).toBeNull();
 });
 
 test('the companion draft survives panel reload and reopening until Reset deal', async () => {
@@ -465,4 +471,25 @@ test('the companion draft survives panel reload and reopening until Reset deal',
   await panel.reload();
   await expect(desk.locator('#sale-price')).toHaveValue('');
   await expect(desk.locator('#cash-down')).toHaveValue('0');
+});
+
+test('cold offline packaged companion generates and downloads a current local PDF', async () => {
+  const external = [];
+  context.on('request', request => { if (/^https?:/.test(request.url())) external.push(request.url()); });
+  await context.setOffline(true);
+  const panel = await openPanelDocument(450, 800);
+  const desk = panel.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('25000'); await desk.locator('#sale-price').blur();
+  await desk.getByRole('button', { name: 'Customer view', exact: true }).click();
+  await expect(desk.getByRole('button', { name: 'Download PDF', exact: true })).toBeEnabled();
+  const pending = panel.waitForEvent('download');
+  await desk.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  const download = await pending;
+  const bytes = await readFile(await download.path());
+  const { PDFDocument } = await import('pdf-lib');
+  const pdf = await PDFDocument.load(bytes);
+  expect(pdf.getSubject()).toContain('Vehicle selling price: $25,000.00');
+  expect(pdf.getSubject()).toContain('Estimated payment:');
+  expect(pdf.getSubject()).not.toMatch(/total interest|total of payments/i);
+  expect(external).toEqual([]);
 });

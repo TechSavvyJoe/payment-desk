@@ -1,5 +1,6 @@
 import { getMichiganPolicy, POLICY_CONFIG } from './policy.js';
 import { CRV_FEE_MAXIMUM } from './feeSettings.js';
+import { assertSupportedPurchase } from './purchaseScope.js';
 
 const CENTS_PER_DOLLAR = 100;
 
@@ -110,9 +111,9 @@ function finiteNumber(value, name, fallback = 0) {
 }
 
 export function normalizeApr(value) {
-  const apr = finiteNumber(value, 'APR');
-  if (apr < 0) throw new RangeError('APR cannot be negative.');
-  if (apr > CALCULATION_LIMITS.maxApr) throw new RangeError(`APR cannot exceed ${CALCULATION_LIMITS.maxApr}%.`);
+  const apr = finiteNumber(value, 'Interest rate');
+  if (apr < 0) throw new RangeError('Interest rate cannot be negative.');
+  if (apr > CALCULATION_LIMITS.maxApr) throw new RangeError(`Interest rate cannot exceed ${CALCULATION_LIMITS.maxApr}%.`);
   return fromCents(toCents(apr));
 }
 
@@ -127,11 +128,22 @@ function normalizeTerm(value) {
   return termMonths;
 }
 
-function roundPositive(value) {
-  if (!Number.isFinite(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+// Exact cents-per-principal-cent ratio for the normalized hundredth-percent
+// annual rate. Compute powers once per inverse solve, not for each candidate.
+function paymentRatio(rateBasisPoints, termMonths) {
+  if (rateBasisPoints === 0) return { numerator: 1n, denominator: BigInt(termMonths) };
+  const q = 120_000n;
+  const b = BigInt(rateBasisPoints);
+  const growth = (q + b) ** BigInt(termMonths);
+  return { numerator: b * growth, denominator: q * (growth - q ** BigInt(termMonths)) };
+}
+
+function roundPaymentRatio(numerator, denominator) {
+  const cents = Number((2n * numerator + denominator) / (2n * denominator));
+  if (!Number.isSafeInteger(cents) || cents < 0) {
     throw new RangeError('Calculated currency value is outside the supported range.');
   }
-  return Math.floor(value + 0.5);
+  return cents;
 }
 
 function roundRatio(numerator, denominator) {
@@ -152,7 +164,7 @@ export function paymentFactor(apr, termMonths) {
 
 /**
  * Calculate an amortized payment. `principal` is in dollars; all displayed
- * monetary outputs are rounded to cents. At 0% APR, total interest is exactly 0.
+ * monetary outputs are rounded to cents. At 0% interest, total interest is exactly 0.
  */
 export function calculatePayment({ principal, amountFinanced, apr = 0, termMonths = 60 }) {
   const principalCents = toCents(principal ?? amountFinanced ?? 0);
@@ -192,11 +204,13 @@ export function calculatePayment({ principal, amountFinanced, apr = 0, termMonth
   }
 
   const rawMonthlyCents = principalCents * factor;
-  const monthlyPaymentCents = roundPositive(rawMonthlyCents);
+  const ratio = paymentRatio(toCents(normalizedApr), normalizedTerm);
+  const paymentNumerator = BigInt(principalCents) * ratio.numerator;
+  const monthlyPaymentCents = roundPaymentRatio(paymentNumerator, ratio.denominator);
   const totalOfPaymentsCents =
     normalizedApr === 0
       ? principalCents
-      : roundPositive(rawMonthlyCents * normalizedTerm);
+      : roundPaymentRatio(paymentNumerator * BigInt(normalizedTerm), ratio.denominator);
   const totalInterestCents =
     normalizedApr === 0 ? 0 : totalOfPaymentsCents - principalCents;
 
@@ -299,6 +313,7 @@ export function calculateDeal(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new TypeError('Deal input must be an object.');
   }
+  assertSupportedPurchase(input);
   const policy = getMichiganPolicy(input.dealDate);
 
   const salePriceCents = nonNegativeCents(
@@ -634,6 +649,8 @@ export function solveAmountFinancedForPayment({ targetPayment, apr = 0, termMont
   const normalizedApr = normalizeApr(apr);
   const normalizedTerm = normalizeTerm(termMonths);
   const factor = paymentFactor(normalizedApr, normalizedTerm);
+  const ratio = paymentRatio(toCents(normalizedApr), normalizedTerm);
+  const targetPrincipalNumerator = BigInt(targetPaymentCents) * ratio.denominator;
   const analyticalPrincipalCents = targetPaymentCents / factor;
   const center = Math.max(0, Math.round(analyticalPrincipalCents));
   const radius = Math.max(100, Math.min(100_000, Math.ceil(2 / factor) + 10));
@@ -642,14 +659,16 @@ export function solveAmountFinancedForPayment({ targetPayment, apr = 0, termMont
 
   let best = null;
   for (let principalCents = minimum; principalCents <= maximum; principalCents += 1) {
-    const displayedPaymentCents = roundPositive(principalCents * factor);
+    const principalNumerator = BigInt(principalCents) * ratio.numerator;
+    const displayedPaymentCents = roundPaymentRatio(principalNumerator, ratio.denominator);
+    const principalDifference = principalNumerator - targetPrincipalNumerator;
     const paymentDifferenceCents = displayedPaymentCents - targetPaymentCents;
     const candidate = {
       principalCents,
       displayedPaymentCents,
       paymentDifferenceCents,
       paymentDistance: Math.abs(paymentDifferenceCents),
-      principalDistance: Math.abs(principalCents - analyticalPrincipalCents),
+      principalDistance: principalDifference < 0n ? -principalDifference : principalDifference,
     };
     if (
       best === null ||
@@ -760,6 +779,19 @@ export function solveCentValueForTarget({
       best = candidate;
     }
   }
+
+  // The neighbor below a target can be the *last* cent of its plateau.
+  // Return the first cent attaining the winning metric for the lower-value tie.
+  low = minCents;
+  high = best.valueCents;
+  const winningMetric = best.metricCents * multiplier;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (evaluateAt(middle).metricCents * multiplier < winningMetric) low = middle + 1;
+    else high = middle;
+  }
+  best.valueCents = low;
+  best.result = evaluateAt(low).result;
 
   return {
     value: fromCents(best.valueCents),
