@@ -31,6 +31,16 @@ export function inventoryUrl(value, site, base = site) {
     return url.href;
   } catch { return null; }
 }
+export function inventoryFeedUrl(value) {
+  const path = new URL(value).pathname;
+  return /\/(?:search(?:new|used|all)\.aspx|inventory(?:\/(?:new|used))?|new(?:-inventory)?|used(?:-inventory)?|pre-owned|cars-for-sale)(?:\/index\.htm)?\/?$/i.test(path)
+    || /\/used-vehicle-inventory[^/]*\.html$/i.test(path);
+}
+export function unfilteredInventoryUrl(value, page = 1) {
+  return [...new URL(value).searchParams].every(([key, value]) =>
+    key.toLowerCase() === 'clearall' && value === '1'
+    || key.toLowerCase() === 'page' && /^\d+$/.test(value) && Number(value) === page);
+}
 export function publicImage(value, site) {
   if (typeof value !== 'string' || !value.trim() || value.length > 2000) return null;
   try { const url = new URL(value, site); return dealershipSite(url.href); }

@@ -1,4 +1,4 @@
-import { INVENTORY_KEY, MAX_PAGES, MAX_VEHICLES, NIGHT_ALARM, WORK_ALARM, dealershipSite, inventoryUrl, mergeInventory, nextNightAt, refreshDue, robotsAllows, robotsPolicy, siteOrigins } from './inventoryModel.js';
+import { INVENTORY_KEY, MAX_PAGES, MAX_VEHICLES, NIGHT_ALARM, WORK_ALARM, dealershipSite, inventoryFeedUrl, inventoryUrl, mergeInventory, nextNightAt, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl } from './inventoryModel.js';
 
 let running;
 let mutation = Promise.resolve();
@@ -52,9 +52,13 @@ async function getPage(url, site, policies) {
   if (!current || !await chrome.permissions.contains({ origins: [`${new URL(current).origin}/*`] })) throw new Error('Website access is missing. Reconnect the dealership to allow it.');
   const policy = policies?.[new URL(current).origin];
   if (policy && !robotsAllows(policy, current)) throw new Error('The website excludes this inventory path from automated reads.');
-  // Chrome's Fetch API hides Location on manual redirects. Follow ordinary
-  // public, cookie-free redirects, then validate the final origin before reading.
-  const response = await fetch(current, { credentials: 'omit', redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' });
+  // Robots files may delegate their policy. Inventory redirects must not issue
+  // an unchecked destination request; Chrome hides Location on manual redirects.
+  const response = await fetch(current, { credentials: 'omit', redirect: policies ? 'manual' : 'follow', cache: 'no-store', signal: AbortSignal.timeout(15_000), referrerPolicy: 'no-referrer' });
+  if (policies && (response.type === 'opaqueredirect' || response.status >= 300 && response.status < 400)) {
+    await response.body?.cancel();
+    throw new Error('The inventory URL redirects. Open it in Chrome and connect the final inventory address. The previous catalog was kept.');
+  }
   current = inventoryUrl(response.url, site);
   const finalPolicy = current && policies?.[new URL(current).origin];
   if (!current || finalPolicy && !robotsAllows(finalPolicy, current)) { await response.body?.cancel(); throw new Error('The website redirected outside this dealership or to an excluded path. Connect the actual inventory website.'); }
@@ -86,8 +90,14 @@ async function finish(jobId, error = '') {
     if (state.job?.id !== jobId) return state;
     const job = state.job;
     const countsMatch = Object.values(job.groups).every(group => group.finalPage && group.ids.length === group.expected);
-    const complete = !error && !job.warnings.length && countsMatch && Object.keys(job.groups).length > 0;
-    const errors = [error, ...job.warnings, !countsMatch && 'The website page counts did not match the vehicles received.'].filter(Boolean);
+    const seen = new Set(job.vehicles.map(vehicle => vehicle.id));
+    const scopes = new Set(Object.values(job.groups).map(group => group.scope));
+    const missingScope = (state.vehicles ?? []).some(vehicle => {
+      const condition = vehicle.condition === 'certified' ? 'used' : vehicle.condition;
+      return vehicle.listed && !seen.has(vehicle.id) && ['new', 'used'].includes(condition) && !scopes.has('all') && !scopes.has(condition);
+    });
+    const complete = !error && !job.warnings.length && countsMatch && !missingScope && Object.keys(job.groups).length > 0;
+    const errors = [error, ...job.warnings, !countsMatch && 'The website page counts did not match the vehicles received.', missingScope && 'A cached inventory condition was not verified. The previous vehicles were kept.'].filter(Boolean);
     const next = { ...state, job: null, vehicles: mergeInventory(state.vehicles ?? [], job.vehicles, complete), provider: job.provider,
       status: complete ? 'ready' : job.vehicles.length ? 'partial' : 'error', error: errors.join(' ') || (complete ? '' : 'The inventory could not be verified.'),
       lastCompletedAt: complete ? Date.now() : state.lastCompletedAt, lastUpdatedAt: job.vehicles.length ? Date.now() : state.lastUpdatedAt };
@@ -172,6 +182,7 @@ async function processBatch() {
           const group = next.groups[result.group] ?? { ids: [], expected: result.expected };
           if (group.expected !== result.expected) next.warnings.push('Inventory changed during this refresh; counts are incomplete.');
           group.ids = [...new Set([...group.ids, ...(result.vehicles ?? []).map(vehicle => vehicle.id)])];
+          group.scope = result.scope;
           group.finalPage = result.finalPage;
           next.groups[result.group] = group;
         }
@@ -193,6 +204,7 @@ function pump() {
 async function command(message) {
   if (message.action === 'connect') {
     const site = dealershipSite(message.site);
+    if (inventoryFeedUrl(site) && !unfilteredInventoryUrl(site)) throw new Error('Connect an unfiltered inventory page to read the complete dealership inventory.');
     if (!await chrome.permissions.contains({ origins: siteOrigins(site) })) throw new Error('Allow access to this dealership website to connect it.');
     let previousSite;
     const state = await transaction(async previous => {

@@ -1,4 +1,4 @@
-import { cleanText, inventoryUrl, usdPrice, vehicleRecord } from './inventoryModel.js';
+import { cleanText, inventoryFeedUrl, inventoryUrl, publicImage, unfilteredInventoryUrl, usdPrice, vehicleRecord } from './inventoryModel.js';
 
 // Only inert, detached markup is parsed. Remote scripts are never evaluated.
 const markup = html => { const template = document.createElement('template'); template.innerHTML = html; return template.content; };
@@ -60,20 +60,26 @@ export function parseDealerOn(data, task, site, now) {
     }, site, now);
   }).filter(Boolean);
   const next = task.page < paging.TotalPages ? [{ ...task, page: task.page + 1, url: dealerOnUrl(task.config, task.url, task.page + 1) }] : [];
-  return { vehicles, tasks: next, expected: paging.TotalCount, group: String(task.config.PageId), finalPage: !next.length, provider: 'DealerOn' };
+  return { vehicles, tasks: next, expected: paging.TotalCount, group: String(task.config.PageId), scope: task.condition === 'new' ? 'new' : 'used', finalPage: !next.length, provider: 'DealerOn' };
 }
 
 function discovery(root, url, site) {
   const candidates = [...root.querySelectorAll('a[href]')].map(a => ({ url: inventoryUrl(a.getAttribute('href'), site, url), label: text(a) })).filter(item => item.url);
-  const find = patterns => candidates.find(item => patterns.some(pattern => pattern.test(new URL(item.url).pathname)) && !/special|certified|under|truck|suv|electric|lease|offer/i.test(new URL(item.url).pathname));
+  const find = patterns => {
+    const matches = candidates.filter(item => patterns.some(pattern => pattern.test(new URL(item.url).pathname)) && !/special|certified|under|truck|suv|electric|lease|offer/i.test(new URL(item.url).pathname));
+    const full = matches.find(item => unfilteredInventoryUrl(item.url));
+    if (!full && matches.length) throw new Error('Only filtered inventory links were found. Connect an unfiltered inventory page. The previous catalog was kept.');
+    return full;
+  };
   const newPage = find([/\/searchnew\.aspx$/i, /\/(?:new|new-inventory)(?:\/index\.htm)?\/?$/i, /\/inventory\/new\/?$/i]);
   const usedPage = find([/\/searchused\.aspx$/i, /\/(?:used|used-inventory|pre-owned)(?:\/index\.htm)?\/?$/i, /\/inventory\/used\/?$/i, /used-vehicle-inventory[^/]*\.html$/i]);
   const all = find([/\/inventory\/?$/i, /\/cars-for-sale\/?$/i, /\/searchall\.aspx$/i]);
   const chosen = newPage || usedPage ? [newPage && { ...newPage, condition: 'new' }, usedPage && { ...usedPage, condition: 'used' }] : [all && { ...all, condition: 'unknown' }];
-  return chosen.filter(Boolean).filter(item => item.url !== url).map(item => ({ url: item.url, kind: 'html', condition: item.condition }));
+  return chosen.filter(Boolean).filter(item => item.url !== url).map(item => ({ url: item.url, kind: 'html', condition: item.condition, feed: true }));
 }
 export function parseInventoryHtml(html, task, site, now) {
   const root = markup(html);
+  if (inventoryFeedUrl(task.url) && !unfilteredInventoryUrl(task.url, task.page ?? 1)) throw new Error('Connect an unfiltered inventory page to read the complete dealership inventory.');
   // A direct inventory URL still needs the dealership's other inventory.
   // Follow its navigation, or visit the home page when the feed omits it.
   const discoverMore = () => {
@@ -91,6 +97,10 @@ export function parseInventoryHtml(html, task, site, now) {
   }
   const cards = [...root.querySelectorAll('.invMainCell')];
   if (cards.length) {
+    const path = new URL(task.url).pathname;
+    const feedCondition = ['new', 'used', 'certified'].includes(task.condition) ? task.condition
+      : /\/(?:searchnew\.aspx|inventory\/new|new(?:-inventory)?)(?:\/index\.htm)?\/?$/i.test(path) ? 'new'
+      : /\/(?:searchused\.aspx|inventory\/used|used(?:-inventory)?|pre-owned)(?:\/index\.htm)?\/?$/i.test(path) || /\/used-vehicle-inventory[^/]*\.html$/i.test(path) ? 'used' : 'unknown';
     const usAddress = /\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\s+\d{5}(?:-\d{4})?\b/.test(text(root.querySelector('.LabelCityStateZip1')));
     const vehicles = cards.map(card => {
       const a = card.querySelector('.vehicleTitleH4 a');
@@ -98,8 +108,8 @@ export function parseInventoryHtml(html, task, site, now) {
       const priceRows = card.querySelector('.i18r_customPricing')?.innerHTML ?? '';
       const name = a?.getAttribute('aria-label') || text(a);
       const href = a?.getAttribute('href') ?? '';
-      const condition = /\/New-/i.test(href) ? 'new' : /\/(?:Used|Certified)-/i.test(href) ? 'used' : task.condition ?? 'unknown';
-      return vehicleRecord({ name, url: a?.getAttribute('href'),
+      const condition = /\/New-/i.test(href) ? 'new' : /\/(?:Used|Certified)-/i.test(href) ? 'used' : feedCondition;
+      return vehicleRecord({ name, url: inventoryUrl(href, site, task.url),
         vin: card.querySelector('[data-vin]')?.getAttribute('data-vin') || details.match(/\bVIN\s*:?\s*([A-HJ-NPR-Z0-9]{17})/i)?.[1],
         stock: details.match(/\bStock\s*(?:#|No\.?|Number)?\s*:\s*(\S+)/i)?.[1],
         mileage: text(card.querySelector('.i18r_optMileage p')).match(/\bMileage\s*:\s*([\d,]+)/i)?.[1] ?? details.match(/\bMileage\s*:\s*([\d,]+)/i)?.[1],
@@ -108,7 +118,7 @@ export function parseInventoryHtml(html, task, site, now) {
         transmission: text(card.querySelector('.i18r_optTrans p')).replace(/^Transmission:\s*/i, ''),
         features: [...card.querySelectorAll('.i18r_optDrive p, .i18r_optEngine p, .i18r_optFuel p')].map(text),
         condition,
-        photos: [...card.querySelectorAll('.mainImgWrap img')].map(img => img.getAttribute('data-src') || img.getAttribute('src')),
+        photos: [...card.querySelectorAll('.mainImgWrap img')].map(img => publicImage(img.getAttribute('data-src') || img.getAttribute('src'), task.url)),
         currency: usAddress ? 'USD' : '', ...pricing(priceRows, condition === 'used' || condition === 'certified'),
       }, site, now);
     }).filter(Boolean);
@@ -122,8 +132,9 @@ export function parseInventoryHtml(html, task, site, now) {
     const groupUrl = new URL(task.url);
     groupUrl.searchParams.delete('page');
     groupUrl.hash = '';
-    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
+    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, scope: feedCondition === 'unknown' ? 'all' : feedCondition === 'new' ? 'new' : 'used', expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
   }
+  if (task.feed || inventoryFeedUrl(task.url)) throw new Error('An inventory feed could not be verified. The previous catalog was kept.');
   const tasks = discovery(root, task.url, site);
   if (!tasks.length) throw new Error('This website needs a different inventory connector. Capture individual listings or enter vehicles manually for now.');
   return { vehicles: [], tasks, provider: '' };

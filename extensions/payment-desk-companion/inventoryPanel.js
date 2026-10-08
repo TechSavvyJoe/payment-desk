@@ -1,4 +1,4 @@
-import { INVENTORY_KEY, dealershipSite, inventoryUrl, siteOrigins } from './inventoryModel.js';
+import { INVENTORY_KEY, dealershipSite, inventoryFeedUrl, inventoryUrl, siteOrigins, unfilteredInventoryUrl } from './inventoryModel.js';
 
 export function installInventoryPanel(onChoose, onOpen) {
   const panel = document.getElementById('inventory-controls');
@@ -102,15 +102,31 @@ export function installInventoryPanel(onChoose, onOpen) {
     if (connecting) return;
     let url;
     try { url = dealershipSite(site.value); } catch { message('Enter a public HTTPS dealership website.', true); site.focus(); return; }
+    if (inventoryFeedUrl(url) && !unfilteredInventoryUrl(url)) { message('Connect an unfiltered inventory page to read the complete dealership inventory.', true); site.focus(); return; }
     const selectedNightly = nightly.checked;
     // Call request synchronously from the user's submit gesture. The permission
     // is for this site's apex/www hosts, not every website in the optional pattern.
-    const permission = chrome.permissions.request({ origins: siteOrigins(url) });
+    const origins = siteOrigins(url);
+    // Snapshot each host before requesting access, preserving the submit gesture.
+    const previousAccess = Promise.all(origins.map(origin => chrome.permissions.contains({ origins: [origin] }))).catch(() => null);
+    const permission = chrome.permissions.request({ origins });
+    let granted = false;
     connecting = true; document.getElementById('inventory-connect').disabled = true;
     try {
-      if (!await permission) throw new Error('Website access was not granted. The connection was not changed.');
+      granted = await permission;
+      if (!granted) throw new Error('Website access was not granted. The connection was not changed.');
       await command({ action: 'connect', site: url, nightly: selectedNightly });
-    } catch (error) { message(error.message, true); }
+    } catch (error) {
+      if (granted) {
+        try {
+          const before = await previousAccess;
+          if (!before) throw new Error('The previous website access could not be verified.', { cause: error });
+          const newlyGranted = origins.filter((_origin, index) => !before[index]);
+          if (newlyGranted.length && !await chrome.permissions.remove({ origins: newlyGranted })) throw new Error('Website access was not withdrawn.', { cause: error });
+        } catch { message(`${error.message} Website access could not be withdrawn. Remove it in Chrome’s extension settings.`, true); return; }
+      }
+      message(error.message, true);
+    }
     finally { connecting = false; document.getElementById('inventory-connect').disabled = false; }
   });
   nightly.addEventListener('change', async () => {

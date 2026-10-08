@@ -137,11 +137,98 @@ test('discovery uses the fetched document URL and neutral vehicle URLs retain th
     const site = 'https://dealer.example.com/inventory/used/';
     const links = parseInventoryHtml('<a href="searchnew.aspx">New</a><a href="searchused.aspx">Used</a><a href="https://outside.example.com/inventory">Outside</a>', { url: 'https://dealer.example.com/', kind: 'html' }, site, 123);
     const html = '<span class="LabelCityStateZip1">Roseville, MI 48066</span><span class="pager-summary">Page: 1 of 1 (1 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/vdp/123/2024-Ford-Explorer">2024 Ford Explorer</a></h4><div class="i18r_customPricing"><div class="price"><label class="price-label">Retail Price</label><span class="price-price">$24,995</span></div></div></div>';
-    return { links: links.tasks.map(task => task.url), newVehicle: parseInventoryHtml(html, { url: 'https://dealer.example.com/inventory/new', kind: 'html', condition: 'new' }, site, 123).vehicles[0], usedVehicle: parseInventoryHtml(html, { url: site, kind: 'html', condition: 'used' }, site, 123).vehicles[0] };
+    return { links: links.tasks.map(task => task.url), newVehicle: parseInventoryHtml(html, { url: 'https://dealer.example.com/inventory/new', kind: 'html', condition: 'new' }, site, 123).vehicles[0], usedVehicle: parseInventoryHtml(html, { url: site, kind: 'html', condition: 'used' }, site, 123).vehicles[0], directNew: parseInventoryHtml(html, { url: 'https://dealer.example.com/inventory/new', kind: 'html', condition: 'unknown' }, site, 123).vehicles[0] };
   });
   expect(results.links).toEqual([`${site}searchnew.aspx`, `${site}searchused.aspx`]);
   expect(results.newVehicle).toMatchObject({ condition: 'new', price: null });
+  expect(results.directNew).toMatchObject({ condition: 'new', price: null });
   expect(results.usedVehicle).toMatchObject({ condition: 'used', price: 24995 });
+});
+
+test('unparsed feed navigation cannot complete a refresh or unlist its cached vehicles', async () => {
+  await connect();
+  const previous = await saved();
+  await context.route(`${site}searchused.aspx`, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchnew.aspx">New</a><a href="/searchused.aspx">Used</a>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  const state = await saved();
+  expect(state.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(state.vehicles).toHaveLength(3);
+  expect(state.vehicles.every(vehicle => vehicle.listed)).toBe(true);
+  expect(state.error).toContain('feed could not be verified');
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchnew.aspx">New</a><a href="/searchused.aspx?make=Ford">Ford used</a>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('error');
+  const filtered = await saved();
+  expect(filtered.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(filtered.vehicles).toHaveLength(3);
+  expect(filtered.vehicles.every(vehicle => vehicle.listed)).toBe(true);
+  expect(filtered.error).toContain('Only filtered inventory links');
+  await context.route(site, route => route.fulfill({ contentType: 'text/html', body: '<a href="/searchnew.aspx">New</a>' }));
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  const missing = await saved();
+  expect(missing.lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect(missing.vehicles.every(vehicle => vehicle.listed)).toBe(true);
+  expect(missing.error).toContain('cached inventory condition was not verified');
+});
+
+test('inventory redirects never request an excluded destination and preserve the old catalog', async () => {
+  await connect();
+  const previous = await saved();
+  await context.route(`${site}robots.txt`, route => route.fulfill({ contentType: 'text/plain', body: 'User-agent: *\nAllow: /\nDisallow: /private/' }));
+  await context.route(`${site}searchnew.aspx`, route => route.fulfill({ status: 302, headers: { location: `${site}private/new` } }));
+  const before = requests.length;
+  await panel.getByRole('button', { name: 'Refresh now' }).click();
+  await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+  expect(requests.slice(before)).not.toContain(`${site}private/new`);
+  expect((await saved()).lastCompletedAt).toBe(previous.lastCompletedAt);
+  expect((await saved()).vehicles.every(vehicle => vehicle.listed)).toBe(true);
+  expect((await saved()).error).toContain('URL redirects');
+});
+
+test('filtered navigation is skipped and relative listing links use the fetched feed', async () => {
+  const result = await panel.evaluate(async () => {
+    const { parseInventoryHtml } = await import('./inventoryParser.js');
+    const site = 'https://dealer.example.com/';
+    const links = '<a href="/searchused.aspx?make=Ford">Ford</a><a href="/inventory/used?certified=true">Certified</a><a href="/searchused.aspx">All used</a><a href="/searchnew.aspx">All new</a>';
+    const tasks = parseInventoryHtml(links, { url: site, kind: 'html' }, site, 123).tasks;
+    const html = '<span class="LabelCityStateZip1">Roseville, MI 48066</span><span class="pager-summary">Page: 1 of 1 (1 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="vehicle/123">2024 Ford Explorer</a></h4><div class="mainImgWrap"><img src="photos/123.jpg"></div></div>';
+    const vehicle = parseInventoryHtml(html, { url: `${site}inventory/used/`, kind: 'html', condition: 'used' }, site, 123).vehicles[0];
+    return { tasks, vehicle };
+  });
+  expect(result.tasks.map(task => task.url)).toEqual([`${site}searchnew.aspx`, `${site}searchused.aspx`]);
+  expect(result.tasks.every(task => task.feed)).toBe(true);
+  expect(result.vehicle.url).toBe(`${site}inventory/used/vehicle/123`);
+  expect(result.vehicle.id).toBe(result.vehicle.url);
+  expect(result.vehicle.photos).toEqual([`${site}inventory/used/photos/123.jpg`]);
+});
+
+test('a failed connection withdraws only newly approved website access', async () => {
+  await connect();
+  const previous = await saved();
+  await panel.locator('#inventory-settings summary').click();
+  await panel.locator('#dealership-site').fill('https://another.example.com/');
+  // Headless Chrome cannot approve its native permission dialog. Simulate its
+  // contract and an unsuccessful background command, without adding real hosts.
+  await panel.evaluate(() => {
+    window.withdrawnOrigins = [];
+    chrome.permissions.contains = async ({ origins }) => origins[0] === 'https://www.another.example.com/*';
+    chrome.permissions.request = async () => true;
+    chrome.permissions.remove = async ({ origins }) => { window.withdrawnOrigins.push(origins); return true; };
+    const original = chrome.runtime.sendMessage;
+    chrome.runtime.sendMessage = (...args) => args[0]?.target === 'inventory.background' && args[0]?.action === 'connect'
+      ? Promise.resolve({ ok: false, error: 'Simulated connection write failure' }) : original(...args);
+  });
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect(panel.locator('#inventory-notice')).toContainText('Simulated connection write failure');
+  expect(await panel.evaluate(() => window.withdrawnOrigins)).toEqual([['https://another.example.com/*']]);
+  expect((await saved()).config).toEqual(previous.config);
+  await panel.evaluate(() => { chrome.permissions.contains = async () => true; });
+  await panel.getByRole('button', { name: 'Connect and refresh' }).click();
+  await expect(panel.getByRole('button', { name: 'Connect and refresh' })).toBeEnabled();
+  expect(await panel.evaluate(() => window.withdrawnOrigins)).toHaveLength(1);
+  expect((await saved()).config).toEqual(previous.config);
 });
 
 test('connects both inventories, follows all pages, shows data, and reviews without clearing a deal', async () => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dealershipSite, inventoryUrl, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
+import { dealershipSite, inventoryFeedUrl, inventoryUrl, mergeInventory, nextNightAt, publicImage, refreshDue, robotsAllows, robotsPolicy, siteOrigins, unfilteredInventoryUrl, usdPrice, vehicleRecord } from '../extensions/payment-desk-companion/inventoryModel.js';
 
 test('inventory connects only public HTTPS sites and scopes access to apex/www', () => {
   assert.equal(dealershipSite('dealer.example.com'), 'https://dealer.example.com/');
@@ -19,6 +19,14 @@ test('inventory never invents a selling price from payments or non-USD values', 
   const source = { name: '2024 Ford Explorer', url: '/used/123', vin: '1FM5K8D80MGA12345', price: 29995, currency: 'CAD' };
   assert.equal(vehicleRecord(source, 'https://dealer.example.com', 100).price, null);
   assert.equal(vehicleRecord({ ...source, currency: 'USD' }, 'https://dealer.example.com', 100).price, 29995);
+});
+
+test('full inventory selection excludes filters and starts pagination at page one', () => {
+  for (const path of ['/searchnew.aspx', '/inventory/used/', '/used-inventory/index.htm', '/used-vehicle-inventory-howell-mi.html']) assert.equal(inventoryFeedUrl(`https://dealer.example.com${path}`), true);
+  assert.equal(inventoryFeedUrl('https://dealer.example.com/'), false);
+  for (const query of ['', '?clearall=1', '?page=1']) assert.equal(unfilteredInventoryUrl(`https://dealer.example.com/inventory${query}`), true);
+  for (const query of ['?make=Ford', '?certified=true', '?clearall=1&make=Ford', '?page=2']) assert.equal(unfilteredInventoryUrl(`https://dealer.example.com/inventory${query}`), false);
+  assert.equal(unfilteredInventoryUrl('https://dealer.example.com/inventory?page=2', 2), true);
 });
 
 test('records keep only bounded public vehicle fields, without customer data or executable URLs', () => {
