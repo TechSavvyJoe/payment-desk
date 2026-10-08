@@ -98,9 +98,13 @@ async function getPage(url, site, policies) {
     // Do not read a redirected document until that origin's own policy is known.
     return { redirect: current };
   }
-  if (response.status === 404 && new URL(current).pathname === '/robots.txt') { await response.body?.cancel(); return { body: '', url: current }; }
+  // Policy reads omit policies; their final pathname can change after a redirect.
+  if (response.status === 404 && !policies) { await response.body?.cancel(); return { body: '', url: current }; }
   if (!response.ok) { await response.body?.cancel(); throw new Error(`The website refused the inventory request (${response.status}). The previous catalog was kept.`); }
-  if (!response.body && new URL(current).pathname === '/robots.txt') return { body: '', url: current };
+  if (!response.body) {
+    if (!policies) return { body: '', url: current };
+    throw new Error('The website returned no inventory content. The previous catalog was kept.');
+  }
   if (Number(response.headers.get('content-length')) > 4_000_000) { await response.body?.cancel(); throw new Error('The inventory response is too large.'); }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

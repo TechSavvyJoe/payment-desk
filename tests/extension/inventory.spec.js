@@ -394,6 +394,25 @@ test('a no-content robots response permits the verified inventory refresh', asyn
   expect(requests).toContain(`${site}searchused.aspx`);
 });
 
+for (const status of [204, 404]) {
+  test(`a redirected ${status} robots response at a nonstandard path permits inventory refresh`, async () => {
+    await context.route(`${site}robots.txt`, route => route.fulfill({ status }));
+    const [worker] = context.serviceWorkers();
+    await worker.evaluate(({ source, final }) => {
+      const original = fetch;
+      globalThis.fetch = async (...args) => {
+        const response = await original(...args);
+        if (args[0] === source) Object.defineProperty(response, 'url', { value: final });
+        return response;
+      };
+    }, { source: `${site}robots.txt`, final: 'https://www.dealer.example.com/policy/empty.txt' });
+    await connect();
+    expect((await saved()).vehicles).toHaveLength(3);
+    expect(requests).toContain(`${site}searchnew.aspx`);
+    expect(requests).toContain(`${site}searchused.aspx`);
+  });
+}
+
 for (const condition of ['new', 'used']) {
   test(`a complete combined feed is used beside a filtered ${condition} link`, async () => {
     await context.route(site, route => route.fulfill({ contentType: 'text/html', body: `<a href="/search${condition}.aspx?make=Ford">Filtered ${condition}</a><a href="/searchall.aspx">All inventory</a>` }));
