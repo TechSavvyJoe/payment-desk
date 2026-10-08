@@ -2,10 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatShortDate, parseShortDate } from '../lib/formatters.js';
 import { todayDealDate } from '../lib/policy.js';
 import { useFieldValidation } from './ValidationContext.jsx';
+import { useInputDrafts } from './DraftContext.jsx';
 
 export default function EstimateDateField({ value, onChange }) {
-  const [draft, setDraft] = useState(() => formatShortDate(value));
-  const [error, setError] = useState(null);
+  const inputDrafts = useInputDrafts();
+  const initialDraft = inputDrafts?.values['estimate-date']?.raw;
+  const [draft, setDraft] = useState(() => initialDraft ?? formatShortDate(value));
+  const [error, setError] = useState(() => initialDraft === undefined ? null : parseShortDate(initialDraft).error ?? null);
   // A blank desk can move to the new day after midnight. Show the new date in place,
   // so whoever is on this field keeps focus. A date being typed always matches value.
   const [shownValue, setShownValue] = useState(value);
@@ -44,8 +47,9 @@ export default function EstimateDateField({ value, onChange }) {
     const next = new Date(Date.UTC(year, month + offset, 1)).toISOString().slice(0, 10);
     if (next >= '2000-01-01' && next <= '2099-12-31') setFocusedDate(next);
   };
-  useEffect(() => () => reportError?.('estimate-date', null), [reportError]);
+  useEffect(() => { reportError?.('estimate-date', error); return () => reportError?.('estimate-date', null); }, [reportError, error]);
   const update = raw => {
+    inputDrafts?.remember('estimate-date', raw);
     setDraft(raw);
     const parsed = parseShortDate(raw);
     const message = parsed.error ?? null;

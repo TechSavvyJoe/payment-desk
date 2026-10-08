@@ -22,6 +22,8 @@ import PolicyReminder from './components/PolicyReminder.jsx';
 import VehicleImportDialog from './components/VehicleImportDialog.jsx';
 import InventoryPicker from './components/InventoryPicker.jsx';
 import { rememberCompanion } from './lib/companionInventory.js';
+import { isDeskDraftField, loadDeskDraft, saveDeskDraft } from './lib/deskDraft.js';
+import { DraftContext } from './components/DraftContext.jsx';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
@@ -53,7 +55,12 @@ function useEasternToday() {
 }
 
 export default function App() {
-  const [state, dispatch] = useReducer(deskReducer, undefined, createDeskState);
+  const [restoredDraft] = useState(loadDeskDraft);
+  const [state, dispatch] = useReducer(deskReducer, undefined, () => restoredDraft?.desk ?? createDeskState());
+  const [inputDrafts, setInputDrafts] = useState(() => restoredDraft?.inputDrafts ?? {});
+  const [draftSaved, setDraftSaved] = useState(true);
+  const rememberInput = useCallback((id, raw) => { if (isDeskDraftField(id)) setInputDrafts(current => current[id]?.raw === raw ? current : { ...current, [id]: { raw } }); }, []);
+  const draftContext = useMemo(() => ({ values: inputDrafts, remember: rememberInput }), [inputDrafts, rememberInput]);
   const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
   const [brandSettings, setBrandSettings] = useState(loadBrandSettings);
   const brand = useMemo(() => resolveBrand(brandSettings), [brandSettings]);
@@ -94,11 +101,17 @@ export default function App() {
   const saveSettings = (nextBrand, nextFees) => applySettings(saveDeviceSettings(nextBrand, nextFees));
   const clearSettings = () => applySettings(clearDeviceSettings());
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
-  const [targetType, setTargetType] = useState('payment');
-  const [targetValues, setTargetValues] = useState({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
+  const [targetType, setTargetType] = useState(() => restoredDraft?.targetType ?? 'payment');
+  const [targetValues, setTargetValues] = useState(() => restoredDraft?.targetValues ?? { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
   const [solverExpanded, setSolverExpanded] = useState(false);
   const [accordions, setAccordions] = useState(allOpen);
   const [contextOpen, setContextOpen] = useState(false);
+  useEffect(() => {
+    // The status reports an external storage write, not derived worksheet state.
+    // React skips rendering when the write outcome has not changed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraftSaved(saveDeskDraft({ desk: state, targetType, targetValues, inputDrafts }).ok);
+  }, [state, targetType, targetValues, inputDrafts]);
   const [fieldErrors, setFieldErrors] = useState({});
   const targetInputRef = useRef(null);
   const reportError = useCallback((id, error) => setFieldErrors(current => {
@@ -122,11 +135,11 @@ export default function App() {
   }, [hasDeal, today]);
 
   useEffect(() => {
-    if (!hasDeal) return;
+    if (!hasDeal || draftSaved) return;
     const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [hasDeal]);
+  }, [hasDeal, draftSaved]);
 
   const focusFirstError = () => {
     setAccordions(allOpen());
@@ -160,6 +173,7 @@ export default function App() {
   };
   const clearDeal = () => {
     dispatch({ type: 'reset' });
+    setInputDrafts({});
     setTargetType('payment'); setTargetValues({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
     setSolverExpanded(false); setAccordions(allOpen()); setFieldErrors({}); setContextOpen(false);
   };
@@ -207,7 +221,7 @@ export default function App() {
     onStartEstimate: () => { dispatch({ type: 'grid-visibility', open: false }); setAccordions(current => ({ ...current, vehicle: true })); focusDestination('sale-price'); } };
 
   return (
-    <ValidationContext.Provider value={reportError}>
+    <ValidationContext.Provider value={reportError}><DraftContext.Provider value={draftContext}>
       <div className={`app-frame ${view === 'dealer' && mobileGridOpen && result.isFinanced ? 'has-mobile-grid-open' : ''}`}>
         <a className="skip-link" href={view === 'customer' ? '#customer-heading' : '#worksheet-heading'}>Skip to calculator</a>
         <ViewToggle brand={brand} onOpenSettings={() => setSettingsOpen(true)} onReset={resetDeal} onViewChange={changeView} settingsButtonRef={settingsButtonRef} view={view} />
@@ -256,11 +270,11 @@ export default function App() {
           rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onStartEstimate={summaryProps.onStartEstimate} /> : null}
         <footer className="app-footer">
           <p>Estimates only. Subject to lender approval and final taxes, fees, and deal structure.</p>
-          <p>Figures stay in this browser unless you share or print. Refreshing clears the deal.</p>
+          <p>{draftSaved ? 'Draft saved on this device. Refreshing keeps your figures; Reset deal clears them.' : 'Draft could not be saved on this device. Keep this page open until you copy or print your estimate.'}</p>
           <p>Michigan purchase estimates · v{APP_VERSION} · {BUILD_ID}</p>
         </footer>
         {view === 'dealer' && result.isFinanced ? <MobileNav onGrid={scrollToGrid} onPayment={() => { if (!(result.salePrice > 0)) { summaryProps.onStartEstimate(); return; } dispatch({ type: 'grid-visibility', open: false }); focusDestination('payment-results-mobile'); }} payment={result.monthlyPayment} hasEstimate={result.salePrice > 0} /> : null}
       </div>
-    </ValidationContext.Provider>
+    </DraftContext.Provider></ValidationContext.Provider>
   );
 }

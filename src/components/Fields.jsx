@@ -1,6 +1,7 @@
 import { cloneElement, forwardRef, isValidElement, useEffect, useId, useState } from 'react';
 import { parseFinancialInput } from '../lib/inputValidation.js';
 import { useFieldValidation } from './ValidationContext.jsx';
+import { useInputDrafts } from './DraftContext.jsx';
 
 const numberFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const isBlank = value => value === '' || value == null;
@@ -13,9 +14,11 @@ const FinancialInput = forwardRef(function FinancialInput({
   const generatedId = useId();
   const inputId = id || generatedId;
   const errorId = `${inputId}-error`;
+  const inputDrafts = useInputDrafts();
+  const initialDraft = savedDraft ?? inputDrafts?.values[inputId];
   const [focused, setFocused] = useState(false);
-  const [draft, setDraft] = useState(() => savedDraft?.raw ?? '');
-  const [error, setError] = useState(() => savedDraft?.error ?? null);
+  const [draft, setDraft] = useState(() => initialDraft?.raw ?? '');
+  const [error, setError] = useState(() => initialDraft ? parseFinancialInput(initialDraft.raw, { kind, min, max, required }).error ?? null : null);
   const reportError = useFieldValidation();
 
   useEffect(() => {
@@ -27,6 +30,7 @@ const FinancialInput = forwardRef(function FinancialInput({
     const parsed = parseFinancialInput(raw, { kind, min, max, required });
     const message = parsed.error ?? null;
     onDraftChange?.({ raw, error: message });
+    inputDrafts?.remember(inputId, raw);
     setError(message);
     reportError?.(inputId, message);
     if (!message) onChange?.(parsed.value);

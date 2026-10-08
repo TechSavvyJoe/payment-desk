@@ -44,7 +44,7 @@ test('replacing an existing deal requires review and preserves device settings',
   await expect(page.locator('#cash-down')).toHaveValue('0');
   await expect(page.getByRole('link', { name: 'Lakeside Motors Payment Desk home' })).toBeVisible();
   await expect(page.locator('#apr')).toHaveValue('6.50');
-  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['payment-desk.dealership.v1']);
+  expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.draft.v1']);
 });
 test('bad imported data cannot apply a price, and reference-only imports remain usable', async ({ page }) => {
   await page.goto('/' + fragment({ salePrice: 1_000_001 }));

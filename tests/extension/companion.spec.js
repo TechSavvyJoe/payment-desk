@@ -383,7 +383,7 @@ test('production-origin web app searches the companion catalog and reviews vehic
   expect(await brokenLink.evaluate(() => localStorage.getItem('payment-desk.companion.v1'))).toBe(extensionId);
 });
 
-test('panel dealership and fees survive Reset deal and reload without saving deal figures', async () => {
+test('panel dealership and fees survive Reset deal and reload after the draft is cleared', async () => {
   const panel = await openPanelDocument();
   const desk = panel.frameLocator('#desk');
   await desk.getByRole('button', { name: 'Dealership settings' }).click();
@@ -404,4 +404,27 @@ test('panel dealership and fees survive Reset deal and reload without saving dea
   await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('125.5');
   const frame = panel.frames().find(frame => frame.url().endsWith('/desk/index.html'));
   expect(await frame.evaluate(() => Object.keys(localStorage).sort())).toEqual(['payment-desk.dealership.v1', 'payment-desk.fees.v1']);
+});
+
+test('the companion draft survives panel reload and reopening until Reset deal', async () => {
+  let panel = await openPanelDocument();
+  let desk = panel.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('30000');
+  await desk.locator('#cash-down').fill('2500');
+  await desk.locator('#target-value').fill('450');
+  await desk.locator('#target-value').blur();
+  await panel.reload();
+  await expect(desk.locator('#sale-price')).toHaveValue('30,000');
+  await expect(desk.locator('#cash-down')).toHaveValue('2,500');
+  await expect(desk.locator('#target-value')).toHaveValue('450');
+  await panel.close();
+  panel = await openPanelDocument();
+  desk = panel.frameLocator('#desk');
+  await expect(desk.locator('#sale-price')).toHaveValue('30,000');
+  await expect(desk.locator('#cash-down')).toHaveValue('2,500');
+  panel.once('dialog', dialog => dialog.accept());
+  await desk.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  await panel.reload();
+  await expect(desk.locator('#sale-price')).toHaveValue('');
+  await expect(desk.locator('#cash-down')).toHaveValue('0');
 });

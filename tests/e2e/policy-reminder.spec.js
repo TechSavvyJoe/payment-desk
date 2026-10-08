@@ -92,7 +92,7 @@ test('a blank desk left open overnight moves to the new day and still resets and
   expect(dialogs).toEqual([]);
 });
 
-test('a desk with a deal keeps its date overnight and still asks before Reset and leaving', async ({ page }) => {
+test('a saved deal keeps its date overnight and asks before Reset but can safely close', async ({ page }) => {
   const dialogs = [];
   page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
   await page.clock.install({ time: BEFORE_MIDNIGHT });
@@ -106,7 +106,7 @@ test('a desk with a deal keeps its date overnight and still asks before Reset an
   await expect.poll(() => dialogs).toEqual(['confirm']);
   await expect(price(page)).toHaveValue('30,000');
   await page.close({ runBeforeUnload: true });
-  await expect.poll(() => dialogs).toEqual(['confirm', 'beforeunload']);
+  expect(dialogs).toEqual(['confirm']);
 });
 
 test('Reset in the first minute after midnight starts the new day, not yesterday', async ({ page }) => {

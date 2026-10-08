@@ -192,7 +192,7 @@ export default function DealerView({
                   ) : null}
                   <label className="product-amount-label">
                     <span>Amount</span>
-                    <MoneyInput ariaLabel={`${item.name || `Product ${index + 1}`} amount`} compact value={item.amount}
+                    <MoneyInput id={`product-${item.id}-amount`} ariaLabel={`${item.name || `Product ${index + 1}`} amount`} compact value={item.amount}
                       onChange={(value) => updateItem(index, { amount: value })} />
                   </label>
                   {categoryFor(item) === "other" ? <OtherTaxField item={item} index={index} updateItem={updateItem} /> : <label className="tax-check">

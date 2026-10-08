@@ -89,6 +89,7 @@ export default function PaymentGrid({
               {grid.columns.map((column, columnIndex) => (
                 <th key={`down-${columnIndex}`} scope="col">
                   <MoneyInput
+                    id={`grid-down-${columnIndex}`}
                     ariaLabel={`Down payment column ${columnIndex + 1}`}
                     savedDraft={draftCache[`down-${columnIndex}`]}
                     onDraftChange={(draft) => setDraftCache((current) => ({ ...current, [`down-${columnIndex}`]: draft }))}
@@ -107,6 +108,7 @@ export default function PaymentGrid({
                 <th scope="row">{row.termMonths} mo</th>
                 <td className="rate-cell">
                   <PercentInput
+                    id={`grid-apr-${row.termMonths}`}
                     ariaLabel={`APR for ${row.termMonths} months`}
                     savedDraft={draftCache[`apr-${row.termMonths}`]}
                     onDraftChange={(draft) => setDraftCache((current) => ({ ...current, [`apr-${row.termMonths}`]: draft }))}
@@ -141,6 +143,7 @@ export default function PaymentGrid({
           <div className="mobile-down-editor__grid">
             {downPayments.map((value, index) => (
               <MoneyInput
+                id={`grid-down-${index}`}
                 ariaLabel={`Down payment option ${index + 1}`}
                 savedDraft={draftCache[`down-${index}`]}
                 onDraftChange={(draft) => setDraftCache((current) => ({ ...current, [`down-${index}`]: draft }))}
@@ -160,6 +163,7 @@ export default function PaymentGrid({
                 <label>
                   <span>APR</span>
                   <PercentInput
+                    id={`grid-apr-${row.termMonths}`}
                     ariaLabel={`APR for ${row.termMonths} months`}
                     savedDraft={draftCache[`apr-${row.termMonths}`]}
                     onDraftChange={(draft) => setDraftCache((current) => ({ ...current, [`apr-${row.termMonths}`]: draft }))}
