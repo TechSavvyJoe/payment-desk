@@ -1477,6 +1477,15 @@ a:focus-visible {
   background: var(--blue-dark);
 }
 
+/* Keep export labels readable while preparing a PDF or handing it to another app. */
+.share-button:disabled,
+.print-button:disabled {
+  opacity: 1;
+  background: var(--surface-alt);
+  color: var(--muted);
+  box-shadow: none;
+}
+
 .print-button {
   border: 1.5px solid var(--input-border);
   background: #ffffff;

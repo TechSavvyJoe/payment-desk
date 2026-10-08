@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
+import AxeBuilder from '@axe-core/playwright';
 import { DESK_DRAFT_KEY } from '../../src/lib/deskDraft.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -197,6 +198,8 @@ test('unmounted pending generation never exposes a stale file', async ({ page })
   await page.route('**/assets/es-*.js', async route => { await gate; await route.continue(); });
   await openEstimate(page, false);
   await expect(page.getByRole('button', { name: 'Download PDF', exact: true })).toBeDisabled();
+  const pendingScan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(pendingScan.violations).toEqual([]);
   await page.getByRole('button', { name: 'Edit deal', exact: true }).click();
   await page.getByLabel('Selling price', { exact: true }).fill('32000');
   await page.getByLabel('Selling price', { exact: true }).blur();

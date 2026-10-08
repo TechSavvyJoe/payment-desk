@@ -308,6 +308,9 @@ for (const reason of ['blocked', 'conflicted']) {
       await expect(page.locator('.app-footer')).toContainText('Another tab changed the saved draft');
     } else await expect(page.locator('.app-footer')).toContainText('Draft could not be saved');
     await expect(page.locator('#sale-price')).toHaveValue('');
+    // The user is closing the original worksheet, not the other tab used to create a conflict.
+    await page.bringToFront();
+    await page.locator('#target-value').click();
     const prompt = page.waitForEvent('dialog', { timeout: 3000 });
     await page.close({ runBeforeUnload: true });
     const dialog = await prompt;
