@@ -22,7 +22,7 @@ import PolicyReminder from './components/PolicyReminder.jsx';
 import VehicleImportDialog from './components/VehicleImportDialog.jsx';
 import InventoryPicker from './components/InventoryPicker.jsx';
 import { rememberCompanion } from './lib/companionInventory.js';
-import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, isDeskDraftField } from './lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, isBaselineDeskInput, isDeskDraftField } from './lib/deskDraft.js';
 import { DraftContext } from './components/DraftContext.jsx';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
@@ -61,7 +61,18 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const [inputDrafts, setInputDrafts] = useState(() => restoredDraft?.inputDrafts ?? {});
   const [draftStatus, setDraftStatus] = useState('saving');
   const draftSaved = draftStatus === 'saved';
-  const rememberInput = useCallback((id, raw) => { if (isDeskDraftField(id)) setInputDrafts(current => current[id]?.raw === raw ? current : { ...current, [id]: { raw } }); }, []);
+  const rememberInput = useCallback((id, raw) => {
+    if (!isDeskDraftField(id)) return;
+    setInputDrafts(current => {
+      if (isBaselineDeskInput(id, raw, state.startDate)) {
+        if (!(id in current)) return current;
+        const next = { ...current };
+        delete next[id];
+        return next;
+      }
+      return current[id]?.raw === raw ? current : { ...current, [id]: { raw } };
+    });
+  }, [state.startDate]);
   const draftContext = useMemo(() => ({ values: inputDrafts, remember: rememberInput }), [inputDrafts, rememberInput]);
   const { deal, view, mobileGridOpen, gridRates, gridDownPayments, lastRoll, resetCount } = state;
   const [brandSettings, setBrandSettings] = useState(loadBrandSettings);

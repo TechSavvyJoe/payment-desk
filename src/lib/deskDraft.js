@@ -1,6 +1,7 @@
 import { CALCULATION_LIMITS, RATE_GRID_DEFAULTS } from './calculations.js';
 import { createDeskState, hasDealEdits } from './dealState.js';
 import { parseShortDate } from './formatters.js';
+import { parseFinancialInput } from './inputValidation.js';
 
 export const DESK_DRAFT_KEY = 'payment-desk.draft.v1';
 const terms = RATE_GRID_DEFAULTS.termMonths;
@@ -12,6 +13,22 @@ const fieldId = /^(?:sale-price|cash-down|trade-allowance|trade-payoff|apr|new-p
 export const isDeskDraftField = id => fieldId.test(id);
 const storageOnDevice = () => { try { return window.localStorage; } catch { return null; } };
 const locksOnDevice = () => { try { return navigator.locks; } catch { return null; } };
+
+export function isBaselineDeskInput(id, raw, startDate) {
+  if (!isDeskDraftField(id) || id === 'estimate-date' || id.startsWith('product-')) return false;
+  const kind = id === 'apr' || id.startsWith('grid-apr-') ? 'rate' : 'money';
+  // A trailing decimal is still being typed, even when its parsed value is zero.
+  if (/\.$/.test(raw.trim().replace(/%$/, '').trim())) return false;
+  const parsed = parseFinancialInput(raw, { kind, required: kind === 'rate' || id === 'new-plate-amount' });
+  if (parsed.error) return false;
+  if (id === 'target-value') return parsed.value === '';
+  const baseline = createDeskState(startDate);
+  const fields = { 'sale-price': 'salePrice', 'cash-down': 'cashDown', 'trade-allowance': 'tradeAllowance', 'trade-payoff': 'tradePayoff', apr: 'apr', 'new-plate-amount': 'newPlateAmount' };
+  const value = parsed.value === '' ? (id === 'sale-price' ? null : 0) : parsed.value;
+  if (id.startsWith('grid-down-')) return value === baseline.gridDownPayments[Number(id.slice(10))];
+  if (id.startsWith('grid-apr-')) return value === baseline.gridRates[Number(id.slice(9))];
+  return value === baseline.deal[fields[id]];
+}
 
 export function normalizeDeskDraft(value) {
   try {
@@ -49,6 +66,7 @@ export function normalizeDeskDraft(value) {
     for (const [id, draft] of entries) {
       if (!fieldId.test(id) || typeof draft?.raw !== 'string' || draft.raw.length > 1000) return null;
       if (id.startsWith('product-') && !ids.has(id.slice(8, -7))) continue;
+      if (isBaselineDeskInput(id, draft.raw, source.startDate)) continue;
       // Preserve unfinished/invalid typing, but a valid restored date must agree
       // with the committed date used in calculations and customer proposals.
       if (id === 'estimate-date') {
@@ -75,7 +93,8 @@ export function loadDeskDraft(storage = storageOnDevice()) {
 }
 
 export function hasDeskDraftEdits({ desk, targetValues, inputDrafts }) {
-  return hasDealEdits(desk) || desk.dateChosen || targets.some(type => targetValues[type] !== '') || Object.keys(inputDrafts).length > 0;
+  return hasDealEdits(desk) || desk.dateChosen || targets.some(type => targetValues[type] !== '')
+    || Object.entries(inputDrafts).some(([id, draft]) => !isBaselineDeskInput(id, draft.raw, desk.startDate));
 }
 
 export function saveDeskDraft(value, storage = storageOnDevice()) {

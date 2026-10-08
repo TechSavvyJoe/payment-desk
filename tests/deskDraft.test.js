@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDeskState, deskReducer } from '../src/lib/dealState.js';
-import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
+import { createDeskDraftSession, DESK_DRAFT_KEY, hasDeskDraftEdits, isBaselineDeskInput, loadDeskDraft, normalizeDeskDraft, saveDeskDraft } from '../src/lib/deskDraft.js';
 
 const empty = () => ({ version: 1, desk: createDeskState('2026-10-07'), targetType: 'payment', targetValues: { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' }, inputDrafts: {} });
 const storage = () => {
@@ -23,6 +23,39 @@ test('draft-only targets, dates and unfinished inputs count as meaningful edits'
   assert.equal(hasDeskDraftEdits(dated), true);
   const unfinished = empty(); unfinished.inputDrafts['target-value'] = { raw: '5.' };
   assert.equal(hasDeskDraftEdits(unfinished), true);
+});
+
+test('returning financial fields to their baseline removes live and restored raw edits', () => {
+  const value = empty();
+  const baseline = {
+    'sale-price': '', 'target-value': ' ', 'cash-down': '0', 'trade-allowance': '', 'trade-payoff': '$0.00', apr: '6.50%',
+    'grid-down-0': '0', 'grid-down-1': '1,000', 'grid-down-2': '2000', 'grid-down-3': '3000',
+    'grid-apr-36': '6', 'grid-apr-48': '6.00', 'grid-apr-60': '6', 'grid-apr-72': '6.5', 'grid-apr-84': '7',
+  };
+  for (const [id, raw] of Object.entries(baseline)) {
+    assert.equal(isBaselineDeskInput(id, raw, value.desk.startDate), true, id);
+    value.inputDrafts[id] = { raw };
+  }
+  assert.equal(hasDeskDraftEdits(value), false);
+  assert.deepEqual(normalizeDeskDraft(value).inputDrafts, {});
+  const device = storage();
+  device.setItem(DESK_DRAFT_KEY, JSON.stringify(value));
+  assert.deepEqual(loadDeskDraft(device).inputDrafts, {});
+  assert.equal(saveDeskDraft(value, device).ok, true);
+  assert.equal(device.getItem(DESK_DRAFT_KEY), null);
+});
+
+test('baseline pruning preserves explicit optional zeros, invalid entries and unfinished decimals', () => {
+  for (const [id, raw] of [
+    ['sale-price', '0'], ['target-value', '0'], ['new-plate-amount', '0'],
+    ['new-plate-amount', ''], ['apr', ''], ['grid-apr-60', ''], ['cash-down', 'bad'],
+    ['cash-down', '0.'], ['apr', '6.50.'], ['target-value', '5.'], ['grid-down-1', '0'], ['grid-apr-84', '6.5'],
+  ]) {
+    const value = empty(); value.inputDrafts[id] = { raw };
+    assert.equal(isBaselineDeskInput(id, raw, value.desk.startDate), false, `${id}: ${raw}`);
+    assert.equal(hasDeskDraftEdits(value), true, `${id}: ${raw}`);
+    assert.deepEqual(normalizeDeskDraft(value).inputDrafts, value.inputDrafts);
+  }
 });
 
 test('draft sessions serialize simultaneous writes and refuse stale saves and resets', async () => {

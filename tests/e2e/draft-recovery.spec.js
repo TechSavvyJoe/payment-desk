@@ -11,6 +11,44 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
+for (const restored of [false, true]) {
+  test(`${restored ? 'restored' : 'live'} baseline price and target edits leave no draft or replacement/reset warnings`, async ({ page }) => {
+    await page.locator('#sale-price').fill('30000');
+    await page.locator('#target-value').fill('450');
+    await page.locator('#target-value').blur();
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.targetValues.payment, KEY)).toBe(450);
+    if (restored) {
+      await page.evaluate(key => {
+        const saved = JSON.parse(localStorage.getItem(key));
+        saved.desk.deal.salePrice = null;
+        saved.targetValues.payment = '';
+        saved.inputDrafts = { 'sale-price': { raw: '' }, 'target-value': { raw: '' } };
+        localStorage.setItem(key, JSON.stringify(saved));
+      }, KEY);
+      await page.reload();
+    } else {
+      await page.locator('#sale-price').fill('');
+      await page.locator('#target-value').fill('');
+      await page.locator('#target-value').blur();
+    }
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+    await expect(page.locator('#sale-price')).toHaveValue('');
+    await expect(page.locator('#target-value')).toHaveValue('');
+    await page.evaluate(hash => { location.hash = hash; }, '#pd-vehicle=' + encodeURIComponent(JSON.stringify({ version: 1, salePrice: 30000, vehicleDescription: 'Example vehicle' })));
+    const review = page.getByRole('dialog', { name: 'Review captured vehicle' });
+    await expect(review).toBeVisible();
+    await expect(review.locator('.vehicle-import__warning')).toHaveCount(0);
+    await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const confirmations = [];
+    page.on('dialog', async dialog => { confirmations.push(dialog.message()); await dialog.dismiss(); });
+    await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+    expect(confirmations).toEqual([]);
+    await page.reload();
+    await expect(page.locator('#sale-price')).toHaveValue('');
+    await expect(page.locator('#target-value')).toHaveValue('');
+  });
+}
+
 test('refresh restores the worksheet, products, grid and target; Reset clears the draft', async ({ page }) => {
   await page.locator('#sale-price').fill('30000');
   await page.locator('#cash-down').fill('2500');
