@@ -41,7 +41,8 @@ function feedConditionFor(task) {
   const path = new URL(task.url).pathname;
   if (/\/(?:searchnew\.aspx|inventory\/new|new(?:-inventory)?)(?:\/index\.htm)?\/?$/i.test(path)) return 'new';
   if (/\/(?:searchused\.aspx|inventory\/used|used(?:-inventory)?|pre-owned)(?:\/index\.htm)?\/?$/i.test(path) || /\/used-vehicle-inventory[^/]*\.html$/i.test(path)) return 'used';
-  return 'all';
+  if (/\/(?:searchall\.aspx|inventory|cars-for-sale)\/?$/i.test(path)) return 'all';
+  return 'unknown';
 }
 
 export function parseDealerOn(data, task, site, now) {
@@ -67,7 +68,7 @@ export function parseDealerOn(data, task, site, now) {
     }, site, now);
   }).filter(Boolean);
   const next = task.page < paging.TotalPages ? [{ ...task, page: task.page + 1, url: dealerOnUrl(task.config, task.url, task.page + 1) }] : [];
-  return { vehicles, tasks: next, expected: paging.TotalCount, group: String(task.config.PageId), scope: task.condition === 'new' ? 'new' : task.condition === 'used' || task.condition === 'certified' ? 'used' : 'all', finalPage: !next.length, provider: 'DealerOn' };
+  return { vehicles, tasks: next, expected: paging.TotalCount, group: `dealeron:${dealerOnUrl(task.config, task.url)}`, scope: task.condition === 'new' ? 'new' : task.condition === 'used' || task.condition === 'certified' ? 'used' : task.condition === 'all' ? 'all' : 'unknown', finalPage: !next.length, provider: 'DealerOn' };
 }
 
 function discovery(root, url, site) {
@@ -141,7 +142,7 @@ export function parseInventoryHtml(html, task, site, now) {
     const groupUrl = new URL(task.url);
     groupUrl.searchParams.delete('page');
     groupUrl.hash = '';
-    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, scope: feedCondition === 'new' ? 'new' : feedCondition === 'used' || feedCondition === 'certified' ? 'used' : 'all', expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
+    return { vehicles, tasks: [...tasks, ...discoverMore()], group: `dealercarsearch:${groupUrl.href}`, scope: feedCondition === 'new' ? 'new' : feedCondition === 'used' || feedCondition === 'certified' ? 'used' : feedCondition, expected: Number(summary[3]), finalPage: !tasks.length, provider: 'DealerCarSearch' };
   }
   if (task.feed || inventoryFeedUrl(task.url)) throw new Error('An inventory feed could not be verified. The previous catalog was kept.');
   const tasks = discovery(root, task.url, site);

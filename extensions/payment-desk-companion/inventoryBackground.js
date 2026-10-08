@@ -125,13 +125,14 @@ async function finish(jobId, error = '') {
     const seen = new Set(job.vehicles.map(vehicle => vehicle.id));
     const scopes = new Set(Object.values(job.groups).map(group => group.scope));
     const fullScope = scopes.has('all') || scopes.has('new') && scopes.has('used');
+    const unknownScope = scopes.has('unknown') && !fullScope;
     const missingScope = (state.vehicles ?? []).some(vehicle => {
       const condition = vehicle.condition === 'certified' ? 'used' : vehicle.condition;
       return vehicle.listed && !seen.has(vehicle.id) && (['new', 'used'].includes(condition)
         ? !scopes.has('all') && !scopes.has(condition) : !fullScope);
     });
-    const complete = !error && !job.warnings.length && countsMatch && !missingScope && Object.keys(job.groups).length > 0;
-    const errors = [...new Set([error, ...job.warnings, !countsMatch && 'The website page counts did not match the vehicles received.', missingScope && 'A cached inventory condition was not verified. The previous vehicles were kept.'].filter(Boolean))];
+    const complete = !error && !job.warnings.length && countsMatch && !missingScope && !unknownScope && Object.keys(job.groups).length > 0;
+    const errors = [...new Set([error, ...job.warnings, !countsMatch && 'The website page counts did not match the vehicles received.', missingScope && 'A cached inventory condition was not verified. The previous vehicles were kept.', unknownScope && 'The inventory feed condition could not be verified. The previous vehicles were kept.'].filter(Boolean))];
     const next = { ...state, job: null, vehicles: mergeInventory(state.vehicles ?? [], job.vehicles, complete), provider: job.provider,
       status: complete ? 'ready' : job.vehicles.length ? 'partial' : 'error', error: errors.join(' ') || (complete ? '' : 'The inventory could not be verified.'),
       lastCompletedAt: complete ? Date.now() : state.lastCompletedAt, lastUpdatedAt: job.vehicles.length ? Date.now() : state.lastUpdatedAt };

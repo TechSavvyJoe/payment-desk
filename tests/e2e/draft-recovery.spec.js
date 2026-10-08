@@ -108,6 +108,26 @@ test('blocked draft storage gives an honest warning while the current worksheet 
   await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled();
 });
 
+for (const raw of ['750', 'invalid']) {
+  test(`removing the only product clears its ${raw === '750' ? 'valid' : 'invalid'} input draft and replacement/reset warnings`, async ({ page }) => {
+    await page.getByRole('button', { name: 'Add product', exact: true }).click();
+    await page.getByLabel('Service Contract amount', { exact: true }).fill(raw);
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.inputDrafts['product-add-on-1-amount']?.raw, KEY)).toBe(raw);
+    await page.getByRole('button', { name: 'Remove Service Contract', exact: true }).click();
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), KEY)).toBeNull();
+    await expect(page.locator('.validation-banner')).toBeHidden();
+    await page.evaluate(hash => { location.hash = hash; }, '#pd-vehicle=' + encodeURIComponent(JSON.stringify({ version: 1, salePrice: 30000, vehicleDescription: 'Example vehicle' })));
+    const review = page.getByRole('dialog', { name: 'Review captured vehicle' });
+    await expect(review).toBeVisible();
+    await expect(review.locator('.vehicle-import__warning')).toHaveCount(0);
+    await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const confirmations = [];
+    page.on('dialog', async dialog => { confirmations.push(dialog.message()); await dialog.dismiss(); });
+    await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
+    expect(confirmations).toEqual([]);
+  });
+}
+
 for (const edit of ['target', 'date']) {
   test(`Reset confirms ${edit}-only work; Cancel keeps it and confirmation clears its saved draft`, async ({ page }) => {
     const field = page.locator(edit === 'target' ? '#target-value' : '#estimate-date');

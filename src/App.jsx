@@ -272,7 +272,12 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
                 <button className="inventory-picker-trigger" id="inventory-picker-trigger" onClick={() => setInventoryOpen(true)} type="button">Inventory</button>
                 </div>
                 <DealerView accordions={accordions} addItem={preset => dispatch({ type: 'add-item', preset })} dealInput={dealInput}
-                  removeItem={index => dispatch({ type: 'remove-item', index })} result={result} targetProps={targetProps}
+                  removeItem={index => {
+                    const item = deal.optionalItems[index];
+                    if (!item) return;
+                    setInputDrafts(current => { const next = { ...current }; delete next[`product-${item.id}-amount`]; return next; });
+                    dispatch({ type: 'remove-item', index });
+                  }} result={result} targetProps={targetProps}
                   toggleAccordion={name => setAccordions(current => ({ ...current, [name]: !current[name] }))}
                   updateField={updateField} updateItem={(index, patch) => dispatch({ type: 'item', index, patch })} />
               </div>

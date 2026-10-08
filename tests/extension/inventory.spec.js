@@ -286,6 +286,61 @@ test('discovery uses the fetched document URL and neutral vehicle URLs retain th
   expect(results.usedVehicle).toMatchObject({ condition: 'used', price: 24995 });
 });
 
+for (const provider of ['DealerOn', 'DealerCarSearch']) {
+  test(`unrecognized ${provider} feed scope discovers the homepage and preserves cached new vehicles`, async () => {
+    await connect();
+    const previous = await saved();
+    const custom = `${site}vehicles/preowned-special`;
+    const cfg = { ...config('used'), PageVehicleType: undefined };
+    const html = provider === 'DealerOn'
+      ? `<script id="dlron-srp-model">${JSON.stringify(cfg)}</script>`
+      : '<span class="pager-summary">Page: 1 of 1 (1 vehicles)</span><div class="invMainCell"><h4 class="vehicleTitleH4"><a href="/Used-2024-Ford-Escape">2024 Ford Escape</a></h4><p>Stock #: U2</p></div>';
+    const probe = await panel.evaluate(async ({ html, url, provider, site }) => {
+      const { parseInventoryHtml, parseDealerOn } = await import('./inventoryParser.js');
+      const parsed = parseInventoryHtml(html, { url, kind: 'html', condition: 'unknown', feed: true }, site, 123);
+      const api = parsed.tasks.find(task => task.kind === 'dealeron');
+      const scope = provider === 'DealerOn' ? parseDealerOn({ DisplayCards: [], Paging: { PaginationDataModel: { PageNumber: 1, TotalPages: 0, TotalCount: 0 } } }, api, site, 123).scope : parsed.scope;
+      return { scope, discoversHome: parsed.tasks.some(task => task.url === site) };
+    }, { html, url: custom, provider, site });
+    expect(probe).toEqual({ scope: 'unknown', discoversHome: true });
+    await context.route(custom, route => route.fulfill({ contentType: 'text/html', body: html }));
+    // Repeating the custom feed on the homepage must not manufacture a full scope.
+    await context.route(site, route => route.fulfill({ contentType: 'text/html', body: html }));
+    await panel.evaluate(async url => {
+      const state = (await chrome.storage.local.get('payment-desk.inventory.v1'))['payment-desk.inventory.v1'];
+      state.config.site = url;
+      await chrome.storage.local.set({ 'payment-desk.inventory.v1': state });
+    }, custom);
+    await panel.getByRole('button', { name: 'Refresh now' }).click();
+    await expect.poll(async () => (await saved())?.status, { timeout: 30_000 }).toBe('partial');
+    const partial = await saved();
+    expect(partial.lastCompletedAt).toBe(previous.lastCompletedAt);
+    expect(partial.vehicles.find(vehicle => vehicle.condition === 'new').listed).toBe(true);
+    expect(partial.error).toContain('feed condition could not be verified');
+    expect(requests).toContain(site);
+  });
+}
+
+test('DealerOn feeds sharing a PageId count each BaseFilter separately across pages', async () => {
+  for (const condition of ['new', 'used']) {
+    await context.route(`${site}search${condition}.aspx`, route => route.fulfill({ contentType: 'text/html', body: `<script id="dlron-srp-model">${JSON.stringify({ ...config(condition), PageId: 30 })}</script>` }));
+  }
+  await context.route(`${site}api/vhcliaa/**/30?*`, route => {
+    const url = new URL(route.request().url());
+    const filter = Buffer.from(url.searchParams.get('baseFilter'), 'base64').toString();
+    const condition = filter === "type='n'" ? 'new' : 'used';
+    return route.fulfill({ json: response(condition, Number(url.searchParams.get('pt'))) });
+  });
+  await connect();
+  const state = await saved();
+  expect(state.status, state.error).toBe('ready');
+  expect(state.error).toBe('');
+  expect(state.vehicles.map(vehicle => vehicle.condition).sort()).toEqual(['new', 'used', 'used']);
+  const feedRequests = requests.filter(url => url.includes('/api/vhcliaa/'));
+  expect(feedRequests).toHaveLength(3);
+  expect(new Set(feedRequests.map(url => new URL(url).searchParams.get('baseFilter'))).size).toBe(2);
+});
+
 test('combined DealerOn feeds verify both conditions when a cached new vehicle disappears', async () => {
   const scopes = await panel.evaluate(async () => {
     const { parseInventoryHtml, parseDealerOn } = await import('./inventoryParser.js');
