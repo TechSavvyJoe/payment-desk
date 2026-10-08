@@ -10,7 +10,7 @@
   .calculator-shell { width: 100%; padding: 6px; }
   .quick-jump-nav { display: none; }
   .compact-height .mobile-results,
-  .mobile-results { margin-bottom: 6px; }
+  .mobile-results { margin-bottom: 2px; }
   .compact-height .mobile-results .results-payment,
   .mobile-results .results-payment { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; padding: 10px 12px; }
   .mobile-results .results-payment__label-row { grid-column: 1 / -1; grid-row: 1; }
@@ -26,7 +26,7 @@
   .compact-height .deal-details,
   .deal-details { margin-bottom: 6px; }
   .compact-height .deal-tools,
-  .deal-tools { margin-bottom: 6px; }
+  .deal-tools { margin-bottom: 2px; }
   .deal-tools .deal-details { margin-bottom: 0; }
   .compact-height .inventory-picker-trigger,
   .inventory-picker-trigger { min-height: 44px; padding-block: 6px; }
