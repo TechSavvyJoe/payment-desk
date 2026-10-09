@@ -308,6 +308,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     cashLimit: targetValues.cashLimit,
     onCashLimitChange: value => setTargetValues(current => ({ ...current, cashLimit: value })),
     onClearCashLimit: () => {
+      if (targetValues.cashLimit !== '' || inputDrafts['budget-cash-limit']?.raw) dispatch({ type: 'expire-undo' });
       setTargetValues(current => ({ ...current, cashLimit: '' }));
       setInputDrafts(current => { const next = { ...current }; delete next['budget-cash-limit']; return next; });
       setFieldErrors(current => { const next = { ...current }; delete next['budget-cash-limit']; return next; });

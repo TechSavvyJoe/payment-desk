@@ -68,6 +68,33 @@ test('cash ceiling uses the minimum cent that satisfies the displayed payment li
   await expect(payment(page)).toHaveText('$540.67');
 });
 
+test('clearing an applied cash ceiling expires Undo and preserves the applied deal', async ({ page }) => {
+  await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
+  await ceiling(page).fill('4000');
+  await page.getByRole('button', { name: 'Apply Payment + cash limits: 84 months', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toHaveCount(0);
+  await expect(summary(page).locator('.estimate-applied')).toHaveCount(0);
+  await expect(page.getByLabel('Cash down', { exact: true })).toHaveValue('2,347.74');
+  await expect(payment(page)).toHaveText('$450.00');
+  await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
+  await expect(ceiling(page)).toHaveValue('');
+  await expect(page.getByLabel('Target payment', { exact: true })).toHaveValue('450');
+});
+
+test('closing an already-empty cash ceiling preserves Undo', async ({ page }) => {
+  await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
+  await page.getByRole('button', { name: 'Apply Add cash down', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  await expect(payment(page)).toHaveText('$450.00');
+  await page.getByRole('button', { name: 'Undo adjustment', exact: true }).click();
+  await expect(page.getByLabel('Cash down', { exact: true })).toHaveValue('0');
+  await expect(payment(page)).toHaveText('$540.67');
+});
+
 test('blank ceiling preserves one-part options; no match and invalid draft are explicit and recoverable', async ({ page }) => {
   await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Apply Add cash down', exact: true })).toBeEnabled();
