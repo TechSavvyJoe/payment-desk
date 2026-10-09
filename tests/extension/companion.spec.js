@@ -446,7 +446,7 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
     keys: Object.keys(localStorage).sort(), marker: JSON.parse(localStorage.getItem(key)), legacy: localStorage.getItem(legacy),
   }), { key: DESK_DRAFT_KEY, legacy: LEGACY_DESK_DRAFT_KEY });
   expect(saved.keys).toEqual(['payment-desk.dealership.v1', DESK_DRAFT_KEY, 'payment-desk.fees.v1'].sort());
-  expect(saved.marker).toEqual({ version: 2, discarded: true, revision: expect.any(String) });
+  expect(saved.marker).toEqual({ version: 3, discarded: true, revision: expect.any(String) });
   expect(saved.legacy).toBeNull();
 });
 
