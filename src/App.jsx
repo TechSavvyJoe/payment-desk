@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
@@ -7,7 +7,7 @@ import { FEE_STORAGE_KEY, loadFeeSettings, resolveFees } from './lib/feeSettings
 import { clearDeviceSettings, saveDeviceSettings } from './lib/deviceSettings.js';
 import { policyReviewReminder, policyReviewReminderShort, todayDealDate } from './lib/policy.js';
 import { getProposalStatus } from './lib/proposal.js';
-import { formatShortDate } from './lib/formatters.js';
+import { formatShortDate, formatCurrency, formatNumber } from './lib/formatters.js';
 import CustomerView from './components/CustomerView.jsx';
 import DealerView from './components/DealerView.jsx';
 import MobileNav from './components/MobileNav.jsx';
@@ -29,12 +29,6 @@ import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
-const focusDestination = id => requestAnimationFrame(() => {
-  const node = document.getElementById(id === 'worksheet-heading' && isMobile() ? 'calculator-top' : id);
-  if (!node) return;
-  node.focus({ preventScroll: true });
-  node.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
-});
 
 // A desk left open overnight must pick up the new Eastern day on its own, so the
 // December reminder appears and leaves on time. Phones pause timers in the
@@ -56,6 +50,19 @@ function useEasternToday() {
 }
 
 export default function App({ restoreDraft = true, savedDraftSession }) {
+  const [focusRequest, setFocusRequest] = useState(null);
+  // Complete navigation after its DOM update, before another field can receive
+  // input. A deferred focus or animated scroll can steal the next interaction.
+  useLayoutEffect(() => {
+    if (!focusRequest) return;
+    const { id, block, select } = focusRequest;
+    const node = document.getElementById(id === 'worksheet-heading' && isMobile() ? 'calculator-top' : id);
+    if (!node) return;
+    node.focus({ preventScroll: true });
+    if (select) node.select?.();
+    node.scrollIntoView({ behavior: 'instant', block });
+  }, [focusRequest]);
+  const focusDestination = (id, { block = 'start', select = false } = {}) => setFocusRequest({ id, block, select });
   const [draftSession] = useState(() => savedDraftSession ?? createDeskDraftSession());
   const [restoredDraft] = useState(() => restoreDraft ? draftSession.draft : null);
   const [state, dispatch] = useReducer(deskReducer, undefined, () => restoredDraft?.desk ?? createDeskState());
@@ -66,6 +73,8 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const draftSaved = draftStatus === 'saved';
   const rememberInput = useCallback((id, raw) => {
     if (!isDeskDraftField(id)) return;
+    // Invalid typing is still an edit even when no new number can be committed.
+    dispatch({ type: 'expire-undo' });
     setInputDrafts(current => {
       if (isBaselineDeskInput(id, raw, state.startDate)) {
         if (!(id in current)) return current;
@@ -111,6 +120,11 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   // Even when the browser refuses to store them, the settings apply for this visit,
   // and the device keeps its previous saved settings whole.
   const applySettings = outcome => {
+    const previousFees = resolveFees(feeSettings);
+    const nextFees = resolveFees(outcome.fees);
+    if (previousFees.documentFee !== nextFees.documentFee || previousFees.crvFee !== nextFees.crvFee) {
+      dispatch({ type: 'expire-undo' });
+    }
     setBrandSettings(outcome.brand);
     setFeeSettings(outcome.fees);
     return { ok: outcome.ok, persistence: outcome.persistence };
@@ -120,7 +134,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const closeSettings = () => { setSettingsOpen(false); requestAnimationFrame(() => settingsButtonRef.current?.focus()); };
   const [targetType, setTargetType] = useState(() => restoredDraft?.targetType ?? 'payment');
   const [targetInputRevision, setTargetInputRevision] = useState(0);
-  const [targetValues, setTargetValues] = useState(() => restoredDraft?.targetValues ?? { payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
+  const [targetValues, setTargetValues] = useState(() => ({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '', cashLimit: '', ...restoredDraft?.targetValues }));
   const [solverExpanded, setSolverExpanded] = useState(false);
   const [accordions, setAccordions] = useState(allOpen);
   const [contextOpen, setContextOpen] = useState(false);
@@ -196,11 +210,17 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     const field = document.getElementById(errorId);
     if (field?.closest('.deal-details')) setContextOpen(true);
     if (isMobile()) dispatch({ type: 'grid-visibility', open: Boolean(field?.closest('#payment-grid')) });
-    requestAnimationFrame(() => {
-      const destination = document.getElementById(errorId);
-      destination?.focus();
-      destination?.scrollIntoView({ block: 'center' });
-    });
+    focusDestination(errorId, { block: 'center' });
+  };
+  const repairEstimate = fieldId => {
+    const destinationId = fieldId === 'first-error'
+      ? settingsChanged ? 'settings-changed' : Object.keys(fieldErrors)[0] || calculation.errorField || 'sale-price'
+      : fieldId;
+    dispatch({ type: 'view', view: 'dealer' });
+    setAccordions(allOpen());
+    if (['registration-state', 'transaction-scope', 'estimate-date'].includes(destinationId)) setContextOpen(true);
+    if (isMobile()) dispatch({ type: 'grid-visibility', open: /^grid-(apr|down)-/.test(destinationId) });
+    focusDestination(destinationId, { block: 'center' });
   };
   const clearTargetDraft = () => {
     setInputDrafts(current => { const updated = { ...current }; delete updated['target-value']; return updated; });
@@ -213,7 +233,15 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   };
   const updateField = (field, value) => {
     if (field === 'dealType') changeTargetType(value === 'cash' ? 'cashDue' : 'payment');
-    dispatch({ type: 'field', field, value });
+    dispatch({ type: 'field', field, value, undoTargetType: targetType,
+      label: field === 'dealType' && value === 'cash' && deal.cashDown > 0 ? 'Cash purchase (financing down cleared)' : undefined });
+  };
+  const undoAdjustment = () => {
+    if (!lastRoll) return;
+    if (lastRoll.targetType) changeTargetType(lastRoll.targetType);
+    else if (lastRoll.deal.dealType === 'cash' && targetType !== 'cashDue' && targetType !== 'outTheDoor') changeTargetType('cashDue');
+    else if (lastRoll.deal.dealType === 'finance' && targetType === 'cashDue') changeTargetType('payment');
+    dispatch({ type: 'undo' });
   };
   const changeView = next => {
     if (hasInputErrors) { focusFirstError(); return; }
@@ -229,11 +257,17 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     if (isMobile()) dispatch({ type: 'grid-visibility', open: true });
     focusDestination('payment-grid-heading');
   };
+  const adjustCustomerOptions = () => {
+    if (hasInputErrors) { repairEstimate('first-error'); return; }
+    dispatch({ type: 'view', view: 'dealer' });
+    if (isMobile()) dispatch({ type: 'grid-visibility', open: true });
+    focusDestination('payment-grid-heading');
+  };
   const clearDeal = () => {
     setDraftStatus(status => status === 'conflict' ? status : 'saving');
     dispatch({ type: 'reset' });
     setInputDrafts({});
-    setTargetType('payment'); setTargetValues({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '' });
+    setTargetType('payment'); setTargetValues({ payment: '', outTheDoor: '', amountFinanced: '', cashDue: '', cashLimit: '' });
     setSolverExpanded(false); setAccordions(allOpen()); setFieldErrors({}); setContextOpen(false);
   };
   const resetDeal = () => {
@@ -258,20 +292,31 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     closeVehicleImport();
   };
   const activatePaymentTarget = value => {
-    clearTargetDraft();
+    const switchingType = targetType !== 'payment';
+    const invalidExisting = !switchingType && Boolean(fieldErrors['target-value']);
+    const needsSeed = targetValues.payment === '' && !invalidExisting;
+    if (switchingType || needsSeed) dispatch({ type: 'expire-undo' });
+    if (switchingType || needsSeed) clearTargetDraft();
     setTargetType('payment');
-    setTargetValues(current => ({ ...current, payment: value }));
-    setTargetInputRevision(current => current + 1);
-    requestAnimationFrame(() => {
-      targetInputRef.current?.focus();
-      targetInputRef.current?.select();
-      targetInputRef.current?.scrollIntoView({ block: 'center' });
-    });
+    if (needsSeed) setTargetValues(current => ({ ...current, payment: value }));
+    if (switchingType || needsSeed) setTargetInputRevision(current => current + 1);
+    focusDestination('target-value', { block: 'center', select: true });
   };
   const targetProps = {
     targetType, targetValues, gridRates, lastRoll, targetInputRef, targetInputRevision, hasInputErrors, canCompare,
-    onTargetTypeChange: changeTargetType,
+    onTargetTypeChange: next => {
+      if (next !== targetType) dispatch({ type: 'expire-undo' });
+      changeTargetType(next);
+    },
     onTargetValueChange: (type, value) => setTargetValues(current => ({ ...current, [type]: value })),
+    cashLimit: targetValues.cashLimit,
+    onCashLimitChange: value => setTargetValues(current => ({ ...current, cashLimit: value })),
+    onClearCashLimit: () => {
+      if (targetValues.cashLimit !== '' || inputDrafts['budget-cash-limit']?.raw) dispatch({ type: 'expire-undo' });
+      setTargetValues(current => ({ ...current, cashLimit: '' }));
+      setInputDrafts(current => { const next = { ...current }; delete next['budget-cash-limit']; return next; });
+      setFieldErrors(current => { const next = { ...current }; delete next['budget-cash-limit']; return next; });
+    },
     expanded: solverExpanded, onExpandedChange: setSolverExpanded,
     onApplyPatch: (patch, label) => dispatch({ type: 'apply', patch, label }),
     onApplyItemPatch: ({ index, amount }, label) => dispatch({ type: 'item', index, patch: { amount }, label }),
@@ -284,9 +329,10 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
         names[names.length - 1]?.scrollIntoView({ block: 'center' });
       });
     },
-    onUndoRoll: () => dispatch({ type: 'undo' }),
+    onUndoRoll: undoAdjustment,
   };
   const summaryProps = { dealInput, result, hasInputErrors, onActivatePaymentTarget: activatePaymentTarget,
+    onRepairEstimate: repairEstimate, lastRoll, onUndoRoll: undoAdjustment,
     onComparePayments: scrollToGrid, onReviewEstimate: () => changeView('customer'),
     onStartEstimate: () => { dispatch({ type: 'grid-visibility', open: false }); setAccordions(current => ({ ...current, vehicle: true })); focusDestination('sale-price'); } };
 
@@ -299,6 +345,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
         {view === 'dealer' ? <p className="coverage-note" role="region" aria-label="Supported tax coverage"><span>Michigan resident purchases only.</span> <button type="button" onClick={() => { setContextOpen(true); focusDestination('registration-state'); }}>Review tax coverage</button></p> : null}
         {settingsChanged ? <div className="validation-banner" role="alert" id="settings-changed" tabIndex={-1}><strong>Dealership settings changed in another tab.</strong> Reload to use the saved name, logo and fees before comparing or sharing an estimate. <button type="button" onClick={() => window.location.reload()}>Reload settings</button></div> : null}
         {draftStatus === 'rejected' ? <div className="validation-banner" role="alert"><strong>The saved worksheet could not be restored.</strong> Its saved data has been kept. This worksheet will not overwrite it. Use a compatible app version or explicitly discard it to save this worksheet. <button type="button" onClick={discardRejectedDraft}>Discard unreadable draft</button></div> : null}
+        {draftStatus === 'conflict' || draftStatus === 'error' ? <div className="validation-banner" role="alert"><strong>This worksheet has not been saved.</strong> {draftStatus === 'conflict' ? 'Another tab changed the saved draft. Keep your current figures before reloading.' : 'Device storage is unavailable. Keep this page open and save or print your estimate before leaving.'}</div> : null}
         {settingsOpen ? <DealershipSettingsDialog externalChange={settingsChanged} feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
         {inventoryOpen ? <InventoryPicker onClose={() => { setInventoryOpen(false); requestAnimationFrame(() => document.getElementById('inventory-picker-trigger')?.focus()); }} onChoose={vehicle => { setInventoryOpen(false); setVehicleImport({ vehicle, error: null }); }} /> : null}
         {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDraftEdits={hasDraftEdits} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
@@ -310,7 +357,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
           {view === 'dealer' ? <>
             <div className="calculator-layout">
               <div className="calculator-left">
-                <div className="page-intro" role="region" aria-label="Worksheet introduction"><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div>
+                <div className="page-intro worksheet-intro" role="region" aria-label="Worksheet introduction"><div><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div><p className={`worksheet-save ${draftSaved ? 'is-saved' : 'needs-attention'}`}><span aria-hidden="true">{draftSaved ? '✓' : '!'}</span>{draftSaved ? 'Saved on this device' : draftStatus === 'saving' ? 'Saving on this device…' : 'Draft not saved — see below'}</p></div>
                 <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
                 <div className="deal-tools">
@@ -341,14 +388,22 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
             {result.isFinanced ? <button className="grid-jump" onClick={scrollToGrid} type="button"><span>Payment grid</span><strong>Compare terms, rates, and down payments</strong></button> : null}
           </> : <>
             <div className="page-intro page-intro--customer"><h1 id="customer-heading" tabIndex={-1}>Your purchase estimate</h1><p>The selected vehicle, products, and payment — together in one place.</p></div>
-            <CustomerView brand={brand} dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} />
+            <CustomerView brand={brand} dealInput={dealInput} gridRates={gridRates} result={result} hasInputErrors={hasInputErrors} onEditDeal={() => changeView('dealer')} onRepairEstimate={repairEstimate} onAdjustPayments={adjustCustomerOptions} />
           </>}
         </main>
         {view === 'dealer' && result.isFinanced ? <PaymentGrid key={`grid-${resetCount}`} dealInput={dealInput} downPayments={gridDownPayments}
-          onApplyScenario={patch => { if (hasInputErrors) { focusFirstError(); return; } if (!canCompare) return; dispatch({ type: 'grid', patch }); if (isMobile()) focusDestination('payment-results-mobile'); }}
+          onApplyScenario={patch => {
+            if (hasInputErrors) { focusFirstError(); return; }
+            const candidate = { ...dealInput, ...patch };
+            try {
+              if (!getProposalStatus({ dealInput: candidate, result: calculateDeal(candidate) }).canExport) return;
+            } catch { return; }
+            dispatch({ type: 'grid', patch, label: `Payment option applied: ${patch.termMonths} months at ${formatNumber(patch.apr)}% with ${formatCurrency(patch.cashDown)} down` });
+            if (isMobile()) focusDestination('payment-results-mobile');
+          }}
           onMobileClose={closeGrid} onDownPaymentChange={(index, value) => dispatch({ type: 'down', index, value })}
           onRateChange={(term, value) => dispatch({ type: 'rate', term, value })}
-          rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onStartEstimate={summaryProps.onStartEstimate} /> : null}
+          rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onRepairEstimate={repairEstimate} onStartEstimate={summaryProps.onStartEstimate} /> : null}
         <footer className="app-footer">
           <p>Estimates only. Subject to lender approval and final taxes, fees, and deal structure.</p>
           <p>{draftStatus === 'conflict' ? 'Another tab changed the saved draft. This worksheet has not been saved. Copy or print it, then reload to open the latest draft.'

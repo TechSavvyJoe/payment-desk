@@ -83,7 +83,14 @@ export function installInventoryPanel(onChoose, onOpen) {
     const more = document.getElementById('inventory-more');
     more.hidden = vehicles.length <= limit;
     document.getElementById('inventory-count').textContent = `${vehicles.length} vehicles${vehicles.length > limit ? ` · showing ${limit}` : ''}`;
-    if (!vehicles.length) list.append(element('p', state.job ? 'Your inventory is being read. The catalog will appear here when the refresh finishes.' : state.config ? 'No matching vehicles. Check refresh status or adjust your search.' : 'Connect your dealership website to browse inventory here.', 'source'));
+    if (!vehicles.length) {
+      const empty = state.job ? 'Your inventory is being read. The catalog will appear here when the refresh finishes.'
+        : !state.config ? 'Connect your dealership website to browse inventory here.'
+          : !state.lastCompletedAt ? `No complete refresh has finished yet${state.error ? '. Check the refresh notice before using any cached vehicles.' : '. Use Refresh now to verify the full inventory.'}`
+            : state.error ? 'No vehicles match these filters. The last refresh was partial; check the warning and last-seen dates before using cached vehicles.'
+              : 'No matching vehicles. Adjust the filters to search the completed catalog.';
+      list.append(element('p', empty, 'source'));
+    }
   }
   function render() {
     if (document.activeElement !== site) site.value = state.config?.site ?? '';
@@ -133,7 +140,10 @@ export function installInventoryPanel(onChoose, onOpen) {
           if (newlyGranted.length && !await chrome.permissions.remove({ origins: newlyGranted })) throw new Error('Website access was not withdrawn.', { cause: error });
         } catch { message(`${error.message} Website access could not be withdrawn. Remove it in Chrome’s extension settings.`, true); return; }
       }
-      message(error.message, true);
+      if (!granted) {
+        site.value = url;
+        message('Website access was not granted. The connection was not changed. Retry Connect and refresh after allowing access to this dealership website.', true);
+      } else message(error.message, true);
     }
     finally { connecting = false; document.getElementById('inventory-connect').disabled = false; }
   });

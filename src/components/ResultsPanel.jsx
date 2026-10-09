@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { formatCurrency, formatNumber } from "../lib/formatters.js";
 import { buildProposalGroups, getDealSummary } from "../lib/proposal.js";
 import { ArrowIcon, ChevronIcon, EditIcon, GridIcon } from "./Icons.jsx";
+import EstimateReadiness from './EstimateReadiness.jsx';
 
 const money = (value) => formatCurrency(value, { cents: true });
 const BreakdownRow = ({ label, value, strong = false }) => (
@@ -11,7 +12,7 @@ const BreakdownRow = ({ label, value, strong = false }) => (
   </div>
 );
 
-export default function ResultsPanel({ dealInput, result, customer = false, compact = false, onActivatePaymentTarget, onComparePayments, onReviewEstimate, onStartEstimate, hasInputErrors = false }) {
+export default function ResultsPanel({ dealInput, result, customer = false, compact = false, onActivatePaymentTarget, onComparePayments, onReviewEstimate, onStartEstimate, hasInputErrors = false, onRepairEstimate, lastRoll, onUndoRoll }) {
   const summary = getDealSummary({ dealInput, result, hasInputErrors });
   const groups = customer ? [] : buildProposalGroups(result);
   const isStarting = !customer && !(result.salePrice > 0) && !hasInputErrors;
@@ -28,12 +29,8 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
       {summary.hasCashCredit ? <BreakdownRow label="Customer credit" value={money(summary.customerCredit)} /> : null}
     </section>
   ) : null;
-  const warning = !isStarting && summary.reasons.length ? (
-    <div className="result-warning" role="alert">
-      <strong>Estimate needs attention</strong>
-      {summary.reasons.map((reason) => <p key={reason}>{reason}</p>)}
-    </div>
-  ) : null;
+  const warning = !isStarting && !customer ? <EstimateReadiness summary={summary} onRepair={onRepairEstimate} showReady={!compact} /> : null;
+  const applied = lastRoll && onUndoRoll ? <div className="estimate-applied" role="status"><span><strong>{lastRoll.label}</strong><small>Undo is available until your next edit.</small></span><button type="button" onClick={onUndoRoll}>Undo</button></div> : null;
   const breakdown = !customer && !isStarting ? (
     <details className="deal-breakdown">
       <summary>View itemized deal breakdown</summary>
@@ -51,7 +48,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
   return (
     <aside className={"results-panel" + (customer ? " results-panel--customer" : "") + (isStarting ? " results-panel--starting" : "")} aria-label={customer ? "Selected estimate summary" : "Current estimate summary"}>
       <section className="results-payment">
-        <div className="results-payment__label-row"><h2>{summary.headline}</h2></div>
+        <div className="results-payment__label-row"><h2>{summary.headline}</h2>{compact && !customer && summary.canExport ? <span aria-label="Ready for customer review" className="estimate-ready-badge" role="status">Ready</span> : null}</div>
         <div className={"payment-number" + (summary.isFinanced ? "" : " payment-number--cash")}>
           <strong>{isStarting ? "—" : money(summary.headlineAmount)}</strong>
           {summary.isFinanced && !isStarting ? <span className="payment-number__suffix">/mo</span> : null}
@@ -68,6 +65,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
       {compact ? (
         <>
           {warning}
+          {applied}
           <div className="estimate-actions estimate-actions--compact">
             <button aria-controls={detailsId} aria-expanded={detailsOpen} className="estimate-details-toggle" onClick={() => setDetailsOpen((open) => !open)} type="button">
               Details<ChevronIcon direction={detailsOpen ? "up" : "down"} size={18} />
@@ -80,6 +78,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
         <>
           {isStarting ? <div className="estimate-start"><strong>Your next deal starts here.</strong><p>Payments, taxes, and totals update as you enter the figures.</p><button type="button" onClick={onStartEstimate}>Enter selling price<ArrowIcon size={17} /></button></div> : totals}
           {warning}
+          {applied}
           {breakdown}
           {!customer && !isStarting ? <div className="estimate-actions">
             {summary.isFinanced && onComparePayments ? <button className="estimate-compare" type="button" onClick={onComparePayments}><GridIcon size={18} />Compare payments</button> : null}

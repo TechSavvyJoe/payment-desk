@@ -147,7 +147,7 @@ for (const plateAmount of [0, 250]) {
     await page.getByRole('button', { name: 'Customer view', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copy summary', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeDisabled();
-    await expect(page.locator('.proposal-incomplete')).toContainText('New plate cost has not been entered');
+    await expect(page.locator('.customer-content .estimate-readiness')).toContainText('New plate cost has not been entered');
     await page.getByRole('button', { name: 'Dealer view', exact: true }).click();
     const plate = page.getByRole('textbox', { name: 'New plate amount', exact: true });
     await plate.fill(String(plateAmount));
@@ -155,7 +155,7 @@ for (const plateAmount of [0, 250]) {
     await page.getByRole('button', { name: 'Customer view', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copy summary', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled();
-    await expect(page.locator('.proposal-incomplete')).toHaveCount(0);
+    await expect(page.locator('.customer-content .estimate-readiness')).toHaveCount(0);
     await expect(page.locator('.results-panel--customer')).toContainText(plateAmount === 0 ? '$32,148.84' : '$32,398.84');
   });
 }

@@ -3,6 +3,7 @@ import { formatCurrency, formatNumber, formatShortDate } from "./formatters.js";
 import { resolveBrand } from "./brandSettings.js";
 import { POLICY_CONFIG } from "./policy.js";
 import { FINANCE_MODEL_EXPLANATION } from "./financeModel.js";
+import { getPurchaseScope } from "./purchaseScope.js";
 
 export const ESTIMATE_QUALIFICATION = "Estimate only, not a financing approval or contract. Actual payments, taxes, fees, product eligibility, and final figures must be confirmed with the lender and the dealership's approved systems.";
 
@@ -14,6 +15,8 @@ const productName = (item, index) => item.category === "service-contract"
 
 export function getProposalStatus({ dealInput = {}, result, hasInputErrors = false }) {
   const reasons = [];
+  const productIssues = [];
+  const purchaseScope = getPurchaseScope(dealInput);
   if (hasInputErrors) reasons.push("Correct the highlighted input errors before creating a proposal.");
   if (!(result.salePrice > 0) && result.isComplete !== false) reasons.push("Enter a selling price before creating a proposal.");
   if (result.isComplete === false) reasons.push(...(result.incompleteReasons?.length ? result.incompleteReasons : ["Complete the required deal information."]));
@@ -22,15 +25,42 @@ export function getProposalStatus({ dealInput = {}, result, hasInputErrors = fal
   }
   for (const [index, item] of (dealInput.optionalItems ?? []).entries()) {
     if (Number(item.amount) > 0 && !["service-contract", "gap"].includes(item.category) && !item.name?.trim()) {
-      reasons.push(`Name product or add-on ${index + 1} before creating a proposal.`);
+      const reason = `Name product or add-on ${index + 1} before creating a proposal.`;
+      reasons.push(reason);
+      productIssues.push({ reason, fieldId: `product-${item.id}-name`, actionLabel: `Name product ${index + 1}` });
     }
     if (Number(item.amount) > 0 && item.category === "other" && item.taxTreatmentConfirmed !== true) {
-      reasons.push(`Choose Taxable or Not taxable for ${productName(item, index)} before creating a proposal.`);
+      const reason = `Choose Taxable or Not taxable for ${productName(item, index)} before creating a proposal.`;
+      reasons.push(reason);
+      productIssues.push({ reason, fieldId: `${item.id}-tax-treatment`, actionLabel: `Review product ${index + 1} tax` });
     }
   }
   if (result.isFinanced && result.amountFinanced < 0) reasons.push("Credits exceed the financed balance. Adjust the deal before creating a proposal.");
   reasons.push(...(result.warnings ?? []));
-  return { canExport: reasons.length === 0, reasons: [...new Set(reasons)] };
+  const uniqueReasons = [...new Set(reasons)];
+  // Recovery is presentation metadata attached to the existing export reasons.
+  // It never decides whether a financial estimate is valid.
+  const issues = uniqueReasons.flatMap(reason => {
+    const matchingProductIssues = productIssues.filter(issue => issue.reason === reason);
+    if (matchingProductIssues.length) return matchingProductIssues;
+    let fieldId, actionLabel;
+    if (reason === "Correct the highlighted input errors before creating a proposal.") {
+      fieldId = 'first-error'; actionLabel = 'Correct inputs';
+    } else if (reason.startsWith('Enter a selling price')) {
+      fieldId = 'sale-price'; actionLabel = 'Enter selling price';
+    } else if (reason.startsWith('New plate cost') || reason.startsWith('Enter the new-plate amount')) {
+      fieldId = 'new-plate-amount'; actionLabel = 'Enter registration estimate';
+    } else if (!purchaseScope.supported && reason === purchaseScope.reason) {
+      fieldId = purchaseScope.errorField;
+      actionLabel = fieldId === 'registration-state' ? 'Review registration state' : 'Review transaction coverage';
+    } else if (reason.startsWith('Credits exceed')) {
+      // Cash cannot repair a balance already negative before cash is applied.
+      fieldId = result.amountBeforeCashDown < 0 ? 'trade-allowance' : 'cash-down';
+      actionLabel = 'Review cash and trade';
+    }
+    return [{ reason, ...(fieldId ? { fieldId, actionLabel } : {}) }];
+  });
+  return { canExport: uniqueReasons.length === 0, reasons: uniqueReasons, issues };
 }
 
 export function getDealSummary({ dealInput = {}, result, hasInputErrors = false }) {

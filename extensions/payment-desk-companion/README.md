@@ -1,6 +1,6 @@
 # Payment Desk Companion
 
-Chrome extension, version 1.3.0, for Chrome 116 or later. The toolbar icon opens the full Payment Desk worksheet in Chrome's side panel so you can desk beside a vehicle listing. The worksheet, calculations, PDF export and fonts are bundled with the extension and work offline. Listing capture requires an open listing. Optional dealership inventory connects a website and keeps a public vehicle catalog on this computer.
+Chrome extension, version 1.4.0, for Chrome 116 or later. The toolbar icon opens the full Payment Desk worksheet in Chrome's side panel so you can desk beside a vehicle listing. The worksheet, calculations, PDF export and fonts are bundled with the extension and work offline. Listing capture requires an open listing. Optional dealership inventory connects a website and keeps a public vehicle catalog on this computer.
 
 ## Install in Chrome
 

@@ -40,7 +40,12 @@ export default function InventoryPicker({ onClose, onChoose }) {
     <dialog aria-labelledby={titleId} className="settings-dialog inventory-picker" onClose={onClose} ref={dialog}>
       <div className="settings-dialog__form">
         <div className="inventory-picker__heading"><h2 id={titleId}>Dealership inventory</h2><button className="settings-dialog__button" onClick={() => dialog.current.close()} type="button">Close</button></div>
-        <p className="settings-dialog__note">From the companion on this computer. Connect your dealership and refresh inventory in the Chrome panel. Review price and availability before starting a deal.</p>
+        <p className="settings-dialog__note">From the companion on this computer. Review price and availability before starting a deal.</p>
+        {!loading && !error && catalog && !catalog.site ? <div className="settings-dialog__hint"><ol>
+          <li>In Chrome’s Payment Desk Companion, open <strong>Inventory</strong> → <strong>Connect and refresh</strong>.</li>
+          <li>Grant access to the dealership website and wait for refresh.</li>
+          <li>Select <strong>Web app ↗</strong> in the companion to connect this browser, then return here and choose <strong>Reload catalog</strong>.</li>
+        </ol></div> : null}
         <div className="inventory-picker__filters">
           <label htmlFor={searchId}>Search vehicle, stock or VIN<input autoComplete="off" className="text-input" id={searchId} maxLength={80} onChange={event => changeFilter(setQuery, event.target.value)} type="search" value={query} /></label>
           <label htmlFor={conditionId}>Inventory<select id={conditionId} onChange={event => changeFilter(setCondition, event.target.value)} value={condition}><option value="">New and used</option><option value="new">New</option><option value="used">Used / certified</option></select></label>
@@ -62,7 +67,11 @@ export default function InventoryPicker({ onClose, onChoose }) {
           <p className="settings-dialog__hint">{vehicle.priceNote || 'Confirm selling price, discounts and availability.'}{vehicle.price === null ? ' Enter the verified selling price in the worksheet.' : ''}</p>
           <div className="inventory-picker__actions"><button className="settings-dialog__button settings-dialog__button--primary" onClick={() => choose(vehicle)} type="button">Use vehicle</button><a href={vehicle.url} rel="noopener noreferrer" target="_blank">View listing ↗</a></div>
         </article>)}
-        {!loading && !error && catalog?.site && !catalog.vehicles.length ? <p>No matching vehicles. Adjust the filters or refresh inventory in the companion.</p> : null}
+        {!loading && !error && catalog?.site && !catalog.vehicles.length ? <p>{!catalog.lastCompletedAt
+          ? `No complete refresh has finished yet${catalog.error ? '. The refresh was incomplete; check the companion notice and last-seen dates.' : '. Refresh inventory in the companion to verify the catalog.'}`
+          : catalog.error
+            ? 'No vehicles match these filters. The last refresh was partial; check its warning and vehicle last-seen dates before using cached records.'
+            : 'No matching vehicles. Adjust the filters or refresh inventory in the companion.'}</p> : null}
         {!loading && !error && catalog && (offset > 0 || catalog.nextOffset !== null) ? <div className="inventory-picker__actions">
           <button className="settings-dialog__button" disabled={offset === 0} onClick={() => { setOffset(value => Math.max(0, value - 100)); setLoading(true); }} type="button">Previous vehicles</button>
           <button className="settings-dialog__button" disabled={catalog.nextOffset === null || !catalog.revision} onClick={() => { setOffset(catalog.nextOffset); setLoading(true); }} type="button">Next vehicles</button>

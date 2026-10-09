@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { calculateRateGrid, RATE_GRID_DEFAULTS } from "../lib/calculations.js";
+import { calculateDeal, calculateRateGrid, RATE_GRID_DEFAULTS } from "../lib/calculations.js";
+import { getProposalStatus } from "../lib/proposal.js";
 import { getPurchaseScope } from "../lib/purchaseScope.js";
-import { formatCurrency, formatNumber, formatWholeCurrency } from "../lib/formatters.js";
+import { formatCurrency, formatNumber } from "../lib/formatters.js";
 import { MoneyInput, PercentInput } from "./Fields.jsx";
 import { ArrowIcon, GridIcon } from "./Icons.jsx";
 
@@ -18,7 +19,7 @@ export default function PaymentGrid({
   onMobileClose,
   mobileOpen = false,
   hasInputErrors = false,
-  canCompare = true,
+  onRepairEstimate,
   onStartEstimate,
 }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 800px)").matches);
@@ -29,22 +30,41 @@ export default function PaymentGrid({
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, []);
-  const grid = useMemo(
-    () =>
-      getPurchaseScope(dealInput).supported ? calculateRateGrid(dealInput, {
-        rows: TERMS.map((termMonths) => ({ termMonths, apr: Number(rates[termMonths] ?? dealInput.apr) })),
-        downPayments,
-        includeCustom: false,
-      }) : { columns: [], rows: [] },
-    [dealInput, rates, downPayments],
-  );
+  const grid = useMemo(() => {
+    if (!getPurchaseScope(dealInput).supported) return { columns: [], rows: [] };
+    const comparison = calculateRateGrid(dealInput, {
+      rows: TERMS.map((termMonths) => ({ termMonths, apr: Number(rates[termMonths] ?? dealInput.apr) })),
+      downPayments,
+      includeCustom: false,
+    });
+    return {
+      ...comparison,
+      rows: comparison.rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => {
+          const candidate = { ...dealInput, termMonths: cell.termMonths, apr: cell.apr, cashDown: cell.cashDown };
+          const candidateResult = calculateDeal(candidate);
+          return { ...cell, status: getProposalStatus({ dealInput: candidate, result: candidateResult, hasInputErrors }) };
+        }),
+      })),
+    };
+  }, [dealInput, rates, downPayments, hasInputErrors]);
 
   const isSelected = (cell) =>
     dealInput.termMonths === cell.termMonths &&
     Math.abs(dealInput.apr - cell.apr) < 0.005 &&
     Math.abs(dealInput.cashDown - cell.cashDown) < 0.005;
 
-  const isUnavailable = (cell) => !canCompare || hasInputErrors || result.isComplete === false || result.salePrice <= 0 || cell.amountFinanced < 0;
+  const isUnavailable = (cell) => !cell.status.canExport;
+  const allBlocked = !grid.rows.some((row) => row.cells.some((cell) => !isUnavailable(cell)));
+  const blockedReason = grid.rows[0]?.cells[0]?.status.reasons[0] ?? result.incompleteReasons?.[0] ?? "Complete the worksheet before selecting a payment.";
+  const blockedIssue = grid.rows[0]?.cells[0]?.status.issues.find(issue => issue.fieldId);
+  const purchaseScope = getPurchaseScope(dealInput);
+  const recoveryFieldId = !purchaseScope.supported ? purchaseScope.errorField
+    : blockedIssue?.fieldId === 'cash-down' && result.amountBeforeCashDown >= 0
+    && grid.rows[0].cells[0].cashDown > result.amountBeforeCashDown
+    ? 'grid-down-0'
+    : blockedIssue?.fieldId ?? getProposalStatus({ dealInput, result, hasInputErrors }).issues.find(issue => issue.fieldId)?.fieldId ?? 'estimate-date';
   const isStarting = !(result.salePrice > 0) && !hasInputErrors;
   const apply = (cell) => !isUnavailable(cell) && onApplyScenario({
     termMonths: cell.termMonths,
@@ -74,9 +94,23 @@ export default function PaymentGrid({
 
       {isStarting ? <div className="grid-empty"><GridIcon size={32} /><div><strong>One deal. Every payment option.</strong><p>Start with a selling price to compare terms, rates, and down payments.</p></div><button type="button" className="apply-button" onClick={onStartEstimate}>Enter selling price<ArrowIcon size={18} /></button></div> : null}
       <div className="grid-context" hidden={isStarting}>
-        <span>{formatWholeCurrency(dealInput.salePrice)} selling price</span>
-        <span>{formatWholeCurrency(result.amountBeforeCashDown)} before cash down</span>
+        <span>{formatCurrency(dealInput.salePrice)} selling price</span>
+        <span>{formatCurrency(result.amountBeforeCashDown)} before cash down</span>
       </div>
+
+      {!isStarting ? <div className="grid-current-reference" role="region" aria-label="Current worksheet scenario">
+        <strong>Current worksheet · Read-only reference</strong>
+        <span>{dealInput.termMonths} months at {formatNumber(dealInput.apr)}% assumed annual interest rate</span>
+        <span>{formatCurrency(dealInput.cashDown)} cash down</span>
+        <span>{formatCurrency(result.monthlyPayment, { cents: true })}/mo estimated payment</span>
+        <small>Edit grid assumptions, then select a payment to change the worksheet.</small>
+      </div> : null}
+
+      {!isStarting && allBlocked ? <div className="grid-readiness" role="status">
+        <strong>No comparison is ready to apply</strong>
+        <p>{blockedReason}</p>
+        {onRepairEstimate ? <button className="grid-repair-button" type="button" onClick={() => onRepairEstimate(recoveryFieldId)}>Review worksheet<ArrowIcon size={18} /></button> : null}
+      </div> : null}
 
       {!isMobile && !isStarting ? <div className="desktop-rate-grid">
         <table>
@@ -184,7 +218,7 @@ export default function PaymentGrid({
                     onClick={() => apply(cell)}
                     type="button"
                   >
-                    <span>{formatWholeCurrency(cell.cashDown)} down</span>
+                    <span>{formatCurrency(cell.cashDown)} down</span>
                     <strong>{formatCurrency(cell.monthlyPayment, { cents: true })}/mo</strong>
                     {isSelected(cell) ? <span className="grid-selected-label">Selected</span> : null}
                     <ArrowIcon direction="right" size={19} />
@@ -202,7 +236,7 @@ export default function PaymentGrid({
           <strong>Payment grid</strong>
           <span>Compare terms, rates, and down payments</span>
         </div>
-        <p>Select any payment to apply its term, interest rate, and down payment to the deal.</p>
+        <p>{allBlocked ? "Review the worksheet and comparison assumptions to enable a payment option." : "Select an available payment to apply its term, assumed annual interest rate, and down payment to the deal."}</p>
       </div>
     </section>
   );

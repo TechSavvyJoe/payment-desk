@@ -55,3 +55,9 @@ Customer-facing payment options show monthly payment, term, and APR. Interest-ch
 Use the existing browser suite for populated, invalid, mobile, keyboard, and customer/export states. Test the start → review → edit flow, section shortcut focus, and helper/error descriptions. Visually inspect desktop and mobile layouts after CSS changes; automated contrast scans do not establish full accessibility conformance.
 
 References: [W3C form instructions](https://www.w3.org/WAI/tutorials/forms/instructions/), [W3C target-size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html), and [GOV.UK review-answer pattern](https://design-system.service.gov.uk/patterns/check-answers/).
+
+### Payment decisions and recovery (2.2)
+
+Keep readiness, applied-action/Undo and save status beside the affected figures. Green means ready for customer review; it never means approved financing. Repairable warnings use a labeled field action and preserve every other entered value. Secondary PDF download/copy actions remain distinct from native Share PDF.
+
+The payment/cash comparison uses two aligned limits above the options, stacking below 441px. Use calculated cent outputs for payment, signing cash and estimated interest. A single valid option fills the available result width, with consistent metric labels. Keep the full financial qualification but avoid duplicate setup paragraphs. Grid assumptions stay separate from the read-only current worksheet reference until a payment is selected. Do not animate numeric output or add motion to frequent calculations; existing focus/reduced-motion conventions apply.

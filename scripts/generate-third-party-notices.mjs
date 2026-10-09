@@ -22,7 +22,7 @@ async function collect(name, from) {
   const pkg = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
   const names = (await readdir(directory)).filter(file => /^(?:licen[cs]e|copying|copyrightnotice|notice|ofl)(?:\.|$)/i.test(file)).sort();
   if (!names.length) throw new Error(`Missing license text for ${pkg.name}@${pkg.version}`);
-  const texts = await Promise.all(names.map(async file => `${file}\n${await readFile(join(directory, file), 'utf8')}`));
+  const texts = await Promise.all(names.map(async file => `${file}\n${(await readFile(join(directory, file), 'utf8')).replace(/\r\n?/g, '\n')}`));
   entries.push({ name: pkg.name, version: pkg.version, text: texts.join('\n\n') });
   for (const dependency of Object.keys(pkg.dependencies ?? {}).sort()) await collect(dependency, directory);
 }

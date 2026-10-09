@@ -6,6 +6,7 @@ import { isRegistrationState, isTransactionScope } from './purchaseScope.js';
 
 export const LEGACY_DESK_DRAFT_KEY = 'payment-desk.draft.v1';
 export const DESK_DRAFT_KEY = 'payment-desk.draft.v2';
+export const DESK_DRAFT_VERSION = 3;
 // Share the released writer's lock while reading a legacy snapshot.
 export const DESK_DRAFT_LOCK_KEY = LEGACY_DESK_DRAFT_KEY;
 const terms = RATE_GRID_DEFAULTS.termMonths;
@@ -13,7 +14,7 @@ const targets = ['payment', 'outTheDoor', 'amountFinanced', 'cashDue'];
 const money = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= CALCULATION_LIMITS.maxAmount && Math.abs(value * 100 - Math.round(value * 100)) < .00001;
 const rate = value => money(value) && value <= CALCULATION_LIMITS.maxApr;
 const date = value => typeof value === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
-const fieldId = /^(?:sale-price|cash-down|trade-allowance|trade-payoff|apr|new-plate-amount|target-value|estimate-date|grid-down-[0-3]|grid-apr-(?:36|48|60|72|84)|product-add-on-\d+-amount)$/;
+const fieldId = /^(?:sale-price|cash-down|trade-allowance|trade-payoff|apr|new-plate-amount|target-value|budget-cash-limit|estimate-date|grid-down-[0-3]|grid-apr-(?:36|48|60|72|84)|product-add-on-\d+-amount)$/;
 export const isDeskDraftField = id => fieldId.test(id);
 const storageOnDevice = () => { try { return window.localStorage; } catch { return null; } };
 const locksOnDevice = () => { try { return navigator.locks; } catch { return null; } };
@@ -25,7 +26,7 @@ export function isBaselineDeskInput(id, raw, startDate) {
   if (/\.$/.test(raw.trim().replace(/%$/, '').trim())) return false;
   const parsed = parseFinancialInput(raw, { kind, required: kind === 'rate' || id === 'new-plate-amount' });
   if (parsed.error) return false;
-  if (id === 'target-value') return parsed.value === '';
+  if (id === 'target-value' || id === 'budget-cash-limit') return parsed.value === '';
   const baseline = createDeskState(startDate);
   const fields = { 'sale-price': 'salePrice', 'cash-down': 'cashDown', 'trade-allowance': 'tradeAllowance', 'trade-payoff': 'tradePayoff', apr: 'apr', 'new-plate-amount': 'newPlateAmount' };
   const value = parsed.value === '' ? (id === 'sale-price' ? null : 0) : parsed.value;
@@ -36,7 +37,7 @@ export function isBaselineDeskInput(id, raw, startDate) {
 
 export function normalizeDeskDraft(value) {
   try {
-    if (![1, 2].includes(value?.version) || !value.desk || !value.targetValues || !value.inputDrafts) return null;
+    if (![1, 2, DESK_DRAFT_VERSION].includes(value?.version) || !value.desk || !value.targetValues || !value.inputDrafts) return null;
     const source = value.desk;
     const deal = source.deal;
     const registrationState = value.version === 1 && deal?.registrationState === undefined ? 'MI' : deal.registrationState;
@@ -63,11 +64,13 @@ export function normalizeDeskDraft(value) {
     }
     if (!Array.isArray(source.gridDownPayments) || source.gridDownPayments.length !== 4 || !source.gridDownPayments.every(money)
       || !terms.every(term => rate(source.gridRates?.[term])) || !targets.includes(value.targetType)
-      || source.gridRates[deal.termMonths] !== deal.apr
+      || (value.version < 3 && source.gridRates[deal.termMonths] !== deal.apr)
       || !Number.isSafeInteger(source.nextItemId) || source.nextItemId < 1 || source.nextItemId > 1_000_000_000
       || source.nextItemId <= Math.max(0, ...optionalItems.map(item => Number(item.id.slice(7))))
       || (deal.dealType === 'cash' ? !['cashDue', 'outTheDoor'].includes(value.targetType) : value.targetType === 'cashDue')
       || !targets.every(type => value.targetValues[type] === '' || money(value.targetValues[type]))) return null;
+    const cashLimit = value.version === DESK_DRAFT_VERSION && value.targetValues.cashLimit !== undefined ? value.targetValues.cashLimit : '';
+    if (cashLimit !== '' && !money(cashLimit)) return null;
     const inputDrafts = {};
     const entries = Object.entries(value.inputDrafts);
     if (entries.length > 100) return null;
@@ -90,7 +93,7 @@ export function normalizeDeskDraft(value) {
     desk.gridDownPayments = [...source.gridDownPayments];
     desk.dateChosen = source.dateChosen;
     desk.nextItemId = source.nextItemId;
-    return { version: 2, desk, targetType: value.targetType, targetValues: Object.fromEntries(targets.map(type => [type, value.targetValues[type]])), inputDrafts };
+    return { version: DESK_DRAFT_VERSION, desk, targetType: value.targetType, targetValues: { ...Object.fromEntries(targets.map(type => [type, value.targetValues[type]])), cashLimit }, inputDrafts };
   } catch { return null; }
 }
 
@@ -101,7 +104,7 @@ function classifyRecord(raw, key) {
   if (raw.length > 200_000) return reject('oversized');
   let value;
   try { value = JSON.parse(raw); } catch { return reject('malformed-json'); }
-  if (value?.version !== (key === DESK_DRAFT_KEY ? 2 : 1)) return reject('unsupported-version');
+  if (!(key === DESK_DRAFT_KEY ? [2, DESK_DRAFT_VERSION].includes(value?.version) : value?.version === 1)) return reject('unsupported-version');
   if (key === DESK_DRAFT_KEY && value.discarded === true) {
     return typeof value.revision === 'string' && value.revision.length > 0 && value.revision.length <= 100
       && Object.keys(value).every(key => ['version', 'discarded', 'revision'].includes(key))
@@ -129,18 +132,19 @@ export function loadDeskDraft(storage = storageOnDevice()) {
 
 export function hasDeskDraftEdits({ desk, targetValues, inputDrafts }) {
   return hasDealEdits(desk) || desk.dateChosen || targets.some(type => targetValues[type] !== '')
+    || (targetValues.cashLimit !== undefined && targetValues.cashLimit !== '')
     || Object.entries(inputDrafts).some(([id, draft]) => !isBaselineDeskInput(id, draft.raw, desk.startDate));
 }
 
 function writeDeskDraft(value, storage, record, discard = false) {
-  const draft = discard ? null : normalizeDeskDraft({ ...value, version: 2 });
+  const draft = discard ? null : normalizeDeskDraft({ ...value, version: DESK_DRAFT_VERSION });
   if (!storage || (!discard && !draft)) return { ok: false };
   try {
     if (discard || !hasDeskDraftEdits(draft)) {
       // Retain v1 bytes for recovery, but never resurrect them after a reset.
       // A unique revision also prevents a reset/save/reset ABA across tabs.
       if (discard || record.kind !== 'absent') storage.setItem(DESK_DRAFT_KEY,
-        JSON.stringify({ version: 2, discarded: true, revision: crypto.randomUUID() }));
+        JSON.stringify({ version: DESK_DRAFT_VERSION, discarded: true, revision: crypto.randomUUID() }));
     } else {
       const raw = JSON.stringify(draft);
       if (raw.length > 200_000) return { ok: false };

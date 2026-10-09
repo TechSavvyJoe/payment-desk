@@ -90,7 +90,7 @@ test('phone and panel worksheet return focus is visible', async ({ page }) => {
   }
 });
 
-test('Set payment target replaces stale raw errors and retains other committed targets', async ({ page }) => {
+test('Set payment target switches modes, preserves its own unfinished typing and retains other targets', async ({ page }) => {
   await page.goto('/');
   await page.locator('#sale-price').fill('25000');
   await page.locator('#sale-price').blur();
@@ -112,10 +112,14 @@ test('Set payment target replaces stale raw errors and retains other committed t
   for (let repeat = 0; repeat < 2; repeat++) {
     await input.fill('abc'); await input.blur();
     await page.locator('.payment-edit-button:visible').click();
-    await expect(input).toHaveValue('451.58');
-    await expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(input).toHaveValue('abc');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
     await expect(input).toBeFocused();
   }
+  await input.fill(''); await input.blur();
+  await page.locator('.payment-edit-button:visible').click();
+  await expect(input).toHaveValue('451.58');
+  await expect(input).not.toHaveAttribute('aria-invalid', 'true');
   await input.fill(''); await input.pressSequentially('450.25');
   await expect(input).toBeFocused(); await expect(input).toHaveValue('450.25');
 });
