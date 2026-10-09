@@ -33,6 +33,8 @@ On phones, the Ready badge shares the existing payment-label row so complete est
 
 Current scenario in a budget comparison is informational: it never overwrites an independent grid assumption or creates an adjustment. Applied dealership fee changes expire Undo, while unchanged financial settings and brand-only edits preserve it. Excess credits focus trade allowance when reducing cash cannot repair the balance. Unsupported state and transaction recovery opens the relevant selector, including when leaving the phone grid.
 
+Worksheet, grid, target and recovery navigation focuses the committed destination before the browser accepts the next interaction, with immediate scrolling. Adding or removing a product completes its focus handoff during the DOM update. This avoids delayed focus stealing the next edit or moving controls while a dealer selects a scenario; financial parsing and draft guards stay intact.
+
 Apple's [Layout](https://developer.apple.com/design/human-interface-guidelines/layout) and [Feedback](https://developer.apple.com/design/human-interface-guidelines/feedback) guidance informed grouping and nearby action feedback. The [VinSolutions product sheet](https://www.vinsolutions.com/choose/wp-content/uploads/sites/3/2023/12/2024-VinSolutions-Desking-Product-Slick.pdf) supports the value of explicit scenario comparison. These references do not confer endorsement or vendor integration access.
 
 ## Draft and rollback contract

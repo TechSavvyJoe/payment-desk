@@ -45,7 +45,7 @@
 
 html {
   background: var(--canvas);
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 body {

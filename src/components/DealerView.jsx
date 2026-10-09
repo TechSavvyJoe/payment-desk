@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { CALCULATION_DEFAULTS, RATE_GRID_DEFAULTS } from "../lib/calculations.js";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { CALCULATION_DEFAULTS, CALCULATION_LIMITS, RATE_GRID_DEFAULTS } from "../lib/calculations.js";
 import { formatCurrency, formatWholeCurrency } from "../lib/formatters.js";
 import DealSection from "./DealSection.jsx";
 import { FieldRow, MoneyInput, PercentInput, SegmentedControl } from "./Fields.jsx";
@@ -41,6 +41,15 @@ export default function DealerView({
   dealInput, result, updateField, updateItem, addItem, removeItem,
   accordions, toggleAccordion, targetProps, purchaseScope,
 }) {
+  const pendingProductFocus = useRef(null);
+  useLayoutEffect(() => {
+    const pending = pendingProductFocus.current;
+    if (!pending) return;
+    pendingProductFocus.current = null;
+    const controls = document.querySelectorAll(".product-category");
+    const index = pending.added ? controls.length - 1 : Math.min(pending.index, controls.length - 1);
+    (controls[index] || document.getElementById("add-product"))?.focus();
+  }, [dealInput.optionalItems]);
   const equitySummary = result.tradeEquity < 0
     ? `${formatWholeCurrency(Math.abs(result.tradeEquity))} negative equity`
     : result.tradeEquity > 0 ? `${formatWholeCurrency(result.tradeEquity)} trade equity` : "No trade equity";
@@ -55,18 +64,13 @@ export default function DealerView({
     });
   };
   const addProduct = () => {
+    if (dealInput.optionalItems.length >= CALCULATION_LIMITS.maxOptionalItems) return;
+    pendingProductFocus.current = { added: true };
     addItem();
-    requestAnimationFrame(() => {
-      const controls = document.querySelectorAll(".product-category");
-      controls[controls.length - 1]?.focus();
-    });
   };
   const removeProduct = (index) => {
+    pendingProductFocus.current = { index };
     removeItem(index);
-    requestAnimationFrame(() => {
-      const controls = document.querySelectorAll(".product-category");
-      (controls[Math.min(index, controls.length - 1)] || document.getElementById("add-product"))?.focus();
-    });
   };
 
   return (

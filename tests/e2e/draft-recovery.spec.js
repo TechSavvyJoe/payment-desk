@@ -377,6 +377,8 @@ test('an invalid grid rate survives refresh and blocks an estimate until correct
   await page.locator('#sale-price').fill('30000');
   await openGrid(page);
   await page.locator('#grid-apr-60').fill('bad rate');
+  await expect(page.locator('#grid-apr-60')).toHaveValue('bad rate');
+  await expect(page.locator('#grid-apr-60')).toHaveAttribute('aria-invalid', 'true');
   await page.getByRole('button', { name: 'Back to calculator', exact: true }).click();
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.inputDrafts['grid-apr-60']?.raw, KEY)).toBe('bad rate');
   await expect(page.locator('.app-footer')).toContainText('Draft saved on this device');

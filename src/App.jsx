@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { calculateDeal } from './lib/calculations.js';
 import { createDeskState, deskReducer, hasDealEdits } from './lib/dealState.js';
 import { APP_VERSION, BUILD_ID } from './lib/release.js';
@@ -29,12 +29,6 @@ import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-
 
 const allOpen = () => ({ vehicle: true, trade: true, taxes: true, roll: true });
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
-const focusDestination = id => requestAnimationFrame(() => {
-  const node = document.getElementById(id === 'worksheet-heading' && isMobile() ? 'calculator-top' : id);
-  if (!node) return;
-  node.focus({ preventScroll: true });
-  node.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
-});
 
 // A desk left open overnight must pick up the new Eastern day on its own, so the
 // December reminder appears and leaves on time. Phones pause timers in the
@@ -56,6 +50,19 @@ function useEasternToday() {
 }
 
 export default function App({ restoreDraft = true, savedDraftSession }) {
+  const [focusRequest, setFocusRequest] = useState(null);
+  // Complete navigation after its DOM update, before another field can receive
+  // input. A deferred focus or animated scroll can steal the next interaction.
+  useLayoutEffect(() => {
+    if (!focusRequest) return;
+    const { id, block, select } = focusRequest;
+    const node = document.getElementById(id === 'worksheet-heading' && isMobile() ? 'calculator-top' : id);
+    if (!node) return;
+    node.focus({ preventScroll: true });
+    if (select) node.select?.();
+    node.scrollIntoView({ behavior: 'instant', block });
+  }, [focusRequest]);
+  const focusDestination = (id, { block = 'start', select = false } = {}) => setFocusRequest({ id, block, select });
   const [draftSession] = useState(() => savedDraftSession ?? createDeskDraftSession());
   const [restoredDraft] = useState(() => restoreDraft ? draftSession.draft : null);
   const [state, dispatch] = useReducer(deskReducer, undefined, () => restoredDraft?.desk ?? createDeskState());
@@ -203,11 +210,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     const field = document.getElementById(errorId);
     if (field?.closest('.deal-details')) setContextOpen(true);
     if (isMobile()) dispatch({ type: 'grid-visibility', open: Boolean(field?.closest('#payment-grid')) });
-    requestAnimationFrame(() => {
-      const destination = document.getElementById(errorId);
-      destination?.focus();
-      destination?.scrollIntoView({ block: 'center' });
-    });
+    focusDestination(errorId, { block: 'center' });
   };
   const repairEstimate = fieldId => {
     const destinationId = fieldId === 'first-error'
@@ -217,11 +220,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     setAccordions(allOpen());
     if (['registration-state', 'transaction-scope', 'estimate-date'].includes(destinationId)) setContextOpen(true);
     if (isMobile()) dispatch({ type: 'grid-visibility', open: /^grid-(apr|down)-/.test(destinationId) });
-    requestAnimationFrame(() => {
-      const destination = document.getElementById(destinationId);
-      destination?.focus({ preventScroll: true });
-      destination?.scrollIntoView({ block: 'center', behavior: 'instant' });
-    });
+    focusDestination(destinationId, { block: 'center' });
   };
   const clearTargetDraft = () => {
     setInputDrafts(current => { const updated = { ...current }; delete updated['target-value']; return updated; });
@@ -300,11 +299,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     setTargetType('payment');
     if (needsSeed) setTargetValues(current => ({ ...current, payment: value }));
     if (switchingType || needsSeed) setTargetInputRevision(current => current + 1);
-    requestAnimationFrame(() => {
-      targetInputRef.current?.focus();
-      targetInputRef.current?.select();
-      targetInputRef.current?.scrollIntoView({ block: 'center' });
-    });
+    focusDestination('target-value', { block: 'center', select: true });
   };
   const targetProps = {
     targetType, targetValues, gridRates, lastRoll, targetInputRef, targetInputRevision, hasInputErrors, canCompare,

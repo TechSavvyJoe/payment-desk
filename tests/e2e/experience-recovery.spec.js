@@ -15,9 +15,12 @@ test('payment-target shortcut preserves the customer number and unfinished input
   await expect(page.locator('#target-value')).toBeFocused();
   await expect(page.locator('#target-value')).toHaveValue('450');
   await page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: 'Out-the-door', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: 'Out-the-door', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#target-value')).toHaveAttribute('aria-label', 'Target out-the-door total');
   await page.locator('#target-value').fill('35000');
   await page.locator('#target-value').blur();
   await summary(page).getByRole('button', { name: 'Set payment target', exact: true }).click();
+  await expect(page.locator('#target-value')).toBeFocused();
   await expect(page.locator('#target-value')).toHaveValue('450');
   await page.locator('#target-value').fill('4xx');
   await summary(page).getByRole('button', { name: 'Set payment target', exact: true }).click();
