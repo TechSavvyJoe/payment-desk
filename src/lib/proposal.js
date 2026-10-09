@@ -51,7 +51,8 @@ export function getProposalStatus({ dealInput = {}, result, hasInputErrors = fal
     } else if (reason.startsWith('New plate cost') || reason.startsWith('Enter the new-plate amount')) {
       fieldId = 'new-plate-amount'; actionLabel = 'Enter registration estimate';
     } else if (!purchaseScope.supported && reason === purchaseScope.reason) {
-      fieldId = purchaseScope.errorField; actionLabel = 'Review tax coverage';
+      fieldId = purchaseScope.errorField;
+      actionLabel = fieldId === 'registration-state' ? 'Review registration state' : 'Review transaction coverage';
     } else if (reason.startsWith('Credits exceed')) {
       // Cash cannot repair a balance already negative before cash is applied.
       fieldId = result.amountBeforeCashDown < 0 ? 'trade-allowance' : 'cash-down';

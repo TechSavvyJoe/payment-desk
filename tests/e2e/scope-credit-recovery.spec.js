@@ -42,6 +42,10 @@ for (const [field, value, valid] of [
     await page.locator('details.deal-details > summary').click();
     await page.locator(`#${field}`).selectOption(value);
     await page.locator('details.deal-details > summary').click();
+    await expect(page.getByRole('button', { name: 'Review tax coverage', exact: true })).toHaveCount(1);
+    await expect(summary(page).getByRole('button', {
+      name: field === 'registration-state' ? 'Review registration state' : 'Review transaction coverage', exact: true,
+    })).toHaveCount(1);
     await expect(page.locator('#payment-grid button[aria-label^="Use "]:enabled')).toHaveCount(0);
     if (page.viewportSize().width <= 800) {
       // The phone shortcut already routes calculation errors to their field;

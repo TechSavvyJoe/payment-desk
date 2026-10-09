@@ -76,6 +76,8 @@ test("unsupported jurisdiction and transaction reasons retain the scope field id
     const result = { ...calculateDeal(deal([])), isComplete: false, incompleteReasons: [scope.reason] };
     const status = getProposalStatus({ dealInput, result, hasInputErrors: true });
     assert.equal(status.canExport, false);
-    assert.equal(status.issues.find(issue => issue.reason === scope.reason).fieldId, fieldId);
+    const issue = status.issues.find(issue => issue.reason === scope.reason);
+    assert.equal(issue.fieldId, fieldId);
+    assert.equal(issue.actionLabel, fieldId === "registration-state" ? "Review registration state" : "Review transaction coverage");
   }
 });
