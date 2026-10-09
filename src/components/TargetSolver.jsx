@@ -35,7 +35,7 @@ export default function TargetSolver({ dealInput, result, targetType, targetValu
     : { suggestions: [], empty: true, error: getPurchaseScope(dealInput).reason },
   [dealInput, result, targetType, targetValue, gridRates, budgetActive, cashLimit, hasInputErrors, budgetDraftInvalid]);
   const suggestions = budgetActive || expanded ? solution.suggestions : solution.suggestions.slice(0, 3);
-  const canApply = suggestion => !hasInputErrors && !(budgetActive && budgetDraftInvalid) && getProposalStatus({
+  const canApply = suggestion => !suggestion.informational && !hasInputErrors && !(budgetActive && budgetDraftInvalid) && getProposalStatus({
     dealInput: { ...dealInput, ...suggestion.patch }, result: suggestion.previewDeal,
   }).canExport;
   const summary = hasInputErrors ? 'Correct the highlighted figures to compare adjustments.'
@@ -83,7 +83,7 @@ export default function TargetSolver({ dealInput, result, targetType, targetValu
       <div className={`suggestion-list ${budgetActive ? 'budget-options' : ''}`} id="suggestion-list">
         {!suggestions.length ? <p className="suggestion-empty">{budgetActive ? solution.error || (solution.empty ? 'Enter both limits to see options.' : 'No option meets both limits at the entered term and rate assumptions.') : solution.alreadyMet ? 'No adjustment is needed.' : solution.empty ? 'Your comparison options will appear here.' : 'No supported adjustment is available for this target.'}</p> : null}
         {budgetActive ? suggestions.map(option => <article className="suggestion budget-option" key={option.id}>
-          <div className="suggestion__heading"><h3>{option.title}</h3><button className="apply-button" type="button" aria-label={`Apply ${option.title}`} disabled={!canApply(option)} onClick={() => apply(option)}>Apply</button></div>
+          <div className="suggestion__heading"><h3>{option.title}</h3>{option.informational ? null : <button className="apply-button" type="button" aria-label={`Apply ${option.title}`} disabled={!canApply(option)} onClick={() => apply(option)}>Apply</button>}</div>
           <dl className="suggestion-metrics budget-option__metrics">
             <div><dt>Term / assumed annual interest rate</dt><dd>{option.previewDeal.termMonths} months / {option.previewDeal.apr.toFixed(2)}%</dd></div>
             <div><dt>Cash down</dt><dd>{formatCurrency(option.previewDeal.cashDown, { cents: true })}</dd></div>

@@ -113,6 +113,11 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   // Even when the browser refuses to store them, the settings apply for this visit,
   // and the device keeps its previous saved settings whole.
   const applySettings = outcome => {
+    const previousFees = resolveFees(feeSettings);
+    const nextFees = resolveFees(outcome.fees);
+    if (previousFees.documentFee !== nextFees.documentFee || previousFees.crvFee !== nextFees.crvFee) {
+      dispatch({ type: 'expire-undo' });
+    }
     setBrandSettings(outcome.brand);
     setFeeSettings(outcome.fees);
     return { ok: outcome.ok, persistence: outcome.persistence };
@@ -211,7 +216,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     dispatch({ type: 'view', view: 'dealer' });
     setAccordions(allOpen());
     if (['registration-state', 'transaction-scope', 'estimate-date'].includes(destinationId)) setContextOpen(true);
-    if (/^grid-(apr|down)-/.test(destinationId) && isMobile()) dispatch({ type: 'grid-visibility', open: true });
+    if (isMobile()) dispatch({ type: 'grid-visibility', open: /^grid-(apr|down)-/.test(destinationId) });
     requestAnimationFrame(() => {
       const destination = document.getElementById(destinationId);
       destination?.focus({ preventScroll: true });

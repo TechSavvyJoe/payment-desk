@@ -143,3 +143,29 @@ test('already-fitting current remains visible and a negative financed balance st
   await expect(page.locator('.budget-option')).toHaveCount(0);
   await expect(page.locator('.target-summary')).toContainText('Credits exceed the financed balance');
 });
+
+test('current scenario has no Apply and preserves an independent grid rate', async ({ page }) => {
+  const mobile = page.viewportSize().width <= 800;
+  if (mobile) await page.locator('#mobile-grid-trigger').click();
+  const rate72 = page.locator('#grid-apr-72');
+  await rate72.fill('8');
+  await rate72.blur();
+  if (mobile) await page.getByRole('button', { name: 'Back to calculator', exact: true }).click();
+  await page.getByLabel('Target payment', { exact: true }).fill('600');
+  await page.getByRole('button', { name: 'Payment + cash limits', exact: true }).click();
+  await ceiling(page).fill('4000');
+
+  const current = page.locator('.budget-option').filter({ hasText: 'Current scenario' });
+  await expect(current).toContainText('$540.67/mo');
+  await expect(current.getByRole('button', { name: 'Apply Current scenario', exact: true })).toHaveCount(0);
+  await expect(rate72).toHaveValue('8.00');
+
+  const option = page.locator('.budget-option').filter({ hasText: 'Payment + cash limits: 84 months' });
+  await expect(option.getByRole('button', { name: 'Apply Payment + cash limits: 84 months', exact: true })).toBeEnabled();
+  await option.getByRole('button', { name: 'Apply Payment + cash limits: 84 months', exact: true }).click();
+  await expect(summary(page)).toContainText('84 months at 7.00% interest rate');
+  await expect(rate72).toHaveValue('8.00');
+  await page.getByRole('button', { name: 'Undo adjustment', exact: true }).click();
+  await expect(summary(page)).toContainText('72 months at 6.50% interest rate');
+  await expect(rate72).toHaveValue('8.00');
+});

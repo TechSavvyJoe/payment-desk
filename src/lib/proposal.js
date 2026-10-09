@@ -3,6 +3,7 @@ import { formatCurrency, formatNumber, formatShortDate } from "./formatters.js";
 import { resolveBrand } from "./brandSettings.js";
 import { POLICY_CONFIG } from "./policy.js";
 import { FINANCE_MODEL_EXPLANATION } from "./financeModel.js";
+import { getPurchaseScope } from "./purchaseScope.js";
 
 export const ESTIMATE_QUALIFICATION = "Estimate only, not a financing approval or contract. Actual payments, taxes, fees, product eligibility, and final figures must be confirmed with the lender and the dealership's approved systems.";
 
@@ -15,6 +16,7 @@ const productName = (item, index) => item.category === "service-contract"
 export function getProposalStatus({ dealInput = {}, result, hasInputErrors = false }) {
   const reasons = [];
   const productIssues = [];
+  const purchaseScope = getPurchaseScope(dealInput);
   if (hasInputErrors) reasons.push("Correct the highlighted input errors before creating a proposal.");
   if (!(result.salePrice > 0) && result.isComplete !== false) reasons.push("Enter a selling price before creating a proposal.");
   if (result.isComplete === false) reasons.push(...(result.incompleteReasons?.length ? result.incompleteReasons : ["Complete the required deal information."]));
@@ -48,8 +50,12 @@ export function getProposalStatus({ dealInput = {}, result, hasInputErrors = fal
       fieldId = 'sale-price'; actionLabel = 'Enter selling price';
     } else if (reason.startsWith('New plate cost') || reason.startsWith('Enter the new-plate amount')) {
       fieldId = 'new-plate-amount'; actionLabel = 'Enter registration estimate';
+    } else if (!purchaseScope.supported && reason === purchaseScope.reason) {
+      fieldId = purchaseScope.errorField; actionLabel = 'Review tax coverage';
     } else if (reason.startsWith('Credits exceed')) {
-      fieldId = 'cash-down'; actionLabel = 'Review cash and trade';
+      // Cash cannot repair a balance already negative before cash is applied.
+      fieldId = result.amountBeforeCashDown < 0 ? 'trade-allowance' : 'cash-down';
+      actionLabel = 'Review cash and trade';
     }
     return [{ reason, ...(fieldId ? { fieldId, actionLabel } : {}) }];
   });

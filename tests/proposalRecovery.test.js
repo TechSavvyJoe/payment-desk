@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { calculateDeal } from "../src/lib/calculations.js";
 import { getProposalStatus } from "../src/lib/proposal.js";
+import { getPurchaseScope } from "../src/lib/purchaseScope.js";
 
 const deal = confirmations => ({
   salePrice: 30_000,
@@ -48,4 +49,33 @@ test("duplicate Other product names retain one recovery issue per unconfirmed pr
   assert.equal(bothConfirmed.canExport, true);
   assert.deepEqual(bothConfirmed.reasons, []);
   assert.deepEqual(bothConfirmed.issues, []);
+});
+
+test("excess credit recovery selects a field that can actually repair the balance", () => {
+  for (const [patch, fieldId] of [
+    [{ salePrice: 1000, tradeAllowance: 5000, cashDown: 0 }, "trade-allowance"],
+    [{ salePrice: 1000, tradeAllowance: 5000, cashDown: 100 }, "trade-allowance"],
+    [{ salePrice: 1000, tradeAllowance: 0, cashDown: 5000 }, "cash-down"],
+  ]) {
+    const dealInput = { ...deal([]), ...patch };
+    const status = getProposalStatus({ dealInput, result: calculateDeal(dealInput) });
+    assert.equal(status.canExport, false);
+    const creditIssues = status.issues.filter(issue => issue.reason.startsWith("Credits exceed"));
+    assert.ok(creditIssues.length > 0);
+    assert.ok(creditIssues.every(issue => issue.fieldId === fieldId));
+  }
+});
+
+test("unsupported jurisdiction and transaction reasons retain the scope field identity", () => {
+  for (const [patch, fieldId] of [
+    [{ registrationState: "NY" }, "registration-state"],
+    [{ registrationState: "MI", transactionScope: "exempt" }, "transaction-scope"],
+  ]) {
+    const dealInput = { ...deal([]), ...patch };
+    const scope = getPurchaseScope(dealInput);
+    const result = { ...calculateDeal(deal([])), isComplete: false, incompleteReasons: [scope.reason] };
+    const status = getProposalStatus({ dealInput, result, hasInputErrors: true });
+    assert.equal(status.canExport, false);
+    assert.equal(status.issues.find(issue => issue.reason === scope.reason).fieldId, fieldId);
+  }
 });

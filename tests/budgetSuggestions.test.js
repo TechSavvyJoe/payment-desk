@@ -51,6 +51,18 @@ test('already-fitting current scenario is visible even if entered grid rate diff
   assert.equal(option.interestDeltaCents, 0);
 });
 
+test('current scenario is informational while a distinct grid-rate option remains available', () => {
+  const current = { ...dealInput, cashDown: 0, termMonths: 72, apr: 6.5 };
+  const solution = budget({ dealInput: current, gridRates: { ...gridRates, 72: 8 }, targetValue: 600 });
+  const currentOption = solution.suggestions.find(option => option.id === 'budget-current');
+  const gridOption = solution.suggestions.find(option => option.id === 'budget-72');
+  assert.equal(currentOption.informational, true);
+  assert.equal(currentOption.previewDeal.cents.monthlyPayment, calculateDeal(current).cents.monthlyPayment);
+  assert.ok(gridOption);
+  assert.deepEqual(gridOption.patch, { termMonths: 72, apr: 8, cashDown: 0 });
+  assert.equal(gridOption.informational, false);
+});
+
 test('zero-rate and zero-payment budgets preserve exact cents without negative finance', () => {
   const rates = Object.fromEntries([36, 48, 60, 72, 84].map(term => [term, 0]));
   const options = budget({ gridRates: rates, cashLimit: 40000, targetValue: 0 }).suggestions;

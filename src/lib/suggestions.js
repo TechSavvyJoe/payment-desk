@@ -286,6 +286,7 @@ export function buildBudgetSuggestions({ dealInput = {}, targetValue, cashLimit,
         || (paymentCents === 0 && previewDeal.cents.amountFinanced !== 0)
         || previewDeal.cents.dueAtSigning > cashCents) return;
       suggestions.push({ id, title, patch, previewDeal, withinTarget: true,
+        informational: id === 'budget-current',
         interestDeltaCents: previewDeal.cents.totalInterest - result.cents.totalInterest });
     };
     add('budget-current', 'Current scenario', { termMonths: result.termMonths, apr: result.apr, cashDown: result.cashDown }, result);

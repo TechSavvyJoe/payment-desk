@@ -59,7 +59,9 @@ export default function PaymentGrid({
   const allBlocked = !grid.rows.some((row) => row.cells.some((cell) => !isUnavailable(cell)));
   const blockedReason = grid.rows[0]?.cells[0]?.status.reasons[0] ?? result.incompleteReasons?.[0] ?? "Complete the worksheet before selecting a payment.";
   const blockedIssue = grid.rows[0]?.cells[0]?.status.issues.find(issue => issue.fieldId);
-  const recoveryFieldId = blockedIssue?.fieldId === 'cash-down' && result.amountBeforeCashDown >= 0
+  const purchaseScope = getPurchaseScope(dealInput);
+  const recoveryFieldId = !purchaseScope.supported ? purchaseScope.errorField
+    : blockedIssue?.fieldId === 'cash-down' && result.amountBeforeCashDown >= 0
     && grid.rows[0].cells[0].cashDown > result.amountBeforeCashDown
     ? 'grid-down-0'
     : blockedIssue?.fieldId ?? getProposalStatus({ dealInput, result, hasInputErrors }).issues.find(issue => issue.fieldId)?.fieldId ?? 'estimate-date';

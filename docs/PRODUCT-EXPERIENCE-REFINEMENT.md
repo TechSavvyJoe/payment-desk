@@ -31,6 +31,8 @@ Reference: generated desktop/narrow concept, then actual local captures at 1440,
 
 On phones, the Ready badge shares the existing payment-label row so complete estimates retain the original slim-card height budgets. Required corrections and active Undo still receive visible space. Duplicate product names retain separate recovery identities; a blocked grid points to its candidate's offending input rather than an unrelated valid worksheet field.
 
+Current scenario in a budget comparison is informational: it never overwrites an independent grid assumption or creates an adjustment. Applied dealership fee changes expire Undo, while unchanged financial settings and brand-only edits preserve it. Excess credits focus trade allowance when reducing cash cannot repair the balance. Unsupported state and transaction recovery opens the relevant selector, including when leaving the phone grid.
+
 Apple's [Layout](https://developer.apple.com/design/human-interface-guidelines/layout) and [Feedback](https://developer.apple.com/design/human-interface-guidelines/feedback) guidance informed grouping and nearby action feedback. The [VinSolutions product sheet](https://www.vinsolutions.com/choose/wp-content/uploads/sites/3/2023/12/2024-VinSolutions-Desking-Product-Slick.pdf) supports the value of explicit scenario comparison. These references do not confer endorsement or vendor integration access.
 
 ## Draft and rollback contract
@@ -44,3 +46,5 @@ The license-notice generator normalizes dependency-license line endings before c
 ## Acceptance boundary
 
 The final gate must verify the exact source tree, full regression checks, packaged native companion, actual desktop/narrow renders, accessibility, current PDF export, and deployed asset/build identity. Isolated browser checks do not prove delivery through a physical phone's Messages app. Inventory fixtures do not establish universal website compatibility. Nationwide automatic tax needs the licensed provider and acceptance gates in [ATC requirements](ATC-INTEGRATION-REQUIREMENTS.md) and [coverage ledger](NATIONWIDE-COVERAGE.md).
+
+The complete CI gate retains every web and native-companion test with a 45-minute job budget. A 30-minute run passed all 799 web cases and reached 56 passing native cases before the time limit stopped it; that incomplete run is not release acceptance.
