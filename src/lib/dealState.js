@@ -62,14 +62,13 @@ export function deskReducer(state, action) {
       const patch = { [action.field]: action.value };
       if (action.field === 'termMonths') patch.apr = state.gridRates[action.value] ?? state.deal.apr;
       if (action.field === 'dealType' && action.value === 'cash') patch.cashDown = 0;
-      return { ...withPatch(state, patch), mobileGridOpen: action.field === 'dealType' ? false : state.mobileGridOpen };
+      return { ...withPatch(state, patch, action.label), mobileGridOpen: action.field === 'dealType' ? false : state.mobileGridOpen };
     }
     case 'apply': return withPatch(state, action.patch, action.label);
-    case 'grid': return { ...withPatch(state, action.patch), mobileGridOpen: false };
+    case 'grid': return { ...withPatch(state, action.patch, action.label ?? 'Payment option applied'), mobileGridOpen: false };
     case 'rate': {
       const rate = normalizeApr(action.value);
-      const next = { ...state, gridRates: { ...state.gridRates, [action.term]: rate }, lastRoll: null };
-      return action.term === state.deal.termMonths ? { ...next, deal: { ...state.deal, apr: rate } } : next;
+      return { ...state, gridRates: { ...state.gridRates, [action.term]: rate }, lastRoll: null };
     }
     case 'down': return { ...state, lastRoll: null, gridDownPayments: state.gridDownPayments.map((v, i) => i === action.index ? money(action.value) : v) };
     case 'add-item': {

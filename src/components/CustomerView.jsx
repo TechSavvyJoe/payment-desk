@@ -7,6 +7,7 @@ import { EditIcon, PrintIcon, ShareIcon } from "./Icons.jsx";
 import ResultsPanel from "./ResultsPanel.jsx";
 import TradeTaxBreakdown from "./TradeTaxBreakdown.jsx";
 import CustomerPrintout from "./CustomerPrintout.jsx";
+import EstimateReadiness from './EstimateReadiness.jsx';
 import { PAYMENT_DESK_URL } from '../../extensions/payment-desk-companion/vehicleHandoff.js';
 
 const money = (value) => formatCurrency(value, { cents: true });
@@ -16,7 +17,7 @@ const LedgerRow = ({ item, total = false }) => (
   </div>
 );
 
-export default function CustomerView({ dealInput, result, gridRates, hasInputErrors = false, onEditDeal, brand }) {
+export default function CustomerView({ dealInput, result, gridRates, hasInputErrors = false, onEditDeal, brand, onRepairEstimate, onAdjustPayments }) {
   const [createdAt] = useState(() => new Date().toISOString());
   const snapshot = useMemo(() => createProposalSnapshot({
     dealInput, result, gridRates, hasInputErrors, createdAt, brand, version: APP_VERSION + " (" + BUILD_ID + ")",
@@ -99,7 +100,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
         </header>
         <div className="customer-actions">
           {onEditDeal ? <button className="edit-deal-button" onClick={onEditDeal} type="button"><EditIcon size={18} />Edit deal</button> : null}
-          <button aria-describedby={!snapshot.summary.canExport ? warningId : undefined} className="share-button" disabled={!snapshot.summary.canExport || busy} onClick={handleCopy} type="button">Copy summary</button>
+          <button aria-describedby={!snapshot.summary.canExport ? warningId : undefined} className="share-button export-secondary" disabled={!snapshot.summary.canExport || busy} onClick={handleCopy} type="button">Copy summary</button>
           {canNativeShare ? (
             <button aria-describedby={!snapshot.summary.canExport ? warningId : undefined} className="share-button" disabled={!snapshot.summary.canExport || busy} onClick={handleShare} type="button">
               <ShareIcon size={20} />Share PDF
@@ -108,7 +109,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
           {currentPdfError ? <button className="share-button" type="button" onClick={() => {
             setPdfError(null); setPdfAttempt(attempt => attempt + 1);
           }}>Retry PDF</button> : null}
-          <button className="share-button" disabled={!currentPdf || !snapshot.summary.canExport || busy} type="button" onClick={() => {
+          <button className={`share-button${canNativeShare ? ' export-secondary' : ''}`} disabled={!currentPdf || !snapshot.summary.canExport || busy} type="button" onClick={() => {
             if (!currentPdf || !snapshot.summary.canExport) return;
             const link = document.createElement('a');
             link.href = currentPdf.url; link.download = currentPdf.file.name;
@@ -120,10 +121,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
           <span className="share-status" role="status">{status} {snapshot.summary.canExport ? (currentPdfError || (!currentPdf ? 'Preparing current PDF…' : !canNativeShare ? 'File sharing is unavailable. Use Download PDF.' : 'Current PDF ready.')) : null}</span>
         </div>
         {!snapshot.summary.canExport ? (
-          <section className="proposal-incomplete result-warning" id={warningId}>
-            <h3>Complete the estimate before sharing or printing</h3>
-            {snapshot.summary.reasons.map((reason) => <p key={reason}>{reason}</p>)}
-          </section>
+          <EstimateReadiness summary={snapshot.summary} onRepair={onRepairEstimate} id={warningId} heading="Complete the estimate before sharing or printing" />
         ) : null}
         {copyFallback && snapshot.summary.canExport ? (
           <label className="proposal-copy-fallback">
@@ -144,6 +142,7 @@ export default function CustomerView({ dealInput, result, gridRates, hasInputErr
             <div className="customer-options__heading">
               <h2>Payment options</h2>
               <p>Same deal and cash due; rates are assumptions subject to lender approval.</p>
+              {onAdjustPayments ? <button className="adjust-payment-options" type="button" onClick={onAdjustPayments}><EditIcon size={17} />Adjust payment options</button> : null}
             </div>
             <div className="customer-options__table" role="table" aria-label="Customer payment options">
               <div className="customer-options__row is-header" role="row">

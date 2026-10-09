@@ -125,7 +125,7 @@ test('reset removes the draft while leaving other device settings intact', () =>
 
 test('corrupt, unsupported, oversized and out-of-range drafts are ignored', () => {
   const device = storage();
-  for (const raw of ['{', JSON.stringify({ ...empty(), version: 3 }), ' '.repeat(200001)]) {
+  for (const raw of ['{', JSON.stringify({ ...empty(), version: 4 }), ' '.repeat(200001)]) {
     device.setItem(DESK_DRAFT_KEY, raw); assert.equal(loadDeskDraft(device), null);
   }
   for (const mutate of [
@@ -200,7 +200,7 @@ test('removed product drafts are discarded and restored product IDs are never re
 
 for (const [reason, raw] of [
   ['malformed-json', '{'], ['malformed-json', ''],
-  ['unsupported-version', JSON.stringify({ ...empty(), version: 3 })],
+  ['unsupported-version', JSON.stringify({ ...empty(), version: 4 })],
   ['oversized', ' '.repeat(200001)],
   ['invalid-fields', JSON.stringify({ ...empty(), inputDrafts: { 'sale-price': { raw: 10 } } })],
   ['invalid-fields', JSON.stringify({ ...empty(), discarded: true, revision: 'synthetic' })],
@@ -250,12 +250,12 @@ test('v2 precedence, rejected legacy preservation and migration do not fall back
   const session = createDeskDraftSession(device, locks());
   assert.equal(session.record.key, LEGACY_DESK_DRAFT_KEY);
   assert.equal(session.record.raw, raw);
-  assert.equal(session.draft.version, 2);
+  assert.equal(session.draft.version, 3);
   assert.equal(session.draft.desk.deal.registrationState, 'MI');
   assert.equal(session.draft.desk.deal.transactionScope, 'resident-retail');
   assert.equal((await session.save(session.draft)).ok, true);
   assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), raw);
-  assert.equal(JSON.parse(device.getItem(DESK_DRAFT_KEY)).version, 2);
+  assert.equal(JSON.parse(device.getItem(DESK_DRAFT_KEY)).version, 3);
   device.setItem(DESK_DRAFT_KEY, '{');
   assert.equal(readDeskDraftRecord(device).kind, 'rejected');
   assert.equal(loadDeskDraft(device), null);
@@ -331,15 +331,16 @@ test('all scope selections survive v2 normalization; only v1 permits missing sco
 // Load the actual released writer and its released dependencies, not a mock of
 // its projection. Git history is required for this bounded compatibility test.
 const releasedModules = new Map();
-function releasedModule(path) {
-  if (releasedModules.has(path)) return releasedModules.get(path);
-  const source = execFileSync('git', ['show', `4832f6f99882f264977dd9b95369e70fe52828c8:${path}`], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
+function releasedModule(path, revision = '4832f6f99882f264977dd9b95369e70fe52828c8') {
+  const cacheKey = revision + path;
+  if (releasedModules.has(cacheKey)) return releasedModules.get(cacheKey);
+  const source = execFileSync('git', ['show', `${revision}:${path}`], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
   const rewritten = source.replace(/from (['"])(\.\/[^'"]+)\1/g, (_match, _quote, relative) => {
     const dependency = path.slice(0, path.lastIndexOf('/') + 1) + relative.slice(2);
-    return `from '${releasedModule(dependency)}'`;
+    return `from '${releasedModule(dependency, revision)}'`;
   });
   const url = `data:text/javascript;base64,${Buffer.from(rewritten).toString('base64')}`;
-  releasedModules.set(path, url);
+  releasedModules.set(cacheKey, url);
   return url;
 }
 
@@ -390,7 +391,7 @@ test('existing v2 does not require legacy reads and rejected v2 never replaces m
   const device = storage(), value = empty();
   value.desk.deal.registrationState = 'NY'; value.desk.deal.transactionScope = 'exempt';
   value.desk.deal.salePrice = 20000;
-  const raw = JSON.stringify({ ...value, version: 3 }); device.setItem(DESK_DRAFT_KEY, raw);
+  const raw = JSON.stringify({ ...value, version: 4 }); device.setItem(DESK_DRAFT_KEY, raw);
   const get = device.getItem;
   device.getItem = key => { if (key === LEGACY_DESK_DRAFT_KEY) throw new Error('legacy denied'); return get(key); };
   const rejected = createDeskDraftSession(device, locks());
@@ -432,4 +433,55 @@ test('valid v2 wins over legacy changes, but explicit cleanup cannot erase a mis
   assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), 'new old-app work');
   assert.equal((await createDeskDraftSession(device, locks()).discard()).ok, true);
   assert.equal(device.getItem(LEGACY_DESK_DRAFT_KEY), null);
+});
+
+
+test('v3 preserves independent comparison rates, cash limits and unfinished typing', () => {
+  const value = empty(); value.version = 3; value.desk.deal.salePrice = 30000;
+  value.desk.gridRates[72] = 8; value.targetValues.payment = 450; value.targetValues.cashLimit = 4000;
+  value.inputDrafts['budget-cash-limit'] = { raw: '4k' };
+  const device = storage();
+  assert.equal(saveDeskDraft(value, device).ok, true);
+  const restored = loadDeskDraft(device);
+  assert.equal(restored.version, 3);
+  assert.equal(restored.desk.deal.apr, 6.5);
+  assert.equal(restored.desk.gridRates[72], 8);
+  assert.equal(restored.targetValues.cashLimit, 4000);
+  assert.deepEqual(restored.inputDrafts['budget-cash-limit'], { raw: '4k' });
+  for (const invalid of [-1, 1.001, '4000', null, Infinity]) {
+    const bad = structuredClone(value); bad.targetValues.cashLimit = invalid;
+    assert.equal(normalizeDeskDraft(bad), null);
+  }
+});
+
+test('v1 and v2 migrate without creating a cash ceiling or changing figures', () => {
+  for (const version of [1, 2]) {
+    const value = empty(); value.version = version; value.desk.deal.salePrice = 30000;
+    const migrated = normalizeDeskDraft(value);
+    assert.equal(migrated.version, 3);
+    assert.equal(migrated.targetValues.cashLimit, '');
+    assert.deepEqual(migrated.desk.deal, value.desk.deal);
+    assert.deepEqual(migrated.desk.gridRates, value.desk.gridRates);
+  }
+});
+
+test('actual released v2 writer preserves v3 records and conflicts instead of replacing them', async () => {
+  const released = await import(releasedModule('src/lib/deskDraft.js', '2ceffd2fc3e082e4e0d9653cbf2135d782670699'));
+  const device = storage(), coordinator = locks();
+  const value = empty(); value.desk.deal.salePrice = 30000;
+  assert.equal(released.saveDeskDraft(value, device).ok, true);
+  const oldTab = released.createDeskDraftSession(device, coordinator);
+  const current = createDeskDraftSession(device, coordinator);
+  const next = current.draft; next.desk.gridRates[72] = 8; next.targetValues.cashLimit = 4000;
+  assert.equal((await current.save(next)).ok, true);
+  const saved = device.getItem(DESK_DRAFT_KEY);
+  assert.equal(released.readDeskDraftRecord(device).kind, 'rejected');
+  assert.equal(released.saveDeskDraft(value, device).rejected, true);
+  assert.equal((await oldTab.save(value)).conflict, true);
+  assert.equal(device.getItem(DESK_DRAFT_KEY), saved);
+  assert.equal((await current.discard()).ok, true);
+  const tombstone = device.getItem(DESK_DRAFT_KEY);
+  assert.equal(released.saveDeskDraft(value, device).rejected, true);
+  assert.equal(device.getItem(DESK_DRAFT_KEY), tombstone);
+  assert.equal(loadDeskDraft(device), null);
 });

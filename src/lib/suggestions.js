@@ -11,6 +11,9 @@ import {
   solveSalePriceForTarget,
   toCents,
 } from './calculations.js';
+import { getProposalStatus } from './proposal.js';
+import { getPurchaseScope } from './purchaseScope.js';
+import { parseFinancialInput } from './inputValidation.js';
 import { formatCurrency, formatNumber } from './formatters.js';
 
 const money = (value) => formatCurrency(value, { cents: true });
@@ -123,6 +126,7 @@ export function buildSuggestions({ dealInput = {}, result: suppliedResult, targe
     const qualification = exact ? 'Target reached.' : `${money(fromCents(Math.abs(differenceCents)))}${suffix} ${withinTarget ? 'below' : 'above'} target.`;
     suggestions.push({
       ...suggestion, previewDeal, exact, withinTarget, status, note,
+      ...(suggestion.id === 'term' ? { interestDeltaCents: previewDeal.cents.totalInterest - result.cents.totalInterest } : {}),
       difference: fromCents(differenceCents), remainingGap: fromCents(Math.abs(differenceCents)),
       detail: `${resultLine(previewDeal)} · ${qualification}${note ? ` ${note}` : ''}`,
     });
@@ -245,4 +249,73 @@ export function buildSuggestions({ dealInput = {}, result: suppliedResult, targe
     suggestions: suggestions.sort((a, b) => ({ 'sale-price': 0, 'cash-down': 1, term: 2 }[a.id] ?? 3) - ({ 'sale-price': 0, 'cash-down': 1, term: 2 }[b.id] ?? 3)), limitations,
     status: suggestions.length ? 'ready' : 'unavailable',
   };
+}
+
+
+/** Bounded term/cash composition. Never changes locked vehicle or purchase inputs. */
+export function buildBudgetSuggestions({ dealInput = {}, targetValue, cashLimit, gridRates = {}, hasInputErrors = false }) {
+  const initial = { suggestions: [], status: 'empty', empty: true };
+  if (hasInputErrors) return { ...initial, empty: false, status: 'blocked', error: 'Correct the highlighted figures to compare payment and cash limits.' };
+  const scope = getPurchaseScope(dealInput);
+  if (!scope.supported) return { ...initial, empty: false, status: 'blocked', error: scope.reason };
+  for (const [label, value] of [['Payment limit', targetValue], ['Cash limit', cashLimit]]) {
+    const parsed = parseFinancialInput(value);
+    if (parsed.error) return { ...initial, empty: false, status: 'invalid', error: `${label}: ${parsed.error}` };
+    if (parsed.value === '') return initial;
+  }
+  try {
+    const result = calculateDeal(dealInput);
+    const currentStatus = getProposalStatus({ dealInput, result });
+    if (!result.isFinanced || !currentStatus.canExport) return {
+      ...initial, empty: false, status: 'blocked',
+      error: currentStatus.reasons.join(' ') || 'Select a complete financed purchase to compare payment and cash limits.',
+    };
+    const paymentCents = toCents(targetValue);
+    const cashCents = toCents(cashLimit);
+    // Validate every entered comparison rate before presenting any options.
+    const rates = RATE_GRID_DEFAULTS.termMonths.map(termMonths => {
+      const parsed = parseFinancialInput(gridRates[termMonths], { kind: 'rate', required: true });
+      if (parsed.error) throw new RangeError(`${termMonths}-month interest rate: ${parsed.error}`);
+      return { termMonths, apr: parsed.value };
+    });
+    const suggestions = [];
+    const add = (id, title, patch, previewDeal) => {
+      const candidate = { ...dealInput, ...patch };
+      if (!getPurchaseScope(candidate).supported || !getProposalStatus({ dealInput: candidate, result: previewDeal }).canExport
+        || previewDeal.cents.amountFinanced < 0 || previewDeal.cents.monthlyPayment > paymentCents
+        || (paymentCents === 0 && previewDeal.cents.amountFinanced !== 0)
+        || previewDeal.cents.dueAtSigning > cashCents) return;
+      suggestions.push({ id, title, patch, previewDeal, withinTarget: true,
+        interestDeltaCents: previewDeal.cents.totalInterest - result.cents.totalInterest });
+    };
+    add('budget-current', 'Current scenario', { termMonths: result.termMonths, apr: result.apr, cashDown: result.cashDown }, result);
+    for (const { termMonths, apr } of rates) {
+      const beforeCash = calculateDeal({ ...dealInput, termMonths, apr, cashDown: 0 });
+      const signingRoom = cashCents - beforeCash.cents.dueAtSigning;
+      if (signingRoom < 0) continue;
+      // A ceiling uses the calculated cent payment, including its rounding
+      // plateau. The exact-target inverse can demand unnecessary cash here.
+      // A zero-payment request must fully pay the balance; sub-cent monthly
+      // rounding must never make an unpaid principal look like a cash purchase.
+      let low = paymentCents === 0 ? beforeCash.cents.amountBeforeCashDown : 0;
+      let high = Math.min(maxInputCents, beforeCash.cents.amountBeforeCashDown, signingRoom);
+      const paymentAt = cash => calculatePayment({
+        principal: fromCents(beforeCash.cents.amountBeforeCashDown - cash), apr, termMonths,
+      }).cents.monthlyPayment;
+      if (high < low || paymentAt(high) > paymentCents) continue;
+      while (low < high) {
+        const middle = low + Math.floor((high - low) / 2);
+        if (paymentAt(middle) <= paymentCents) high = middle;
+        else low = middle + 1;
+      }
+      const cashDownCents = low;
+      const patch = { termMonths, apr, cashDown: fromCents(cashDownCents) };
+      if (suggestions.some(option => option.patch.termMonths === termMonths && option.patch.apr === apr && toCents(option.patch.cashDown) === cashDownCents)) continue;
+      add(`budget-${termMonths}`, `Payment + cash limits: ${termMonths} months`, patch, calculateDeal({ ...dealInput, ...patch }));
+    }
+    return { suggestions, empty: false, status: suggestions.length ? 'ready' : 'no-match' };
+  } catch (error) {
+    if (!(error instanceof RangeError || error instanceof TypeError)) throw error;
+    return { ...initial, empty: false, status: 'invalid', error: error.message };
+  }
 }

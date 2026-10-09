@@ -129,3 +129,70 @@ test('a date someone picked is kept at midnight, even when it makes the desk bla
   // Reset hands the date back to the calendar.
   assert.equal(deskReducer(state, { type: 'reset' }).dateChosen, false);
 });
+
+test('active and inactive grid rates edit assumptions only and expire Undo', () => {
+  const base = deskReducer(createDeskState('2026-09-24'), { type: 'field', field: 'salePrice', value: 30000 });
+  const adjusted = deskReducer(base, { type: 'apply', patch: { cashDown: 5393.95 }, label: 'Add cash down' });
+  for (const term of [72, 60]) {
+    const edited = deskReducer(adjusted, { type: 'rate', term, value: 8 });
+    assert.equal(edited.deal, adjusted.deal);
+    assert.equal(edited.deal.apr, 6.5);
+    assert.equal(calculateDeal(edited.deal).cents.monthlyPayment, calculateDeal(adjusted.deal).cents.monthlyPayment);
+    assert.equal(edited.gridRates[term], 8);
+    assert.equal(edited.lastRoll, null);
+  }
+  const worksheet = deskReducer(adjusted, { type: 'field', field: 'apr', value: 8 });
+  assert.equal(worksheet.deal.apr, 8);
+  assert.equal(worksheet.gridRates[72], 8);
+});
+
+test('grid application snapshots the preceding deal and comparison rates for one-step Undo', () => {
+  let base = deskReducer(createDeskState('2026-09-24'), { type: 'field', field: 'salePrice', value: 30000 });
+  base = deskReducer(base, { type: 'field', field: 'cashDown', value: 5393.95 });
+  base = deskReducer(base, { type: 'rate', term: 60, value: 8 });
+  base = deskReducer(base, { type: 'grid-visibility', open: true });
+  const patch = { termMonths: 60, apr: 7.75, cashDown: 1000.49 };
+  const applied = deskReducer(base, { type: 'grid', patch });
+  assert.equal(applied.lastRoll.label, 'Payment option applied');
+  assert.equal(applied.mobileGridOpen, false);
+  assert.deepEqual(applied.deal, { ...base.deal, ...patch });
+  assert.equal(calculateDeal(applied.deal).cents.monthlyPayment, calculateDeal({ ...base.deal, ...patch }).cents.monthlyPayment);
+  const undone = deskReducer(applied, { type: 'undo' });
+  assert.deepEqual(undone.deal, base.deal);
+  assert.deepEqual(undone.gridRates, base.gridRates);
+  assert.equal(undone.lastRoll, null);
+  assert.equal(deskReducer(undone, { type: 'undo' }), undone);
+  for (const action of [
+    { type: 'field', field: 'tradePayoff', value: 2000 },
+    { type: 'add-item' },
+    { type: 'item', index: 0, patch: { amount: 500 } },
+    { type: 'rate', term: 72, value: 7 },
+    { type: 'down', index: 1, value: 1000.01 },
+  ]) {
+    const edited = deskReducer(applied, action);
+    assert.equal(edited.lastRoll, null);
+    assert.equal(deskReducer(edited, { type: 'undo' }), edited);
+  }
+});
+
+
+test('a labeled cash switch clears financing down and Undo restores the preceding finance deal', () => {
+  const label = 'Cash purchase (financing down cleared)';
+  let base = deskReducer(createDeskState('2026-09-24'), { type: 'field', field: 'salePrice', value: 30000 });
+  base = deskReducer(base, { type: 'field', field: 'cashDown', value: 5393.95 });
+  const cash = deskReducer(base, { type: 'field', field: 'dealType', value: 'cash', label });
+  assert.equal(cash.deal.dealType, 'cash');
+  assert.equal(cash.deal.cashDown, 0);
+  assert.equal(cash.lastRoll.label, label);
+  const restored = deskReducer(cash, { type: 'undo' });
+  assert.deepEqual(restored.deal, base.deal);
+  assert.deepEqual(restored.gridRates, base.gridRates);
+  assert.equal(restored.lastRoll, null);
+  const zeroDown = deskReducer(base, { type: 'field', field: 'cashDown', value: 0 });
+  const unlabeled = deskReducer(zeroDown, { type: 'field', field: 'dealType', value: 'cash' });
+  assert.equal(unlabeled.deal.cashDown, 0);
+  assert.equal(unlabeled.lastRoll, null, 'main supplies the cash-switch label only for nonzero financing down');
+  const edited = deskReducer(cash, { type: 'field', field: 'tradePayoff', value: 2000 });
+  assert.equal(edited.lastRoll, null);
+  assert.equal(deskReducer(edited, { type: 'undo' }), edited);
+});

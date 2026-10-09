@@ -22,9 +22,10 @@
         <summary>Dealership website</summary>
         <form id="inventory-form" novalidate>
           <label for="dealership-site">Website or inventory page</label>
-          <input id="dealership-site" type="url" placeholder="https://www.yourdealership.com/" autocomplete="url" maxlength="1000" aria-describedby="inventory-permission-note">
+          <input id="dealership-site" type="url" placeholder="https://www.yourdealership.com/" autocomplete="url" maxlength="1000" aria-describedby="inventory-url-note inventory-permission-note">
+          <p id="inventory-url-note" class="source">Paste your dealership homepage or an unfiltered New/Used inventory page.</p>
           <label class="inventory-check"><input id="inventory-nightly" type="checkbox" checked> Refresh nightly while Chrome is running</label>
-          <p id="inventory-permission-note" class="source">Chrome will ask for access to this dealership website. The catalog stays on this computer. Some website platforms require a different connector.</p>
+          <p id="inventory-permission-note" class="source">Chrome will ask to read this dealership website, including its www or non-www version. The catalog stays in this browser; declining leaves the connection unchanged.</p>
           <button id="inventory-connect" class="primary" type="submit">Connect and refresh</button>
           <button id="inventory-disconnect" class="quiet" type="button" hidden>Disconnect and clear inventory</button>
         </form>

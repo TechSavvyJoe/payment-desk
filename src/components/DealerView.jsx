@@ -87,6 +87,7 @@ export default function DealerView({
                 onChange={(value) => updateField("dealType", value)}
                 options={[{ label: "Finance", value: "finance" }, { label: "Cash", value: "cash" }]} />
             </div>
+            {result.isFinanced && dealInput.cashDown > 0 ? <p className="purchase-type-note">Cash clears the {formatCurrency(dealInput.cashDown)} financing down payment. You can undo the switch.</p> : null}
           </DealSection>
           <DealSection id="trade-cash" className="deal-section--trade" title="Trade & cash" icon={TradeIcon}
             open={accordions.trade} onToggle={() => toggleAccordion("trade")} summary={result.isFinanced ? `${formatWholeCurrency(dealInput.cashDown)} down · ${equitySummary}` : equitySummary}>
@@ -187,7 +188,7 @@ export default function DealerView({
                   {categoryFor(item) === "other" ? (
                     <label className="product-name-label">
                       <span>Product name</span>
-                      <input aria-label={`Product name for add-on ${index + 1}`} className="text-input"
+                      <input id={`product-${item.id}-name`} aria-label={`Product name for add-on ${index + 1}`} className="text-input"
                         value={item.name} placeholder="Describe the product" type="text" maxLength={120}
                         onChange={(event) => updateItem(index, { name: event.target.value })} />
                     </label>

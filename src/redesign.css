@@ -3129,3 +3129,82 @@ input[type="checkbox"] { flex:0 0 auto; }
 }
 
 .calculator-shell:focus-visible { outline: 2px solid #0670e8; outline-offset: -2px; }
+
+/* Decision feedback stays beside the figures; keep the working pencil dense. */
+.worksheet-intro { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:6px 16px; }
+.worksheet-intro h1 { font-size:clamp(1.7rem,2.4vw,2.2rem); }
+.page-intro .worksheet-save { display:inline-flex; align-items:center; gap:6px; margin:7px 0 0; padding:5px 9px; border:1px solid #a6cdb8; border-radius:6px; background:var(--green-bg); color:#075b34; font-size:.75rem; font-weight:600; line-height:1.4; }
+.worksheet-save span { font-weight:800; }
+.page-intro .worksheet-save.needs-attention { color:#734600; background:#fff7df; border-color:#d2b368; }
+.estimate-ready { display:flex; align-items:center; gap:7px; margin:10px 16px; padding:7px 10px; border:1px solid #a6cdb8; border-radius:6px; color:#075b34; background:var(--green-bg); font-size:.8rem; font-weight:700; }
+.estimate-ready span { font-size:1rem; }
+.estimate-readiness__issue { padding-top:6px; }
+.estimate-readiness { border:1px solid #d2b368; background:#fff7df; color:#734600; }
+.estimate-readiness__issue p { margin:0; }
+.estimate-readiness__issue button { min-height:44px; padding:6px 0; border:0; background:transparent; color:#734600; font-weight:750; font-size:.85rem; text-align:left; text-decoration:underline; text-underline-offset:3px; }
+.estimate-applied { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 16px; padding:9px 10px; border:1px solid #8ba9d8; border-radius:6px; background:#edf4ff; color:var(--navy); font-size:.8rem; }
+.estimate-applied strong { display:block; }
+.estimate-applied small { display:block; margin-top:3px; color:#374b6e; font-size:.74rem; }
+.estimate-applied button,.adjust-payment-options { display:inline-flex; align-items:center; justify-content:center; gap:7px; flex:0 0 auto; min-height:44px; padding:8px 12px; border:1px solid #788dad; border-radius:6px; background:#fff; color:var(--navy); font:inherit; font-weight:700; }
+.estimate-applied button:hover,.adjust-payment-options:hover { background:var(--blue-tint); }
+.purchase-type-note { margin:0; padding:6px 16px 10px; color:#374b6e; font-size:.75rem; line-height:1.45; }
+.customer-actions .export-secondary { border:1px solid #788dad; background:#fff; color:var(--navy); box-shadow:none; }
+.customer-actions .export-secondary:hover { background:var(--blue-tint); }
+.customer-actions .export-secondary:disabled { background:var(--surface-alt); color:var(--muted); }
+.adjust-payment-options { margin-top:7px; font-size:.84rem; }
+.budget-setup { grid-column:1/-1; border-top:1px solid var(--line-strong); padding-top:10px; }
+.budget-toggle { min-height:44px; padding:6px 10px; color:var(--blue-dark); border:1px solid #8ba9d8; background:#f2f6ff; border-radius:6px; font-size:.84rem; font-weight:700; }
+.budget-toggle:hover { background:var(--blue-tint); }
+.budget-limit-setup { display:grid; grid-template-columns:minmax(240px,1fr) minmax(220px,1fr); align-items:start; gap:8px 20px; padding:12px 0 0; }
+.budget-limit-setup .target-input-row { grid-template-columns:minmax(0,1fr); }
+.budget-limit-setup .target-definition { margin:24px 0 0; }
+.budget-option__metrics { display:grid; grid-template-columns:1fr 1fr; }
+.budget-option__metrics div { min-width:0; }
+.budget-option__metrics dd { font-variant-numeric:tabular-nums; }
+.budget-qualification { grid-column:1/-1; margin:0; }
+.suggestion-interest { padding:8px 0 0; border-top:1px solid var(--line); margin-top:8px; }
+.suggestion-interest dd { font-size:.76rem; }
+.grid-current-reference { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 16px; padding:10px 16px; border-bottom:1px solid var(--line-strong); background:#edf4ff; color:var(--navy); font-size:.85rem; }
+.grid-current-reference p { margin:0; }
+.grid-current-reference strong { font-variant-numeric:tabular-nums; }
+.grid-readiness { margin:12px 16px; padding:10px 12px; border:1px solid #d2b368; border-radius:6px; background:#fff7df; color:#734600; font-size:.85rem; }
+.grid-readiness button { min-height:44px; padding:5px 0; background:transparent; border:0; color:inherit; font-weight:700; text-decoration:underline; }
+@media (max-width:800px) {
+  .worksheet-intro { margin:0; }
+  .page-intro .worksheet-save { display:none; }
+  .estimate-ready { margin:6px 12px; padding:5px 8px; font-size:.73rem; }
+  .estimate-applied { margin:7px 12px; }
+  .purchase-type-note { padding:5px 16px 8px; }
+  .budget-limit-setup { grid-template-columns:minmax(0,1fr); gap:6px; }
+  .budget-limit-setup .target-definition { margin:0; }
+  .grid-current-reference { padding:10px; font-size:.8rem; }
+}
+@media print {
+  .estimate-ready,.estimate-applied,.adjust-payment-options,.estimate-readiness__issue button,.worksheet-save { display:none!important; }
+}
+/* The two limits form one comparison. Keep both inputs and the result in view. */
+.target-setup.is-budget-mode { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.is-budget-mode .target-tabs { grid-column:1/-1; grid-row:1; }
+.is-budget-mode > .target-input-row { grid-column:1; grid-row:3; grid-template-columns:minmax(0,1fr) auto; }
+.is-budget-mode .budget-setup,.is-budget-mode .budget-limit-setup { display:contents; }
+.is-budget-mode .budget-toggle { grid-column:1/-1; grid-row:2; justify-self:start; }
+.is-budget-mode .budget-limit-setup .target-input-row { grid-column:2; grid-row:3; grid-template-columns:minmax(0,1fr); }
+.is-budget-mode .target-input-row label { min-height:23px; }
+.is-budget-mode .target-summary { grid-column:1/-1; grid-row:4; margin:0; }
+.is-budget-mode #budget-limit-help { grid-column:1/-1; grid-row:5; margin:0; }
+.is-budget-mode .target-current { grid-column:1/-1; grid-row:6; margin:0; }
+.budget-options { grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); }
+.budget-option__metrics { grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); }
+.budget-option__metrics div:nth-child(4) dd { color:var(--blue-dark); font-size:1.12rem; }
+@media (max-width:440px) {
+ .target-setup.is-budget-mode { grid-template-columns:minmax(0,1fr); }
+ .is-budget-mode > .target-input-row { grid-column:1; grid-row:3; }
+ .is-budget-mode .budget-limit-setup .target-input-row { grid-column:1; grid-row:4; }
+ .is-budget-mode .target-summary { grid-row:5; }
+ .is-budget-mode #budget-limit-help { grid-row:6; }
+ .is-budget-mode .target-current { grid-row:7; }
+}
+@media (prefers-reduced-motion:no-preference) {
+ .apply-button:active:not(:disabled),.estimate-review:active,.estimate-compare:active,.share-button:active:not(:disabled),.budget-toggle:active { transform:translateY(1px); box-shadow:none; }
+}
+.suggestion-list.budget-options > .budget-option:only-of-type { grid-column:1/-1; }
