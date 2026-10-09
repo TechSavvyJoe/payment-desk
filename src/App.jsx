@@ -295,6 +295,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     const switchingType = targetType !== 'payment';
     const invalidExisting = !switchingType && Boolean(fieldErrors['target-value']);
     const needsSeed = targetValues.payment === '' && !invalidExisting;
+    if (switchingType || needsSeed) dispatch({ type: 'expire-undo' });
     if (switchingType || needsSeed) clearTargetDraft();
     setTargetType('payment');
     if (needsSeed) setTargetValues(current => ({ ...current, payment: value }));
@@ -303,7 +304,10 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   };
   const targetProps = {
     targetType, targetValues, gridRates, lastRoll, targetInputRef, targetInputRevision, hasInputErrors, canCompare,
-    onTargetTypeChange: changeTargetType,
+    onTargetTypeChange: next => {
+      if (next !== targetType) dispatch({ type: 'expire-undo' });
+      changeTargetType(next);
+    },
     onTargetValueChange: (type, value) => setTargetValues(current => ({ ...current, [type]: value })),
     cashLimit: targetValues.cashLimit,
     onCashLimitChange: value => setTargetValues(current => ({ ...current, cashLimit: value })),

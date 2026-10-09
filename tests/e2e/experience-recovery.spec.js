@@ -74,6 +74,50 @@ test('cash switching explains the cleared down payment and can undo the entire s
   await expect(page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: 'Payment', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('a user target-mode change expires grid Undo and keeps the applied figures', async ({ page }) => {
+  await page.locator('#target-value').fill('450');
+  await page.locator('#target-value').blur();
+  await (page.viewportSize().width <= 800 ? page.locator('#mobile-grid-trigger') : page.locator('.grid-jump')).click();
+  await page.getByRole('button', { name: /Use 60 months.*2,000.*down/ }).filter({ visible: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  // Returning to the existing payment target only focuses it; Undo stays.
+  await summary(page).getByRole('button', { name: 'Set payment target', exact: true }).click();
+  await expect(page.locator('#target-value')).toHaveValue('450');
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  await page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: 'Out-the-door', exact: true }).click();
+  await expect(page.locator('#target-value')).toHaveAttribute('aria-label', 'Target out-the-door total');
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toHaveCount(0);
+  await expect(summary(page).locator('.estimate-applied')).toHaveCount(0);
+  await expect(page.locator('#cash-down')).toHaveValue('2,000');
+  await expect(page.getByRole('group', { name: 'Loan term', exact: true }).getByRole('button', { name: '60', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('seeding a blank payment target expires grid Undo without changing the deal', async ({ page }) => {
+  await (page.viewportSize().width <= 800 ? page.locator('#mobile-grid-trigger') : page.locator('.grid-jump')).click();
+  await page.getByRole('button', { name: /Use 60 months.*2,000.*down/ }).filter({ visible: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  const amount = await summary(page).locator('.payment-number strong').innerText();
+  await summary(page).getByRole('button', { name: 'Set payment target', exact: true }).click();
+  await expect(page.locator('#target-value')).toBeFocused();
+  await expect(page.locator('#target-value')).toHaveValue(amount.replace(/[$,]/g, ''));
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toHaveCount(0);
+  await expect(page.locator('#cash-down')).toHaveValue('2,000');
+  await expect(summary(page).locator('.payment-number strong')).toHaveText(amount);
+});
+
+test('the shortcut changes target mode and expires a later grid adjustment', async ({ page }) => {
+  await page.locator('#target-value').fill('450');
+  await page.locator('#target-value').blur();
+  await page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: 'Loan balance', exact: true }).click();
+  await (page.viewportSize().width <= 800 ? page.locator('#mobile-grid-trigger') : page.locator('.grid-jump')).click();
+  await page.getByRole('button', { name: /Use 60 months.*2,000.*down/ }).filter({ visible: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toBeVisible();
+  await summary(page).getByRole('button', { name: 'Set payment target', exact: true }).click();
+  await expect(page.locator('#target-value')).toHaveValue('450');
+  await expect(page.getByRole('button', { name: 'Undo adjustment', exact: true })).toHaveCount(0);
+  await expect(page.locator('#cash-down')).toHaveValue('2,000');
+});
+
 test('customer alternatives open the guarded grid without changing the quote', async ({ page }) => {
   await page.locator('#cash-down').fill('1000.49');
   await page.locator('#cash-down').blur();
