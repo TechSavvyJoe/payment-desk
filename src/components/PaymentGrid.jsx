@@ -58,6 +58,11 @@ export default function PaymentGrid({
   const isUnavailable = (cell) => !cell.status.canExport;
   const allBlocked = !grid.rows.some((row) => row.cells.some((cell) => !isUnavailable(cell)));
   const blockedReason = grid.rows[0]?.cells[0]?.status.reasons[0] ?? result.incompleteReasons?.[0] ?? "Complete the worksheet before selecting a payment.";
+  const blockedIssue = grid.rows[0]?.cells[0]?.status.issues.find(issue => issue.fieldId);
+  const recoveryFieldId = blockedIssue?.fieldId === 'cash-down' && result.amountBeforeCashDown >= 0
+    && grid.rows[0].cells[0].cashDown > result.amountBeforeCashDown
+    ? 'grid-down-0'
+    : blockedIssue?.fieldId ?? getProposalStatus({ dealInput, result, hasInputErrors }).issues.find(issue => issue.fieldId)?.fieldId ?? 'estimate-date';
   const isStarting = !(result.salePrice > 0) && !hasInputErrors;
   const apply = (cell) => !isUnavailable(cell) && onApplyScenario({
     termMonths: cell.termMonths,
@@ -102,7 +107,7 @@ export default function PaymentGrid({
       {!isStarting && allBlocked ? <div className="grid-readiness" role="status">
         <strong>No comparison is ready to apply</strong>
         <p>{blockedReason}</p>
-        {onRepairEstimate ? <button className="grid-repair-button" type="button" onClick={onRepairEstimate}>Review worksheet<ArrowIcon size={18} /></button> : null}
+        {onRepairEstimate ? <button className="grid-repair-button" type="button" onClick={() => onRepairEstimate(recoveryFieldId)}>Review worksheet<ArrowIcon size={18} /></button> : null}
       </div> : null}
 
       {!isMobile && !isStarting ? <div className="desktop-rate-grid">

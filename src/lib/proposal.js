@@ -14,6 +14,7 @@ const productName = (item, index) => item.category === "service-contract"
 
 export function getProposalStatus({ dealInput = {}, result, hasInputErrors = false }) {
   const reasons = [];
+  const productIssues = [];
   if (hasInputErrors) reasons.push("Correct the highlighted input errors before creating a proposal.");
   if (!(result.salePrice > 0) && result.isComplete !== false) reasons.push("Enter a selling price before creating a proposal.");
   if (result.isComplete === false) reasons.push(...(result.incompleteReasons?.length ? result.incompleteReasons : ["Complete the required deal information."]));
@@ -22,10 +23,14 @@ export function getProposalStatus({ dealInput = {}, result, hasInputErrors = fal
   }
   for (const [index, item] of (dealInput.optionalItems ?? []).entries()) {
     if (Number(item.amount) > 0 && !["service-contract", "gap"].includes(item.category) && !item.name?.trim()) {
-      reasons.push(`Name product or add-on ${index + 1} before creating a proposal.`);
+      const reason = `Name product or add-on ${index + 1} before creating a proposal.`;
+      reasons.push(reason);
+      productIssues.push({ reason, fieldId: `product-${item.id}-name`, actionLabel: `Name product ${index + 1}` });
     }
     if (Number(item.amount) > 0 && item.category === "other" && item.taxTreatmentConfirmed !== true) {
-      reasons.push(`Choose Taxable or Not taxable for ${productName(item, index)} before creating a proposal.`);
+      const reason = `Choose Taxable or Not taxable for ${productName(item, index)} before creating a proposal.`;
+      reasons.push(reason);
+      productIssues.push({ reason, fieldId: `${item.id}-tax-treatment`, actionLabel: `Review product ${index + 1} tax` });
     }
   }
   if (result.isFinanced && result.amountFinanced < 0) reasons.push("Credits exceed the financed balance. Adjust the deal before creating a proposal.");
@@ -33,7 +38,9 @@ export function getProposalStatus({ dealInput = {}, result, hasInputErrors = fal
   const uniqueReasons = [...new Set(reasons)];
   // Recovery is presentation metadata attached to the existing export reasons.
   // It never decides whether a financial estimate is valid.
-  const issues = uniqueReasons.map(reason => {
+  const issues = uniqueReasons.flatMap(reason => {
+    const matchingProductIssues = productIssues.filter(issue => issue.reason === reason);
+    if (matchingProductIssues.length) return matchingProductIssues;
     let fieldId, actionLabel;
     if (reason === "Correct the highlighted input errors before creating a proposal.") {
       fieldId = 'first-error'; actionLabel = 'Correct inputs';
@@ -44,14 +51,7 @@ export function getProposalStatus({ dealInput = {}, result, hasInputErrors = fal
     } else if (reason.startsWith('Credits exceed')) {
       fieldId = 'cash-down'; actionLabel = 'Review cash and trade';
     }
-    for (const [index, item] of (dealInput.optionalItems ?? []).entries()) {
-      if (reason === `Name product or add-on ${index + 1} before creating a proposal.`) {
-        fieldId = `product-${item.id}-name`; actionLabel = `Name product ${index + 1}`;
-      } else if (reason === `Choose Taxable or Not taxable for ${productName(item, index)} before creating a proposal.`) {
-        fieldId = `${item.id}-tax-treatment`; actionLabel = `Review product ${index + 1} tax`;
-      }
-    }
-    return { reason, ...(fieldId ? { fieldId, actionLabel } : {}) };
+    return [{ reason, ...(fieldId ? { fieldId, actionLabel } : {}) }];
   });
   return { canExport: uniqueReasons.length === 0, reasons: uniqueReasons, issues };
 }

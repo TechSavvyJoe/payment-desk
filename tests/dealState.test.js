@@ -196,3 +196,19 @@ test('a labeled cash switch clears financing down and Undo restores the precedin
   assert.equal(edited.lastRoll, null);
   assert.equal(deskReducer(edited, { type: 'undo' }), edited);
 });
+
+test('Cash Undo snapshots its target mode and raw edits expire Undo without changing committed figures', () => {
+  let base = deskReducer(createDeskState('2026-09-24'), { type: 'field', field: 'salePrice', value: 30000 });
+  base = deskReducer(base, { type: 'field', field: 'cashDown', value: 2000 });
+  for (const undoTargetType of ['payment', 'outTheDoor', 'amountFinanced']) {
+    const cash = deskReducer(base, { type: 'field', field: 'dealType', value: 'cash', label: 'Cash', undoTargetType });
+    assert.equal(cash.lastRoll.targetType, undoTargetType);
+    assert.deepEqual(deskReducer(cash, { type: 'undo' }).deal, base.deal);
+    const edited = deskReducer(cash, { type: 'expire-undo' });
+    assert.equal(edited.deal, cash.deal);
+    assert.equal(edited.gridRates, cash.gridRates);
+    assert.equal(edited.lastRoll, null);
+    assert.equal(deskReducer(edited, { type: 'undo' }), edited);
+    assert.equal(deskReducer(edited, { type: 'expire-undo' }), edited);
+  }
+});

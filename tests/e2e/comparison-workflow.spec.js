@@ -79,6 +79,72 @@ test('valid candidates repair current excess cash but negative candidate balance
   await expect(payment(page)).toHaveText('$540.67');
 });
 
+test('an otherwise valid worksheet recovers excessive grid cash at the offending column', async ({ page }) => {
+  await openGrid(page);
+  for (let index = 0; index < 4; index += 1) {
+    await page.locator(`#grid-down-${index}`).fill('40000');
+    await page.locator(`#grid-down-${index}`).blur();
+  }
+  await expect(page.locator('#payment-grid button[aria-label^="Use "]:enabled')).toHaveCount(0);
+  await page.locator('.grid-readiness').getByRole('button', { name: 'Review worksheet', exact: true }).click();
+  await expect(page.locator('#grid-down-0')).toBeFocused();
+  await expect(page.locator('#payment-grid')).toBeVisible();
+  await page.locator('#grid-down-0').fill('0');
+  await page.locator('#grid-down-0').blur();
+  await expect(option(page, 72, '0')).toBeEnabled();
+});
+
+for (const [label, value] of [['Out-the-door', '31000'], ['Loan balance', '25000']]) {
+  test(`Cash Undo restores the ${label} target workflow and its value`, async ({ page }) => {
+    await page.getByLabel('Cash down', { exact: true }).fill('2000');
+    await page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: label, exact: true }).click();
+    await page.locator('#target-value').fill(value);
+    await page.locator('#target-value').blur();
+    await page.getByRole('group', { name: 'Purchase type', exact: true }).getByRole('button', { name: 'Cash', exact: true }).click();
+    await undo(page).click();
+    await expect(page.getByRole('group', { name: 'Target type', exact: true }).getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#target-value')).toHaveValue(Number(value).toLocaleString('en-US'));
+    await expect(page.getByLabel('Cash down', { exact: true })).toHaveValue('2,000');
+  });
+}
+
+for (const flow of ['grid', 'cash']) {
+  for (const field of ['sale-price', 'target-value']) {
+    test(`${flow} Undo expires immediately when ${field} receives invalid typing`, async ({ page }) => {
+      if (flow === 'grid') { await openGrid(page); await option(page, 60, '2,000').click(); }
+      else {
+        await page.getByLabel('Cash down', { exact: true }).fill('2000');
+        await page.getByRole('group', { name: 'Purchase type', exact: true }).getByRole('button', { name: 'Cash', exact: true }).click();
+      }
+      await expect(undo(page)).toBeVisible();
+      const before = await payment(page).innerText();
+      await page.locator(`#${field}`).fill('bad');
+      await expect(page.locator(`#${field}`)).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByRole('button', { name: /Undo/ }).filter({ visible: true })).toHaveCount(0);
+      await expect(payment(page)).toHaveText(before);
+      await expect(page.locator(`#${field}`)).toHaveValue('bad');
+    });
+  }
+}
+
+test('invalid comparison rate and date drafts expire the pending adjustment', async ({ page }) => {
+  await openGrid(page);
+  await option(page, 60, '2,000').click();
+  await expect(undo(page)).toBeVisible();
+  await openGrid(page);
+  await page.locator('#grid-apr-60').fill('6.123');
+  await expect(page.locator('#grid-apr-60')).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('button', { name: /Undo/, includeHidden: true })).toHaveCount(0);
+  await page.locator('#grid-apr-60').fill('6');
+  await page.locator('#grid-apr-60').blur();
+  await option(page, 72, '1,000').click();
+  await expect(undo(page)).toBeVisible();
+  await page.locator('details.deal-details > summary').click();
+  await page.getByLabel('Estimate date', { exact: true }).fill('invalid');
+  await expect(page.getByLabel('Estimate date', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('button', { name: /Undo/, includeHidden: true })).toHaveCount(0);
+});
+
 for (const cash of ['1000.01', '1000.49']) {
   test(`current custom cash stays referenced and visible option cash retains ${cash}`, async ({ page }, testInfo) => {
     await page.getByLabel('Cash down', { exact: true }).fill('5393.95');

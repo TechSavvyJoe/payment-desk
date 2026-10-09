@@ -79,7 +79,7 @@ test('refresh restores the worksheet, products, grid and target; Reset clears th
   await expect(page.locator('#cash-down')).toHaveValue('2,500');
   await expect(page.locator('#trade-allowance')).toHaveValue('8,000');
   await expect(page.locator('#trade-payoff')).toHaveValue('3,000');
-  await expect(page.locator('#apr')).toHaveValue('5.75');
+  await expect(page.locator('#apr')).toHaveValue('6.00'); // Comparison edits do not change the active deal rate.
   await expect(page.locator('#target-value')).toHaveValue('450');
   await expect(page.getByLabel('Accessories amount')).toHaveValue('750');
   await expect(page.getByLabel('Tax treatment for Accessories')).toHaveValue('not-taxable');
@@ -227,12 +227,14 @@ for (const blockedRemoval of [false, true]) {
     await expect(page.getByRole('alert')).toContainText('A worksheet draft may be saved on this device');
     await page.getByRole('button', { name: 'Reset deal', exact: true }).click();
     await expect(page.locator('#sale-price')).toHaveValue('');
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('alert').filter({ hasText: 'Something went wrong' })).toHaveCount(0);
     if (blockedRemoval) {
+      await expect(page.getByRole('alert')).toContainText('This worksheet has not been saved.');
       await expect(page.locator('.app-footer')).toContainText('Draft could not be saved');
       expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk.deal.salePrice, LEGACY_KEY)).toBe(30000);
       expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).discarded, KEY)).toBe(true);
     } else {
+      await expect(page.getByRole('alert')).toHaveCount(0);
       await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.discarded ?? (localStorage.getItem(key) === null), KEY)).toBe(true);
       await page.reload();
       await expect(page.locator('#sale-price')).toHaveValue('');

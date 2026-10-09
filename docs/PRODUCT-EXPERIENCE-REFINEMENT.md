@@ -7,7 +7,7 @@ The working pencil keeps its navy identity, raised worksheet cards, local data a
 - A summary shortcut preserves an existing customer payment target, including unfinished invalid typing.
 - Missing-field warnings return directly to the relevant product name, tax choice, registration estimate or erroneous input. Proposal/export guards still make the validity decision.
 - Grid rate edits are comparison assumptions. Selecting a candidate commits its exact term/rate/cash only if that resulting proposal passes the same guards used for exports. A valid candidate can repair excessive current cash down.
-- Grid selection and a Cash switch with nonzero financing down expose the existing one-step Undo. A later edit expires it. The Cash calculation still clears financing down; Undo restores the prior financing deal.
+- Grid selection and a Cash switch with nonzero financing down expose the existing one-step Undo. Any subsequent numeric draft edit, including invalid typing, expires it. The Cash calculation still clears financing down; Undo restores the prior financing deal and selected target mode.
 - Payment + cash limits enumerates the existing allowed terms at entered rate assumptions. It fixes vehicle price, trade, products and fees, and constrains the calculated monthly payment and all cash due at signing. Upfront negative equity counts toward the cash ceiling. Apply is explicit.
 - Term decisions show calculated total interest and its signed change, using cent outputs rather than rounded monthly payment times term. Rate assumptions and lender-confirmation boundaries remain visible.
 - Customer payment alternatives lead directly to the guarded grid. Actual PDF sharing remains distinct from copying text, and secondary export buttons have quieter styling.
@@ -28,6 +28,8 @@ Reference: generated desktop/narrow concept, then actual local captures at 1440,
 | Decision controls | Real minimum-height controls, keyboard focus and explicit Apply/Undo remain; small mockup controls were not copied. |
 | Readiness and recovery | Pair colored surfaces with text and an action; success means ready for customer review, never lender approval. |
 | Financial text | Use actual calculated cents. Invented concept example amounts are not copied into the application. |
+
+On phones, the Ready badge shares the existing payment-label row so complete estimates retain the original slim-card height budgets. Required corrections and active Undo still receive visible space. Duplicate product names retain separate recovery identities; a blocked grid points to its candidate's offending input rather than an unrelated valid worksheet field.
 
 Apple's [Layout](https://developer.apple.com/design/human-interface-guidelines/layout) and [Feedback](https://developer.apple.com/design/human-interface-guidelines/feedback) guidance informed grouping and nearby action feedback. The [VinSolutions product sheet](https://www.vinsolutions.com/choose/wp-content/uploads/sites/3/2023/12/2024-VinSolutions-Desking-Product-Slick.pdf) supports the value of explicit scenario comparison. These references do not confer endorsement or vendor integration access.
 

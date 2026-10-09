@@ -2967,7 +2967,8 @@ input[type="checkbox"] { flex:0 0 auto; }
    readers and focus jumps; the payment card is slim until Details is opened. */
 @media screen and (max-width: 800px) {
   .page-intro:not(.page-intro--customer),
-  .page-intro:not(.page-intro--customer) > * {
+  .page-intro:not(.page-intro--customer) > *,
+  .page-intro:not(.page-intro--customer) h1 {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -3138,6 +3139,7 @@ input[type="checkbox"] { flex:0 0 auto; }
 .page-intro .worksheet-save.needs-attention { color:#734600; background:#fff7df; border-color:#d2b368; }
 .estimate-ready { display:flex; align-items:center; gap:7px; margin:10px 16px; padding:7px 10px; border:1px solid #a6cdb8; border-radius:6px; color:#075b34; background:var(--green-bg); font-size:.8rem; font-weight:700; }
 .estimate-ready span { font-size:1rem; }
+.estimate-ready-badge { flex:0 0 auto; padding:1px 4px; border:1px solid #a6cdb8; border-radius:4px; color:#075b34; background:var(--green-bg); font-size:.625rem; font-weight:700; line-height:1; white-space:nowrap; }
 .estimate-readiness__issue { padding-top:6px; }
 .estimate-readiness { border:1px solid #d2b368; background:#fff7df; color:#734600; }
 .estimate-readiness__issue p { margin:0; }
@@ -3172,6 +3174,7 @@ input[type="checkbox"] { flex:0 0 auto; }
 @media (max-width:800px) {
   .worksheet-intro { margin:0; }
   .page-intro .worksheet-save { display:none; }
+  .mobile-results .results-payment__label-row { gap:6px; }
   .estimate-ready { margin:6px 12px; padding:5px 8px; font-size:.73rem; }
   .estimate-applied { margin:7px 12px; }
   .purchase-type-note { padding:5px 16px 8px; }

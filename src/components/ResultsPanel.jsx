@@ -29,7 +29,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
       {summary.hasCashCredit ? <BreakdownRow label="Customer credit" value={money(summary.customerCredit)} /> : null}
     </section>
   ) : null;
-  const warning = !isStarting && !customer ? <EstimateReadiness summary={summary} onRepair={onRepairEstimate} showReady /> : null;
+  const warning = !isStarting && !customer ? <EstimateReadiness summary={summary} onRepair={onRepairEstimate} showReady={!compact} /> : null;
   const applied = lastRoll && onUndoRoll ? <div className="estimate-applied" role="status"><span><strong>{lastRoll.label}</strong><small>Undo is available until your next edit.</small></span><button type="button" onClick={onUndoRoll}>Undo</button></div> : null;
   const breakdown = !customer && !isStarting ? (
     <details className="deal-breakdown">
@@ -48,7 +48,7 @@ export default function ResultsPanel({ dealInput, result, customer = false, comp
   return (
     <aside className={"results-panel" + (customer ? " results-panel--customer" : "") + (isStarting ? " results-panel--starting" : "")} aria-label={customer ? "Selected estimate summary" : "Current estimate summary"}>
       <section className="results-payment">
-        <div className="results-payment__label-row"><h2>{summary.headline}</h2></div>
+        <div className="results-payment__label-row"><h2>{summary.headline}</h2>{compact && !customer && summary.canExport ? <span aria-label="Ready for customer review" className="estimate-ready-badge" role="status">Ready</span> : null}</div>
         <div className={"payment-number" + (summary.isFinanced ? "" : " payment-number--cash")}>
           <strong>{isStarting ? "—" : money(summary.headlineAmount)}</strong>
           {summary.isFinanced && !isStarting ? <span className="payment-number__suffix">/mo</span> : null}

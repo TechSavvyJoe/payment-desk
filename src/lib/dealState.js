@@ -47,11 +47,12 @@ export function hasDealEdits(state) {
     || JSON.stringify(state.gridDownPayments) !== JSON.stringify(baseline.gridDownPayments);
 }
 
-function withPatch(state, patch, label) {
+function withPatch(state, patch, label, undoTargetType) {
   const normalized = normalizeDealPatch(patch);
   const deal = { ...state.deal, ...normalized };
   const gridRates = normalized.apr !== undefined ? { ...state.gridRates, [deal.termMonths]: deal.apr } : state.gridRates;
-  return { ...state, deal, gridRates, lastRoll: label ? { deal: state.deal, gridRates: state.gridRates, label } : null };
+  return { ...state, deal, gridRates, lastRoll: label ? { deal: state.deal, gridRates: state.gridRates, label,
+    ...(undoTargetType ? { targetType: undoTargetType } : {}) } : null };
 }
 
 /** Every mutation passes here. An undo expires as soon as a subsequent edit occurs. */
@@ -62,7 +63,7 @@ export function deskReducer(state, action) {
       const patch = { [action.field]: action.value };
       if (action.field === 'termMonths') patch.apr = state.gridRates[action.value] ?? state.deal.apr;
       if (action.field === 'dealType' && action.value === 'cash') patch.cashDown = 0;
-      return { ...withPatch(state, patch, action.label), mobileGridOpen: action.field === 'dealType' ? false : state.mobileGridOpen };
+      return { ...withPatch(state, patch, action.label, action.undoTargetType), mobileGridOpen: action.field === 'dealType' ? false : state.mobileGridOpen };
     }
     case 'apply': return withPatch(state, action.patch, action.label);
     case 'grid': return { ...withPatch(state, action.patch, action.label ?? 'Payment option applied'), mobileGridOpen: false };
@@ -88,6 +89,7 @@ export function deskReducer(state, action) {
     }
     case 'remove-item': return { ...state, lastRoll: null, deal: { ...state.deal, optionalItems: state.deal.optionalItems.filter((_, index) => index !== action.index) } };
     case 'undo': return state.lastRoll ? { ...state, deal: state.lastRoll.deal, gridRates: state.lastRoll.gridRates, lastRoll: null } : state;
+    case 'expire-undo': return state.lastRoll ? { ...state, lastRoll: null } : state;
     case 'view': return { ...state, view: action.view, mobileGridOpen: false };
     case 'grid-visibility': return { ...state, mobileGridOpen: action.open && state.view === 'dealer' && state.deal.dealType === 'finance' };
     case 'reset': return { ...createDeskState(), resetCount: state.resetCount + 1 };

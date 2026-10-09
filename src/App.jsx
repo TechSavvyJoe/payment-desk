@@ -66,6 +66,8 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const draftSaved = draftStatus === 'saved';
   const rememberInput = useCallback((id, raw) => {
     if (!isDeskDraftField(id)) return;
+    // Invalid typing is still an edit even when no new number can be committed.
+    dispatch({ type: 'expire-undo' });
     setInputDrafts(current => {
       if (isBaselineDeskInput(id, raw, state.startDate)) {
         if (!(id in current)) return current;
@@ -227,12 +229,14 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   };
   const updateField = (field, value) => {
     if (field === 'dealType') changeTargetType(value === 'cash' ? 'cashDue' : 'payment');
-    dispatch({ type: 'field', field, value, label: field === 'dealType' && value === 'cash' && deal.cashDown > 0 ? 'Cash purchase (financing down cleared)' : undefined });
+    dispatch({ type: 'field', field, value, undoTargetType: targetType,
+      label: field === 'dealType' && value === 'cash' && deal.cashDown > 0 ? 'Cash purchase (financing down cleared)' : undefined });
   };
   const undoAdjustment = () => {
     if (!lastRoll) return;
-    if (lastRoll.deal.dealType === 'cash' && targetType !== 'cashDue' && targetType !== 'outTheDoor') changeTargetType('cashDue');
-    if (lastRoll.deal.dealType === 'finance' && targetType === 'cashDue') changeTargetType('payment');
+    if (lastRoll.targetType) changeTargetType(lastRoll.targetType);
+    else if (lastRoll.deal.dealType === 'cash' && targetType !== 'cashDue' && targetType !== 'outTheDoor') changeTargetType('cashDue');
+    else if (lastRoll.deal.dealType === 'finance' && targetType === 'cashDue') changeTargetType('payment');
     dispatch({ type: 'undo' });
   };
   const changeView = next => {
@@ -394,7 +398,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
           }}
           onMobileClose={closeGrid} onDownPaymentChange={(index, value) => dispatch({ type: 'down', index, value })}
           onRateChange={(term, value) => dispatch({ type: 'rate', term, value })}
-          rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onRepairEstimate={() => repairEstimate(getProposalStatus({ dealInput, result, hasInputErrors }).issues.find(issue => issue.fieldId)?.fieldId || 'first-error')} onStartEstimate={summaryProps.onStartEstimate} /> : null}
+          rates={gridRates} result={result} mobileOpen={mobileGridOpen} hasInputErrors={hasInputErrors} canCompare={canCompare} onRepairEstimate={repairEstimate} onStartEstimate={summaryProps.onStartEstimate} /> : null}
         <footer className="app-footer">
           <p>Estimates only. Subject to lender approval and final taxes, fees, and deal structure.</p>
           <p>{draftStatus === 'conflict' ? 'Another tab changed the saved draft. This worksheet has not been saved. Copy or print it, then reload to open the latest draft.'
