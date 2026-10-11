@@ -21,12 +21,13 @@ export default function InventoryPicker({ onClose, onChoose }) {
   useEffect(() => { if (!dialog.current.open) dialog.current.showModal(); }, []);
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
-      readCompanionInventory({ query, condition, includeOld, offset, revision: offset > 0 ? revision.current : undefined }).then(page => {
+      readCompanionInventory({ query, condition, includeOld, offset, revision: offset > 0 ? revision.current : undefined }, { signal: controller.signal }).then(page => {
         if (!cancelled) { revision.current = page.revision; setCatalog(page); setLoading(false); }
       }, failure => { if (!cancelled) { setError(failure.message); setLoading(false); } });
     }, 150);
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => { cancelled = true; clearTimeout(timer); controller.abort(); };
   }, [query, condition, includeOld, offset, reload]);
   const changeFilter = (setter, value) => { revision.current = null; setter(value); setOffset(0); setLoading(true); setError(''); };
   const choose = vehicle => {

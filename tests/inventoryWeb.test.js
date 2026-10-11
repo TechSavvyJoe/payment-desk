@@ -110,7 +110,7 @@ test('native catalog callbacks preserve sender checks and report storage failure
   assert.equal(JSON.stringify(response).includes('private'), false);
   assert.deepEqual(await read(internal, { id: 'companion', url: runtime.getURL('desk/index.html') }), response);
   failure = true;
-  const failed = { ok: false, error: 'The saved inventory could not be read.' };
+  const failed = { ok: false, code: 'storage_unavailable', error: 'The saved inventory could not be read from Chrome storage.' };
   assert.deepEqual(await read(external, sender), failed);
   throws = true;
   assert.deepEqual(await read(external, sender), failed);

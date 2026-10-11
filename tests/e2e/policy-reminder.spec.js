@@ -14,7 +14,7 @@ async function openOn(page, isoDate) {
 
 test('the reminder stays hidden through November 30', async ({ page }) => {
   await openOn(page, '2026-11-30');
-  await expect(page.getByRole('heading', { name: 'Build the deal. See the payment.' })).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Current worksheet' })).toBeAttached();
   await expect(reminder(page)).toHaveCount(0);
   await expect(page.getByText('Tax and fee rules are reviewed through')).toHaveCount(0);
 });

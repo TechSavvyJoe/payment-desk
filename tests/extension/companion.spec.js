@@ -108,6 +108,28 @@ test('laptop panel keeps a readable estimate and initial deal inputs above its f
   expect(metrics.overflow).toBe(false);
 });
 
+test('named worksheets survive a panel reload and restore into a reset worksheet', async () => {
+  const page = await openPanelDocument(450, 800);
+  const desk = page.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('25000');
+  await desk.getByLabel('Cash down', { exact: true }).fill('1500');
+  await desk.getByRole('button', { name: 'Save worksheet', exact: true }).click();
+  const saved = desk.getByRole('dialog', { name: 'Saved worksheets' });
+  await saved.getByRole('textbox', { name: 'Worksheet name', exact: true }).fill('Panel alternative');
+  await saved.getByRole('button', { name: 'Save a copy', exact: true }).click();
+  await expect(saved.getByRole('heading', { name: 'Panel alternative', exact: true })).toBeVisible();
+  await saved.getByRole('button', { name: 'Close', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await desk.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  await expect(desk.locator('#sale-price')).toHaveValue('');
+  await page.reload();
+  await expect(desk.locator('#sale-price')).toHaveValue('');
+  await desk.getByRole('button', { name: 'Saved worksheets', exact: true }).click();
+  await saved.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(desk.locator('#sale-price')).toHaveValue('25,000');
+  await expect(desk.getByLabel('Cash down', { exact: true })).toHaveValue('1,500');
+});
+
 // Native panels are page targets outside Playwright's tab inventory. Use CDP for
 // the real toolbar/panel test; the other cases use the identical panel document.
 const attachNativePanel = async (browserSession, targetId) => {
@@ -429,7 +451,10 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
   let settings = desk.getByRole('dialog', { name: 'Dealership settings' });
   await settings.getByLabel('Dealership name').fill('Lakeside Motors');
   await settings.getByRole('textbox', { name: 'Document fee', exact: true }).fill('200');
-  await settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true }).fill('125.50');
+  const crvFee = settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true });
+  await crvFee.fill('35');
+  await expect(crvFee).toHaveAttribute('aria-invalid', 'true');
+  await crvFee.fill('30.50');
   await settings.getByRole('button', { name: 'Save', exact: true }).click();
   await desk.locator('#sale-price').fill('30000');
   panel.on('dialog', dialog => dialog.accept());
@@ -440,7 +465,7 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
   settings = desk.getByRole('dialog', { name: 'Dealership settings' });
   await expect(settings.getByLabel('Dealership name')).toHaveValue('Lakeside Motors');
   await expect(settings.getByRole('textbox', { name: 'Document fee', exact: true })).toHaveValue('200');
-  await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('125.5');
+  await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('30.5');
   const frame = panel.frames().find(frame => frame.url().endsWith('/desk/index.html'));
   const saved = await frame.evaluate(({ key, legacy }) => ({
     keys: Object.keys(localStorage).sort(), marker: JSON.parse(localStorage.getItem(key)), legacy: localStorage.getItem(legacy),

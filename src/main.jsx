@@ -7,6 +7,7 @@ import "@fontsource/ibm-plex-sans/latin-500.css";
 import "@fontsource/ibm-plex-sans/latin-600.css";
 import "@fontsource/ibm-plex-sans/latin-700.css";
 import "./redesign.css";
+import "./worksheet-library.css";
 import "./customer-print.css";
 import { createDeskDraftSession } from './lib/deskDraft.js';
 

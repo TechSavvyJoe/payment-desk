@@ -61,3 +61,12 @@ References: [W3C form instructions](https://www.w3.org/WAI/tutorials/forms/instr
 Keep readiness, applied-action/Undo and save status beside the affected figures. Green means ready for customer review; it never means approved financing. Repairable warnings use a labeled field action and preserve every other entered value. Secondary PDF download/copy actions remain distinct from native Share PDF.
 
 The payment/cash comparison uses two aligned limits above the options, stacking below 441px. Use calculated cent outputs for payment, signing cash and estimated interest. A single valid option fills the available result width, with consistent metric labels. Keep the full financial qualification but avoid duplicate setup paragraphs. Grid assumptions stay separate from the read-only current worksheet reference until a payment is selected. Do not animate numeric output or add motion to frequent calculations; existing focus/reduced-motion conventions apply.
+
+
+## Named worksheet workspace (2.3)
+
+Desktop begins with Current worksheet, draft storage status and explicit Saved worksheets / Save worksheet controls. Below 801px the heading remains accessible but visually hidden; Saved and Save share the existing Deal details / Inventory strip, without adding height or shrinking the payment card. The collapsed estimate date moves inside Deal details. New controls have at least 44px targets and visible focus.
+
+The library is one native modal with a navy heading, bounded scrolling body and persistent Close footer. Browse mode collapses Save current worksheet; Save mode expands and focuses the name. Records show calculated payment and assumptions. Open restores inputs after confirmation when the current draft has edits. Rename, Update and Delete each have explicit actions; replacement and deletion require confirmation.
+
+Select up to two ready saved inputs to compare with current. Desktop uses a labeled table; narrow viewports use complete labeled cards. Invalid or incomplete estimates show Needs attention without ready figures. Always retain vehicle/date, current-fee qualification, and browser-local storage scope. Saved inputs are not historical quotes; branding and fees remain outside each copy.

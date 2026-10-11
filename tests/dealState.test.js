@@ -212,3 +212,11 @@ test('Cash Undo snapshots its target mode and raw edits expire Undo without chan
     assert.equal(deskReducer(edited, { type: 'expire-undo' }), edited);
   }
 });
+
+test('restoring a validated worksheet replaces transient state and remounts inputs', () => {
+  const current = { ...createDeskState('2026-10-11'), resetCount: 4, view: 'customer', mobileGridOpen: true };
+  const saved = createDeskState('2026-10-08'); saved.deal.salePrice = 24000; saved.deal.vehicleDescription = 'Saved stock';
+  const restored = deskReducer(current, { type: 'restore', desk: saved });
+  assert.equal(restored.resetCount, 5); assert.equal(restored.view, 'dealer'); assert.equal(restored.mobileGridOpen, false); assert.equal(restored.lastRoll, null);
+  assert.equal(restored.deal.salePrice, 24000); assert.equal(restored.deal.dealDate, '2026-10-08');
+});

@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
 
 for (const [feeName, field, value] of [
   ['document fee', 'Document fee', '199'],
-  ['CRV fee', 'CRV dealer fee', '75'],
+  ['CRV fee', 'CRV dealer fee', '20'],
 ]) {
   test(`changing the ${feeName} expires Undo after a grid adjustment`, async ({ page }) => {
     await applyGridAdjustment(page);
@@ -51,7 +51,7 @@ for (const [feeName, field, value] of [
 }
 
 test('clearing a changed fee expires Undo after a grid adjustment', async ({ page }) => {
-  await saveFee(page, 'CRV dealer fee', '75');
+  await saveFee(page, 'CRV dealer fee', '20');
   await applyGridAdjustment(page);
   const previousPayment = await currentPayment(page).innerText();
 
@@ -83,12 +83,12 @@ test('a changed fee applied in memory still expires Undo when storage fails', as
   });
 
   const dialog = await openSettings(page);
-  await dialog.getByRole('textbox', { name: 'CRV dealer fee', exact: true }).fill('75');
+  await dialog.getByRole('textbox', { name: 'CRV dealer fee', exact: true }).fill('20');
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog.getByRole('status')).toContainText("Couldn't save on this device");
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(dialog).toBeHidden();
 
   await expect(appliedStatus(page)).toHaveCount(0);
-  await expect(page.locator('.fixed-fees > div').filter({ hasText: 'CRV fee' }).locator('dd')).toHaveText('$75');
+  await expect(page.locator('.fixed-fees > div').filter({ hasText: 'CRV fee' }).locator('dd')).toHaveText('$20');
 });

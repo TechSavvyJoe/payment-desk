@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { POLICY_CONFIG, policyReviewReminder, policyReviewReminderShort, todayDealDate } from "../src/lib/policy.js";
+import { ELECTRONIC_FILING_FEE_MAXIMUM, POLICY_CONFIG, policyReviewReminder, policyReviewReminderShort, todayDealDate } from "../src/lib/policy.js";
 
 const REMINDER = "Tax and fee rules are reviewed through Dec 31, 2026. Have them reviewed and the app updated before January 1, or estimates dated 2027 will be blocked.";
 
@@ -45,4 +45,18 @@ test("phones get a shorter reminder over the same window", () => {
   assert.ok(short.length < REMINDER.length);
   assert.equal(policyReviewReminderShort("2027-06-15", { effectiveTo: "2027-06-30" }),
     "Rules reviewed through Jun 30, 2027. Update the app before estimates dated from July 1, 2027 are blocked.");
+});
+
+
+test("the supported Michigan electronic filing ceiling and default remain $34", () => {
+  assert.equal(ELECTRONIC_FILING_FEE_MAXIMUM, 34);
+  assert.equal(POLICY_CONFIG.feeDefaults.crvFee, 34);
+});
+
+
+test("October 2026 review records the electronic filing source without extending coverage", () => {
+  assert.equal(POLICY_CONFIG.version, "2026.10.11");
+  assert.equal(POLICY_CONFIG.reviewedAt, "2026-10-11");
+  assert.equal(POLICY_CONFIG.effectiveTo, "2026-12-31");
+  assert.ok(POLICY_CONFIG.sources.some(source => source.url.endsWith('/Dealer_Manual_Chapter_7.pdf')));
 });

@@ -527,7 +527,7 @@ test('dated trade policy handles every scheduled boundary and flags fee review',
     assert.equal(deal.policy.dealDate, dealDate);
     assert.equal(deal.policy.reviewRequired, !complete);
   }
-  assert.equal(POLICY_CONFIG.sources.length, 3);
+  assert.equal(POLICY_CONFIG.sources.length, 4);
   assert.equal(getMichiganPolicy().dealDate, todayDealDate());
   assert.equal(todayDealDate(new Date('2027-01-01T03:00:00Z')), '2026-12-31');
 });
@@ -661,27 +661,27 @@ test('a zero document fee and a zero CRV fee remove both charges and their tax',
   assert.equal(crvOnly.taxBase, 30_280);
 });
 
-test('a $125.50 CRV fee is charged in cents and taxed at 6%', () => {
+test('a $25.50 electronic filing fee is charged in cents and taxed at 6%', () => {
   const standard = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60 });
-  const deal = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60, dealershipFees: { documentFee: 280, crvFee: 125.5 } });
-  assert.equal(deal.fees.crvFee, 125.5);
-  assert.equal(deal.cents.fees.crvFee, 12_550);
-  assert.equal(deal.fees.taxableFixedFees, 405.5);
-  assert.equal(deal.taxBase, 30_405.5);
-  assert.equal(deal.salesTax, 1_824.33);
-  assert.equal(deal.outTheDoor, 32_260.83);
-  assert.equal(deal.payment, 623.69);
-  assert.equal(deal.cents.salesTax - standard.cents.salesTax, 549, '6% of the extra $91.50');
-  assert.equal(deal.cents.outTheDoor - standard.cents.outTheDoor, 9_150 + 549);
+  const deal = calculateDeal({ salePrice: 30_000, apr: 6, termMonths: 60, dealershipFees: { documentFee: 280, crvFee: 25.5 } });
+  assert.equal(deal.fees.crvFee, 25.5);
+  assert.equal(deal.cents.fees.crvFee, 2_550);
+  assert.equal(deal.fees.taxableFixedFees, 305.5);
+  assert.equal(deal.taxBase, 30_305.5);
+  assert.equal(deal.salesTax, 1_818.33);
+  assert.equal(deal.outTheDoor, 32_154.83);
+  assert.equal(deal.payment, 621.64);
+  assert.equal(standard.cents.salesTax - deal.cents.salesTax, 51, '6% of the $8.50 fee reduction');
+  assert.equal(standard.cents.outTheDoor - deal.cents.outTheDoor, 850 + 51);
 });
 
-test('the CRV fee is clamped to $0–$999.99 and only charged with a vehicle', () => {
-  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 999.99 } }).fees.crvFee, 999.99);
-  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 1_000 } }).fees.crvFee, 999.99);
-  assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: 50_000 } }).fees.crvFee, 999.99);
+test('the electronic filing fee is clamped to $0–$34 and only charged with a vehicle', () => {
+  for (const crvFee of [0, 0.01, 25.5, 33.99, 34, '25.50']) {
+    assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee } }).fees.crvFee, Number(crvFee));
+  }
   assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { crvFee: -5 } }).fees.crvFee, 0);
   assert.equal(calculateDeal({ salePrice: 30_000, dealershipFees: { documentFee: -5 } }).fees.documentFee, 0);
-  const noVehicle = calculateDeal({ dealershipFees: { documentFee: 199, crvFee: 125.5 } });
+  const noVehicle = calculateDeal({ dealershipFees: { documentFee: 199, crvFee: 999.99 } });
   assert.equal(noVehicle.fees.documentFee, 0);
   assert.equal(noVehicle.fees.crvFee, 0);
   assert.equal(noVehicle.outTheDoor, 0);
@@ -695,40 +695,40 @@ test('missing or invalid dealership fees fall back to the defaults', () => {
     const deal = calculateDeal({ salePrice: 30_000, dealershipFees });
     assert.deepEqual(deal.cents, standard.cents, JSON.stringify(dealershipFees));
   }
-  const partial = calculateDeal({ salePrice: 30_000, dealershipFees: { documentFee: 'abc', crvFee: 50 } });
+  const partial = calculateDeal({ salePrice: 30_000, dealershipFees: { documentFee: 'abc', crvFee: 25 } });
   assert.equal(partial.fees.documentFee, 280);
-  assert.equal(partial.fees.crvFee, 50);
+  assert.equal(partial.fees.crvFee, 25);
 });
 
 test('custom fees flow through cash deals and trade credit', () => {
-  const fees = { documentFee: 150, crvFee: 99 };
+  const fees = { documentFee: 150, crvFee: 25 };
   const cash = calculateDeal({ dealType: 'cash', salePrice: 20_000, dealershipFees: fees });
   assert.equal(cash.fees.titleFee, 15);
-  assert.equal(cash.taxBase, 20_249);
-  assert.equal(cash.salesTax, 1_214.94);
-  assert.equal(cash.outTheDoor, 21_493.94);
-  assert.equal(cash.dueAtSigning, 21_493.94);
+  assert.equal(cash.taxBase, 20_175);
+  assert.equal(cash.salesTax, 1_210.5);
+  assert.equal(cash.outTheDoor, 21_415.5);
+  assert.equal(cash.dueAtSigning, 21_415.5);
   // A large trade credit can absorb the fees' tax entirely.
   const covered = calculateDeal({ dealType: 'cash', salePrice: 10_000, tradeAllowance: 11_000, dealershipFees: fees });
   assert.equal(covered.tradeTaxCredit, 11_000);
-  assert.equal(covered.taxableTotalBeforeCredit, 10_249);
+  assert.equal(covered.taxableTotalBeforeCredit, 10_175);
   assert.equal(covered.taxBase, 0);
   assert.equal(covered.salesTax, 0);
-  assert.equal(covered.tradeTaxDeduction, 10_249);
-  assert.equal(covered.tradeTaxSavings, 614.94);
-  assert.equal(covered.outTheDoor, 10_279);
-  assert.equal(covered.customerCredit, 721);
+  assert.equal(covered.tradeTaxDeduction, 10_175);
+  assert.equal(covered.tradeTaxSavings, 610.5);
+  assert.equal(covered.outTheDoor, 10_205);
+  assert.equal(covered.customerCredit, 795);
   // The $12,000 cap leaves the fees taxable on a financed deal.
   const capped = calculateDeal({ salePrice: 40_000, tradeAllowance: 15_000, tradePayoff: 7_000, apr: 6.9, termMonths: 72, dealershipFees: fees });
   assert.equal(capped.tradeTaxCredit, 12_000);
-  assert.equal(capped.taxBase, 28_249);
-  assert.equal(capped.salesTax, 1_694.94);
-  assert.equal(capped.amountFinanced, 33_974.94);
-  assert.equal(capped.payment, 577.61);
+  assert.equal(capped.taxBase, 28_175);
+  assert.equal(capped.salesTax, 1_690.5);
+  assert.equal(capped.amountFinanced, 33_896.5);
+  assert.equal(capped.payment, 576.28);
 });
 
 test('the rate grid and target solvers use the dealership fees', () => {
-  const fees = { documentFee: 199, crvFee: 125.5 };
+  const fees = { documentFee: 199, crvFee: 25.5 };
   const grid = calculateRateGrid({ salePrice: 30_000, apr: 6.5, termMonths: 72, dealershipFees: fees });
   const deal = calculateDeal({ salePrice: 30_000, apr: 6.5, termMonths: 72, dealershipFees: fees });
   assert.equal(grid.amountBeforeCashDown, deal.amountBeforeCashDown);
@@ -738,7 +738,7 @@ test('the rate grid and target solvers use the dealership fees', () => {
   const solved = solveSalePriceForTarget({ salePrice: 30_000, dealershipFees: fees }, { target: deal.outTheDoor });
   assert.equal(solved.salePrice, 30_000);
   assert.equal(solved.exact, true);
-  assert.equal(solved.deal.fees.crvFee, 125.5);
+  assert.equal(solved.deal.fees.crvFee, 25.5);
 });
 
 // Digests of calculateDeal output captured from the implementation before
@@ -760,9 +760,19 @@ const PRE_FEE_SETTINGS_DIGESTS = {
   'trade without vehicle': [{ dealDate: '2026-09-24', tradeAllowance: 8_000, tradePayoff: 2_500 }, 'f0362c03869d13000627eb0de37cd2a4bbfb885e1717ab76aaf6866c5a0c0164'],
 };
 
-test('default-fee regression cases retain their financial results apart from clarified rate wording', () => {
+test('default-fee regression cases retain their financial results apart from reviewed policy metadata', () => {
   const digest = (value) => {
     const historicWording = structuredClone(value);
+    // Keep the original financial digests: normalize only the documented source
+    // review metadata/copy, never any amount, tax cap, fee or calculation result.
+    Object.assign(historicWording.policy, { id: 'mi-retail-2026-09-24', version: '2026.09.24', reviewedAt: '2026-09-24' });
+    historicWording.policy.sources = historicWording.policy.sources.filter(source => !source.title.includes('Chapter 7')).map(source => ({
+      ...source, url: source.url.replace('https://www.michigan.gov/sos/-/media/Project/Websites/sos/01preston/Dealer_Manual_Chapter_8.pdf', 'https://www.michigan.gov/documents/sos/Dealer_Manual_Chapter_8_186065_7.pdf'),
+    }));
+    historicWording.policy.assumptions = historicWording.policy.assumptions.map(text => text.replace(
+      'The optional taxable electronic filing charge is limited to $34 and assumes customer consent on the RD-108; it is not a state-mandated charge.',
+      'The $34 taxable CRV charge is a dealership assumption and must be verified; it is not presented as a state-mandated fee.',
+    ));
     historicWording.policy.assumptions = historicWording.policy.assumptions.map(text => text.replace(
       'Payments assume equal monthly periods and a two-decimal annual interest rate. Lender APR, credit-specific charges, timing, eligibility and final contract figures require separate verification.',
       'Payments assume equal monthly periods and a two-decimal annual rate. Lender timing, fees, eligibility and final contract figures require separate verification.',
@@ -774,6 +784,70 @@ test('default-fee regression cases retain their financial results apart from cla
     assert.equal(digest(plain), expected, name);
     for (const dealershipFees of [{ documentFee: 280, crvFee: 34 }, { documentFee: '280.00', crvFee: '34' }, {}, null]) {
       assert.equal(JSON.stringify(calculateUndatedDeal({ ...input, dealershipFees })), JSON.stringify(plain), `${name} with ${JSON.stringify(dealershipFees)}`);
+    }
+  }
+});
+
+
+test('automatic selling-price bounds honor a minimum above the current price', () => {
+  const input = { salePrice: 1_000 };
+  const floorDeal = calculateDeal({ ...input, salePrice: 2_000 });
+  for (const target of [500, floorDeal.outTheDoor]) {
+    const solved = solveSalePriceForTarget(input, { target, minSalePrice: 2_000 });
+    assert.equal(solved.salePrice, 2_000);
+    assert.equal(solved.metric, floorDeal.outTheDoor);
+    assert.equal(solved.exact, target === floorDeal.outTheDoor);
+  }
+  const higherDeal = calculateDeal({ ...input, salePrice: 3_000 });
+  assert.equal(solveSalePriceForTarget(input, {
+    target: higherDeal.outTheDoor, minSalePrice: 2_000,
+  }).salePrice, 3_000);
+  assert.throws(() => solveSalePriceForTarget(input, {
+    target: 500, minSalePrice: 2_000, maxSalePrice: 1_000,
+  }), /min cannot exceed max/);
+  assert.throws(() => solveSalePriceForTarget(input, {
+    target: 500, minSalePrice: -1,
+  }), /Minimum sale price cannot be negative/);
+  assert.throws(() => solveSalePriceForTarget(input, {
+    target: 500, minSalePrice: 1_000_001,
+  }), /Minimum sale price cannot exceed/);
+});
+
+test('automatic optional-item bounds honor a minimum above the current amount', () => {
+  const input = { salePrice: 1_000, optionalItems: [{ amount: 0, taxable: false }] };
+  const floorDeal = calculateDeal({ ...input, optionalItems: [{ amount: 100, taxable: false }] });
+  for (const target of [500, floorDeal.amountFinanced]) {
+    const solved = solveOptionalItemAmountForTarget(input, { itemIndex: 0, target, minAmount: 100 });
+    assert.equal(solved.optionalItemAmount, 100);
+    assert.equal(solved.metric, floorDeal.amountFinanced);
+    assert.equal(solved.exact, target === floorDeal.amountFinanced);
+  }
+  assert.equal(solveOptionalItemAmountForTarget(input, {
+    itemIndex: 0, target: floorDeal.amountFinanced + 100, minAmount: 100,
+  }).optionalItemAmount, 200);
+  assert.throws(() => solveOptionalItemAmountForTarget(input, {
+    itemIndex: 0, target: 500, minAmount: 100, maxAmount: 50,
+  }), /min cannot exceed max/);
+  assert.throws(() => solveOptionalItemAmountForTarget(input, {
+    itemIndex: 0, target: 500, minAmount: -1,
+  }), /Minimum optional item amount cannot be negative/);
+  assert.throws(() => solveOptionalItemAmountForTarget(input, {
+    itemIndex: 0, target: 500, minAmount: 1_000_001,
+  }), /Minimum optional item amount cannot exceed/);
+});
+
+
+test('direct electronic filing overrides cannot exceed $34 in any financial result', () => {
+  for (const dealType of ['finance', 'cash']) {
+    const input = { salePrice: 30_000, dealType, apr: 6, termMonths: 60, dealershipFees: { documentFee: 199, crvFee: 34 } };
+    const bounded = calculateDeal(input);
+    assert.equal(bounded.cents.taxBase, 3_023_300);
+    assert.equal(bounded.cents.salesTax, 181_398);
+    assert.equal(bounded.cents.outTheDoor, dealType === 'finance' ? 3_207_798 : 3_207_698);
+    for (const crvFee of [34.01, '34.01', 125.5, '999.99', 50_000, 1_000_000]) {
+      const deal = calculateDeal({ ...input, dealershipFees: { documentFee: 199, crvFee } });
+      assert.equal(deal.cents.fees.crvFee, 3_400, String(crvFee));
+      assert.deepEqual(deal.cents, bounded.cents, `${dealType}: ${crvFee}`);
     }
   }
 });

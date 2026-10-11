@@ -24,6 +24,10 @@ import InventoryPicker from './components/InventoryPicker.jsx';
 import { rememberCompanion } from './lib/companionInventory.js';
 import { createDeskDraftSession, DESK_DRAFT_KEY, LEGACY_DESK_DRAFT_KEY, hasDeskDraftEdits, isBaselineDeskInput, isDeskDraftField } from './lib/deskDraft.js';
 import { DraftContext } from './components/DraftContext.jsx';
+import WorksheetToolbar from './components/WorksheetToolbar.jsx';
+import WorksheetLibraryDialog from './components/WorksheetLibraryDialog.jsx';
+import { createSavedWorksheetSession, SAVED_WORKSHEETS_KEY, captureWorksheetSnapshot } from './lib/savedWorksheets.js';
+import { summarizeWorksheet } from './lib/worksheetSummary.js';
 import { REGISTRATION_STATES, TRANSACTION_SCOPES, UnsupportedPurchaseError, getPurchaseScope } from './lib/purchaseScope.js';
 import { HANDOFF_PREFIX, parseVehicleHandoff } from '../extensions/payment-desk-companion/vehicleHandoff.js';
 
@@ -97,6 +101,22 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
   const purchaseScope = getPurchaseScope(dealInput);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [worksheetSession] = useState(createSavedWorksheetSession);
+  const [libraryState, setLibraryState] = useState(() => worksheetSession.read());
+  const [libraryMode, setLibraryMode] = useState(null);
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const [libraryMessage, setLibraryMessage] = useState('');
+  const libraryInFlight = useRef(false);
+  const saveWorksheetRef = useRef(null);
+  const libraryButtonRef = useRef(null);
+  const libraryReturnFocus = useRef(null);
+  useEffect(() => {
+    const changed = event => {
+      if (event.key === null || event.key === SAVED_WORKSHEETS_KEY) setLibraryState(worksheetSession.read());
+    };
+    window.addEventListener('storage', changed);
+    return () => window.removeEventListener('storage', changed);
+  }, [worksheetSession]);
   useEffect(rememberCompanion, []);
   const [vehicleImport, setVehicleImport] = useState(() => parseVehicleHandoff(window.location.hash));
   useEffect(() => {
@@ -331,6 +351,49 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
     },
     onUndoRoll: undoAdjustment,
   };
+  const currentSnapshot = useMemo(() => captureWorksheetSnapshot({ desk: state, targetType, targetValues, inputDrafts }), [state, targetType, targetValues, inputDrafts]);
+  const currentWorksheetSummary = useMemo(() => summarizeWorksheet(currentSnapshot.value, dealershipFees, { blocked: hasInputErrors }), [currentSnapshot, dealershipFees, hasInputErrors]);
+  const savedWorksheets = useMemo(() => libraryState.ok ? (libraryState.value.collection?.worksheets ?? []).map(entry => ({
+    ...entry, summary: summarizeWorksheet(entry.snapshot, dealershipFees, { blocked: settingsChanged }),
+  })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : [], [libraryState, dealershipFees, settingsChanged]);
+  const openLibrary = (mode, trigger) => {
+    libraryReturnFocus.current = trigger || (mode === 'save' ? saveWorksheetRef.current : libraryButtonRef.current);
+    setLibraryState(worksheetSession.reload());
+    setLibraryMessage('');
+    setLibraryMode(mode);
+  };
+  const closeLibrary = () => {
+    if (libraryInFlight.current) return;
+    setLibraryMode(null);
+    libraryReturnFocus.current?.focus();
+  };
+  const mutateLibrary = async command => {
+    if (libraryInFlight.current) return false;
+    libraryInFlight.current = true; setLibraryBusy(true); setLibraryMessage('');
+    try {
+      const outcome = await worksheetSession.execute(command);
+      setLibraryState(worksheetSession.read());
+      setLibraryMessage(outcome.ok ? ({ create: 'Worksheet copy saved on this device.', replace: 'Saved worksheet updated.', rename: 'Worksheet renamed.', delete: 'Saved worksheet deleted.' })[command.type]
+        : outcome.reason === 'too-many-worksheets' ? 'The library holds 50 worksheets. Delete an unneeded copy before saving another.'
+        : outcome.reason === 'invalid-name' ? 'Enter a worksheet name from 1 to 80 characters.'
+        : outcome.message || 'The worksheet could not be saved. Your open figures have been kept.');
+      return outcome.ok;
+    } finally { libraryInFlight.current = false; setLibraryBusy(false); }
+  };
+  const openSavedWorksheet = id => {
+    const restored = worksheetSession.prepareRestore(id);
+    if (!restored.ok) { setLibraryState(worksheetSession.read()); setLibraryMessage(restored.message); return false; }
+    if (hasDraftEdits && !window.confirm('Open this saved worksheet? This replaces your current draft. Save a copy first if you want to keep it. The opened estimate uses current dealership fees and rules.')) return false;
+    dispatch({ type: 'restore', desk: restored.value.desk });
+    setInputDrafts(restored.value.inputDrafts);
+    setTargetType(restored.value.targetType); setTargetValues(restored.value.targetValues);
+    setTargetInputRevision(value => value + 1);
+    setFieldErrors({}); setSolverExpanded(false); setAccordions(allOpen()); setContextOpen(false);
+    setLibraryMode(null);
+    focusDestination('worksheet-heading');
+    return true;
+  };
+
   const summaryProps = { dealInput, result, hasInputErrors, onActivatePaymentTarget: activatePaymentTarget,
     onRepairEstimate: repairEstimate, lastRoll, onUndoRoll: undoAdjustment,
     onComparePayments: scrollToGrid, onReviewEstimate: () => changeView('customer'),
@@ -346,6 +409,16 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
         {settingsChanged ? <div className="validation-banner" role="alert" id="settings-changed" tabIndex={-1}><strong>Dealership settings changed in another tab.</strong> Reload to use the saved name, logo and fees before comparing or sharing an estimate. <button type="button" onClick={() => window.location.reload()}>Reload settings</button></div> : null}
         {draftStatus === 'rejected' ? <div className="validation-banner" role="alert"><strong>The saved worksheet could not be restored.</strong> Its saved data has been kept. This worksheet will not overwrite it. Use a compatible app version or explicitly discard it to save this worksheet. <button type="button" onClick={discardRejectedDraft}>Discard unreadable draft</button></div> : null}
         {draftStatus === 'conflict' || draftStatus === 'error' ? <div className="validation-banner" role="alert"><strong>This worksheet has not been saved.</strong> {draftStatus === 'conflict' ? 'Another tab changed the saved draft. Keep your current figures before reloading.' : 'Device storage is unavailable. Keep this page open and save or print your estimate before leaving.'}</div> : null}
+        {libraryMode ? <WorksheetLibraryDialog initialMode={libraryMode}
+          defaultName={deal.vehicleDescription || `Worksheet ${formatShortDate(deal.dealDate)}`}
+          currentSummary={currentWorksheetSummary} worksheets={savedWorksheets}
+          status={libraryState.ok ? 'ready' : libraryState.status} busy={libraryBusy} message={!libraryState.ok ? libraryState.message : libraryMessage}
+          onSaveCopy={name => mutateLibrary({ type: 'create', name, snapshot: currentSnapshot.value })}
+          onUpdate={id => mutateLibrary({ type: 'replace', id, snapshot: currentSnapshot.value })}
+          onRename={(id, name) => mutateLibrary({ type: 'rename', id, name })}
+          onDelete={id => mutateLibrary({ type: 'delete', id })}
+          onReload={() => { setLibraryState(worksheetSession.reload()); setLibraryMessage(''); }}
+          onOpen={openSavedWorksheet} onClose={closeLibrary} /> : null}
         {settingsOpen ? <DealershipSettingsDialog externalChange={settingsChanged} feeSettings={feeSettings} settings={brandSettings} onClear={clearSettings} onClose={closeSettings} onSave={saveSettings} /> : null}
         {inventoryOpen ? <InventoryPicker onClose={() => { setInventoryOpen(false); requestAnimationFrame(() => document.getElementById('inventory-picker-trigger')?.focus()); }} onChoose={vehicle => { setInventoryOpen(false); setVehicleImport({ vehicle, error: null }); }} /> : null}
         {vehicleImport.vehicle || vehicleImport.error ? <VehicleImportDialog {...vehicleImport} hasDraftEdits={hasDraftEdits} onAccept={acceptVehicle} onClose={closeVehicleImport} /> : null}
@@ -357,7 +430,7 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
           {view === 'dealer' ? <>
             <div className="calculator-layout">
               <div className="calculator-left">
-                <div className="page-intro worksheet-intro" role="region" aria-label="Worksheet introduction"><div><h1 id="worksheet-heading" tabIndex={-1}>Build the deal. See the payment.</h1><p>Adjust the figures, compare your options, and see the complete deal.</p></div><p className={`worksheet-save ${draftSaved ? 'is-saved' : 'needs-attention'}`}><span aria-hidden="true">{draftSaved ? '✓' : '!'}</span>{draftSaved ? 'Saved on this device' : draftStatus === 'saving' ? 'Saving on this device…' : 'Draft not saved — see below'}</p></div>
+                <WorksheetToolbar draftStatus={draftStatus} onSave={() => openLibrary('save')} onOpen={() => openLibrary('browse')} saveButtonRef={saveWorksheetRef} libraryButtonRef={libraryButtonRef} />
                 <div className="mobile-results" id="payment-results-mobile" tabIndex={-1}><ResultsPanel {...summaryProps} compact /></div>
                 <QuickJumpNav />
                 <div className="deal-tools">
@@ -372,6 +445,10 @@ export default function App({ restoreDraft = true, savedDraftSession }) {
                 </div>
                 </details>
                 <button className="inventory-picker-trigger" id="inventory-picker-trigger" onClick={() => setInventoryOpen(true)} type="button">Inventory</button>
+                <div className="worksheet-mobile-actions">
+                  <button type="button" aria-label="Saved worksheets" onClick={event => openLibrary('browse', event.currentTarget)}>Saved</button>
+                  <button type="button" aria-label="Save worksheet" onClick={event => openLibrary('save', event.currentTarget)}>Save</button>
+                </div>
                 </div>
                 <DealerView accordions={accordions} addItem={preset => dispatch({ type: 'add-item', preset })} dealInput={dealInput}
                   removeItem={index => {

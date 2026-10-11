@@ -1,15 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <title>Payment Desk</title>
-  <defs>
-    <linearGradient id="desk-blue" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#00095b"/>
-      <stop offset=".52" stop-color="#08277f"/>
-      <stop offset="1" stop-color="#066fef"/>
-    </linearGradient>
-  </defs>
+  <defs><linearGradient id="desk-blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#00095b"/><stop offset="1" stop-color="#066fef"/></linearGradient></defs>
   <rect width="64" height="64" rx="14" fill="url(#desk-blue)"/>
-  <g fill="#fff" fill-rule="evenodd" transform="translate(.5 3.2) scale(.9)">
-    <path d="M12 47V17H23C30.2 17 34.6 21.4 34.6 28S30.2 39 23 39H18V47ZM18 23V33H23C26.5 33 28.5 31.2 28.5 28S26.5 23 23 23Z"/>
-    <path d="M36 17H43C53 17 58 23 58 32S53 47 43 47H36ZM42 23V41H43C49 41 52 38 52 32S49 23 43 23Z"/>
-  </g>
+  <g transform="translate(12 12) scale(1.25)" fill="#fff"><path d="M4 4H16C23.8 4 28 8.2 28 16S23.8 28 16 28H12V24H16C21.2 24 24 21.2 24 16S21.2 8 16 8H8V28H4Z"/><path d="M12 14H20V18H12Z"/></g>
 </svg>

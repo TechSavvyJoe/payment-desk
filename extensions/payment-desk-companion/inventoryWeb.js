@@ -71,7 +71,7 @@ export function validateCatalogPage(value) {
 export function installInventoryWeb() {
   const respondToCatalog = (message, respond) => {
     if (message?.target !== 'inventory.catalog' || message.action !== 'read') return;
-    const failed = () => respond({ ok: false, error: 'The saved inventory could not be read.' });
+    const failed = () => respond({ ok: false, code: 'storage_unavailable', error: 'The saved inventory could not be read from Chrome storage.' });
     // Use the native callback to keep the storage read responsive while an
     // external message holds the MV3 response channel open.
     try {
