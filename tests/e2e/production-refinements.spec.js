@@ -15,6 +15,9 @@ for (const [label, raw] of [['malformed', '{invalid'], ['newer version', JSON.st
     expect(await page.evaluate(key => localStorage.getItem(key), DESK_DRAFT_KEY)).toBe(raw);
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'Discard unreadable draft' }).click();
+    // Discard waits for the storage lock. Do not parse the original malformed
+    // record before the confirmed operation has replaced it.
+    await expect.poll(() => page.evaluate(key => localStorage.getItem(key), DESK_DRAFT_KEY)).not.toBe(raw);
     await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)).desk?.deal.salePrice, DESK_DRAFT_KEY)).toBe(25000);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await page.reload();
