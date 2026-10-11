@@ -13,6 +13,11 @@ export function summarizeWorksheet(snapshot, dealershipFees, { blocked = false }
   const base = { vehicle: deal.vehicleDescription || 'Vehicle not specified', date: deal.dealDate, salePrice: deal.salePrice,
     isFinanced: deal.dealType === 'finance', termMonths: deal.termMonths, apr: deal.apr };
   const invalidTyping = Object.entries(normalized.inputDrafts).some(([id, { raw }]) => {
+    // Match the controls mounted for this deal. Keep inactive drafts so their
+    // original text and validation return if the user switches back later.
+    if (deal.dealType !== 'finance' && (id === 'cash-down' || id === 'apr' || id.startsWith('grid-'))) return false;
+    if (id === 'new-plate-amount' && deal.plateMode !== 'new') return false;
+    if (id === 'budget-cash-limit' && normalized.targetType !== 'payment') return false;
     if (id === 'estimate-date') return Boolean(parseShortDate(raw).error);
     const kind = id === 'apr' || id.startsWith('grid-apr-') ? 'rate' : 'money';
     return Boolean(parseFinancialInput(raw, { kind, required: kind === 'rate' || id === 'new-plate-amount' }).error);

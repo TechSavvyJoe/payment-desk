@@ -29,3 +29,24 @@ test('cash credit is labeled distinctly and excludes finance-only metrics', () =
   assert.equal(result.ready, true); assert.equal(result.label, 'Estimated customer credit'); assert.ok(result.customerCredit > 0);
   assert.equal(result.totalInterest, null); assert.equal(result.amountFinanced, null);
 });
+
+test('inactive drafts do not block comparisons, and become invalid again when reactivated', () => {
+  for (const id of ['cash-down', 'apr', 'grid-apr-48', 'grid-down-0']) {
+    const value = snapshot();
+    value.inputDrafts[id] = { raw: 'invalid' };
+    value.desk.deal.dealType = 'cash'; value.targetType = 'cashDue';
+    assert.equal(summarizeWorksheet(value).ready, true, id);
+    assert.equal(value.inputDrafts[id].raw, 'invalid');
+    value.desk.deal.dealType = 'finance'; value.targetType = 'payment';
+    assert.equal(summarizeWorksheet(value).ready, false, id);
+  }
+  const plate = snapshot(); plate.inputDrafts['new-plate-amount'] = { raw: 'invalid' };
+  assert.equal(summarizeWorksheet(plate).ready, true);
+  plate.desk.deal.plateMode = 'new'; plate.desk.deal.newPlateAmount = 200;
+  assert.equal(summarizeWorksheet(plate).ready, false);
+  const budget = snapshot(); budget.inputDrafts['budget-cash-limit'] = { raw: 'invalid' };
+  budget.targetType = 'outTheDoor';
+  assert.equal(summarizeWorksheet(budget).ready, true);
+  budget.targetType = 'payment';
+  assert.equal(summarizeWorksheet(budget).ready, false);
+});

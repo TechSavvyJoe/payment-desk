@@ -80,6 +80,31 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole('textbox', { name: 'Selling price', exact: true })).toBeVisible();
 });
 
+for (const scenario of [
+  { name: 'cash purchase', field: '#apr', group: 'Purchase type', inactive: 'Cash', active: 'Finance' },
+  { name: 'plate transfer', field: '#new-plate-amount', group: 'Plate type', inactive: 'Transfer', active: 'New plate' },
+]) {
+  test(`saved ${scenario.name} ignores inactive invalid text and restores it on reactivation`, async ({ page }) => {
+    await fillReadyDeal(page);
+    const mode = page.getByRole('group', { name: scenario.group, exact: true });
+    await mode.getByRole('button', { name: scenario.active, exact: true }).click();
+    await page.locator(scenario.field).fill('invalid');
+    await expect(page.locator(scenario.field)).toHaveAttribute('aria-invalid', 'true');
+    await mode.getByRole('button', { name: scenario.inactive, exact: true }).click();
+    const dialog = await saveCopy(page, scenario.name);
+    await expect(entry(dialog, scenario.name).getByRole('checkbox', { name: `Compare ${scenario.name}`, exact: true })).toBeEnabled();
+    await closeLibrary(dialog);
+    await fillReadyDeal(page, '40000');
+    const reopened = await openLibrary(page);
+    await openSavedOverEditedDraft(page, reopened, scenario.name);
+    await expect(page.locator('#sale-price')).toHaveValue('30,000');
+    await expect(mode.getByRole('button', { name: scenario.inactive, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await mode.getByRole('button', { name: scenario.active, exact: true }).click();
+    await expect(page.locator(scenario.field)).toHaveValue('invalid');
+    await expect(page.locator(scenario.field)).toHaveAttribute('aria-invalid', 'true');
+  });
+}
+
 test('restores a named deal, products, and chosen date over a changed draft after reload', async ({ page }) => {
   test.setTimeout(60_000); // Full edit/save/edit/reload/restore flow across browser engines.
   await fillReadyDeal(page);

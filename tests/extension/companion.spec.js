@@ -451,7 +451,10 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
   let settings = desk.getByRole('dialog', { name: 'Dealership settings' });
   await settings.getByLabel('Dealership name').fill('Lakeside Motors');
   await settings.getByRole('textbox', { name: 'Document fee', exact: true }).fill('200');
-  await settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true }).fill('125.50');
+  const crvFee = settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true });
+  await crvFee.fill('35');
+  await expect(crvFee).toHaveAttribute('aria-invalid', 'true');
+  await crvFee.fill('30.50');
   await settings.getByRole('button', { name: 'Save', exact: true }).click();
   await desk.locator('#sale-price').fill('30000');
   panel.on('dialog', dialog => dialog.accept());
@@ -462,7 +465,7 @@ test('panel dealership and fees survive Reset deal and reload after the draft is
   settings = desk.getByRole('dialog', { name: 'Dealership settings' });
   await expect(settings.getByLabel('Dealership name')).toHaveValue('Lakeside Motors');
   await expect(settings.getByRole('textbox', { name: 'Document fee', exact: true })).toHaveValue('200');
-  await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('125.5');
+  await expect(settings.getByRole('textbox', { name: 'CRV dealer fee', exact: true })).toHaveValue('30.5');
   const frame = panel.frames().find(frame => frame.url().endsWith('/desk/index.html'));
   const saved = await frame.evaluate(({ key, legacy }) => ({
     keys: Object.keys(localStorage).sort(), marker: JSON.parse(localStorage.getItem(key)), legacy: localStorage.getItem(legacy),
