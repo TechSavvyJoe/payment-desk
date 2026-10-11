@@ -38,3 +38,5 @@ Result: **passed for the revised workspace surfaces**. Full release CI, packaged
 - Restore tests overwrite deliberately changed drafts after reload, retain products/date/raw invalid input and targets, preserve immutable saved copies during Open, and verify cross-tab conflict recovery. Comparison checks exact recomputed totals under current fees.
 - Long restore scenarios have a 60-second overall test budget; field/value expectations remain unchanged. Initial 30-second whole-scenario deadlines were exhausted in Chromium during the heavier combined run.
 - This UI acceptance does not claim Chrome Web Store publication, nationwide tax coverage, legal approval, actual customer delivery, or physical iOS/Android share-sheet acceptance. Existing financial scope gates remain in force.
+
+User-directed copy refinement: removed “store policy” from the CVR worksheet line, retaining Taxable and the amount. Fresh desktop evidence and the combined comparison were recaptured.

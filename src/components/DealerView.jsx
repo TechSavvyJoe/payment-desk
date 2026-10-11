@@ -152,7 +152,7 @@ export default function DealerView({
             <dl className="fixed-fees">
               <div><dt>Michigan sales tax <small>{CALCULATION_DEFAULTS.salesTaxRate * 100}%</small></dt><dd>{formatCurrency(result.salesTax)}</dd></div>
               <div><dt>Document fee <small>Taxable</small></dt><dd>{formatCurrency(result.fees.documentFee)}</dd></div>
-              <div><dt>CRV fee <small>Taxable · store policy</small></dt><dd>{formatCurrency(result.fees.crvFee)}</dd></div>
+              <div><dt>CRV fee <small>Taxable</small></dt><dd>{formatCurrency(result.fees.crvFee)}</dd></div>
             </dl>
             <div className="choice-row">
               <span>Registration</span>
