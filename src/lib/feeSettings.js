@@ -1,10 +1,10 @@
-import { POLICY_CONFIG } from "./policy.js";
+import { ELECTRONIC_FILING_FEE_MAXIMUM, POLICY_CONFIG } from "./policy.js";
 
 // The dealership's document and CRV fees, saved per device next to the
 // dealership name and logo. Amounts are dollars; null means the policy default.
 // calculateDeal applies the legal caps again, so a bad value can never raise a fee.
 export const FEE_STORAGE_KEY = "payment-desk.fees.v1";
-export const CRV_FEE_MAXIMUM = 999.99;
+export const CRV_FEE_MAXIMUM = ELECTRONIC_FILING_FEE_MAXIMUM;
 export const DOCUMENT_FEE_MAXIMUM = POLICY_CONFIG.documentFeeMaximum;
 export const FEE_DEFAULTS = Object.freeze({
   documentFee: POLICY_CONFIG.feeDefaults.documentFee,
@@ -55,7 +55,15 @@ export function normalizeFeeSettings(value) {
 export function loadFeeSettings(storage = defaultStorage()) {
   try {
     const raw = storage?.getItem(FEE_STORAGE_KEY);
-    return raw ? normalizeFeeSettings(JSON.parse(raw)) : empty();
+    if (!raw) return empty();
+    const saved = JSON.parse(raw);
+    const normalized = normalizeFeeSettings(saved);
+    // Preserve legacy storage until Save/Clear. Estimates use the bounded default;
+    // the dialog explains the rejected override rather than silently dropping it.
+    const savedCrvFee = normalizeAmount(saved?.crvFee, Number.MAX_SAFE_INTEGER);
+    return savedCrvFee > CRV_FEE_MAXIMUM
+      ? { ...normalized, crvFeeNeedsReview: true }
+      : normalized;
   } catch {
     return empty();
   }

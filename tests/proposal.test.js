@@ -135,7 +135,7 @@ test("proposal display dates use MM/DD/YY while policy and creation values stay 
   assert.match(snapshot.reference, /^PD-20260925-/);
   const text = formatProposalText(snapshot);
   assert.match(text, /Created: 09\/24\/26, 8:30 PM/);
-  assert.match(text, /effective 01\/01\/26 through 12\/31\/26; reviewed 09\/24\/26/);
+  assert.match(text, /effective 01\/01\/26 through 12\/31\/26; reviewed 10\/11\/26/);
   assert.match(text, /Deal date: 09\/24\/26\./);
 });
 
@@ -163,12 +163,12 @@ test("assumptions state the document and CRV fees actually used and who sets the
   assert.ok(standard.assumptions.includes("Product tax treatment must be confirmed for this transaction."));
   assert.equal(standard.assumptions.some((line) => /CRV dealer fee must be confirmed/.test(line)), false);
 
-  const custom = create({ dealershipFees: { documentFee: 199, crvFee: 125.5 } });
+  const custom = create({ dealershipFees: { documentFee: 199, crvFee: 25.5 } });
   const text = formatProposalText(custom);
-  assert.match(text, /^Document fee \$199\.00 \(dealership setting; never more than \$280 or 5% of the selling price\) and CRV dealer fee \$125\.50 are set by the dealership\.$/m);
+  assert.match(text, /^Document fee \$199\.00 \(dealership setting; never more than \$280 or 5% of the selling price\) and CRV dealer fee \$25\.50 are set by the dealership\.$/m);
   // Line labels stay the same; only the amounts change.
   assert.match(text, /^Document fee \(taxable\): \$199\.00$/m);
-  assert.match(text, /^CRV dealer fee \(taxable\): \$125\.50$/m);
+  assert.match(text, /^CRV dealer fee \(taxable\): \$25\.50$/m);
 
   // A capped fee is reported at the amount charged, not the setting.
   const capped = create({ salePrice: 3_000, dealershipFees: { documentFee: 199, crvFee: 34 } });
@@ -183,6 +183,6 @@ test("assumptions state the document and CRV fees actually used and who sets the
 test("the estimate reference changes with the fees but not with an equivalent default record", () => {
   const plain = create();
   assert.equal(create({ dealershipFees: { documentFee: 280, crvFee: 34 } }).reference, plain.reference);
-  assert.notEqual(create({ dealershipFees: { documentFee: 280, crvFee: 50 } }).reference, plain.reference);
+  assert.notEqual(create({ dealershipFees: { documentFee: 280, crvFee: 25 } }).reference, plain.reference);
   assert.notEqual(create({ dealershipFees: { documentFee: 199, crvFee: 34 } }).reference, plain.reference);
 });

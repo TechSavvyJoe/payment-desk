@@ -14,6 +14,13 @@ test('a changed catalog produces an actionable recovery error without accepting 
   assert.equal(storage.has(KEY), false);
 });
 
+test('a storage read failure has a truthful retry message', async t => {
+  browser(t, null, (_runtime, _id, _message, callback) => callback({
+    ok: false, code: 'storage_unavailable', error: 'The saved inventory could not be read from Chrome storage.',
+  }));
+  await assert.rejects(readCompanionInventory({}), /could not read its saved inventory from Chrome storage.*retry/i);
+});
+
 function browser(t, savedId, send) {
   const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const savedChrome = Object.getOwnPropertyDescriptor(globalThis, 'chrome');
@@ -89,6 +96,52 @@ test('the bounded timeout ignores a late handshake instead of saving its identif
   assert.equal(storage.has(KEY), false);
 });
 
+test('aborting a pending candidate read settles it and prevents late connection persistence', async t => {
+  let respond;
+  const storage = browser(t, previous, (_runtime, id, _message, callback) => {
+    assert.equal(id, candidate);
+    respond = callback;
+  });
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const requestTimers = new Set();
+  const clearedTimers = new Set();
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    const timer = originalSetTimeout(callback, delay, ...args);
+    if (delay === 45_000) requestTimers.add(timer);
+    return timer;
+  };
+  globalThis.clearTimeout = timer => {
+    if (requestTimers.has(timer)) clearedTimers.add(timer);
+    return originalClearTimeout(timer);
+  };
+  t.after(() => { globalThis.setTimeout = originalSetTimeout; globalThis.clearTimeout = originalClearTimeout; });
+  const controller = new AbortController();
+  let removed = 0;
+  const removeListener = controller.signal.removeEventListener.bind(controller.signal);
+  controller.signal.removeEventListener = (...args) => { removed++; return removeListener(...args); };
+
+  const result = readCompanionInventory({}, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(result, { name: 'AbortError' });
+  respond(page);
+  await Promise.resolve();
+
+  assert.equal(removed, 1);
+  assert.equal(clearedTimers.size, 1);
+  assert.equal(storage.get(KEY), previous);
+});
+
+test('an already aborted read does not send a message or replace the saved companion', async t => {
+  let sent = false;
+  const storage = browser(t, previous, () => { sent = true; });
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(readCompanionInventory({}, { signal: controller.signal }), { name: 'AbortError' });
+  assert.equal(sent, false);
+  assert.equal(storage.get(KEY), previous);
+});
+
 test('a failed concurrent read cannot discard a candidate verified by another read', async t => {
   const callbacks = [];
   const storage = browser(t, null, (_runtime, _id, _message, callback) => callbacks.push(callback));
@@ -137,3 +190,22 @@ test('a superseded candidate cannot replace the companion verified by a newer li
   await oldRead;
   assert.equal(storage.get(KEY), replacement);
 });
+
+for (const savedId of [null, previous]) {
+  test(`a cancelled initial handshake can reconnect with ${savedId ? 'an older identifier' : 'no saved identifier'}`, async t => {
+    const requests = [];
+    const storage = browser(t, savedId, (_runtime, id, _message, callback) => requests.push({ id, callback }));
+    const controller = new AbortController();
+    const first = readCompanionInventory({}, { signal: controller.signal });
+    controller.abort();
+    await assert.rejects(first, { name: 'AbortError' });
+    requests[0].callback(page);
+    assert.equal(storage.get(KEY), savedId ?? undefined, 'cancelled response cannot save a connection');
+    const retry = readCompanionInventory({ query: 'Explorer' });
+    assert.equal(requests.length, 2, 'the replacement read reaches the companion');
+    assert.equal(requests[1].id, candidate, 'keep the requested companion instead of reverting to an older one');
+    requests[1].callback(page);
+    assert.deepEqual(await retry, page);
+    assert.equal(storage.get(KEY), candidate);
+  });
+}

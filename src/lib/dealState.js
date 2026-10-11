@@ -92,6 +92,8 @@ export function deskReducer(state, action) {
     case 'expire-undo': return state.lastRoll ? { ...state, lastRoll: null } : state;
     case 'view': return { ...state, view: action.view, mobileGridOpen: false };
     case 'grid-visibility': return { ...state, mobileGridOpen: action.open && state.view === 'dealer' && state.deal.dealType === 'finance' };
+    // Caller supplies a normalized snapshot; remount inputs to replace local raw text.
+    case 'restore': return { ...action.desk, view: 'dealer', mobileGridOpen: false, lastRoll: null, resetCount: state.resetCount + 1 };
     case 'reset': return { ...createDeskState(), resetCount: state.resetCount + 1 };
     // A blank desk left open past midnight moves to the new day, as a fresh page would.
     // Only forward, because Reset can already be on the new day while the app's clock

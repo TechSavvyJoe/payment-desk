@@ -1,19 +1,24 @@
 // This is an estimate policy, not a lender rate or eligibility table.
 // Source review does not replace dealership verification of vendor fees.
+// SOS Dealer Manual Chapter 7, rev. 07/26, p. 5, entries 2a/4:
+// optional taxable MiEFS/CVR filing is $34; customer initials are on the RD-108.
+// https://www.michigan.gov/sos/-/media/Project/Websites/sos/01preston/Dealer_Manual_Chapter_7.pdf
+export const ELECTRONIC_FILING_FEE_MAXIMUM = 34;
+
 export const POLICY_CONFIG = Object.freeze({
-  id: 'mi-retail-2026-09-24',
-  version: '2026.09.24',
+  id: 'mi-retail-2026-10-11',
+  version: '2026.10.11',
   jurisdiction: 'Michigan',
   effectiveFrom: '2026-01-01',
   effectiveTo: '2026-12-31',
-  reviewedAt: '2026-09-24',
+  reviewedAt: '2026-10-11',
   salesTaxRate: 0.06,
   salesTaxBasisPoints: 600,
   documentFeeMaximum: 280,
   documentFeeSalePricePercent: 5,
   feeDefaults: Object.freeze({
     documentFee: 280,
-    crvFee: 34,
+    crvFee: ELECTRONIC_FILING_FEE_MAXIMUM,
     plateTransferFee: 10,
     additionalTransferFee: 5,
     cashTitleFee: 15,
@@ -21,6 +26,10 @@ export const POLICY_CONFIG = Object.freeze({
   }),
   documentFeeBasis: 'Conservative estimate: the lesser of $280 and 5% of selling price, rounded down to cents, for both cash and finance.',
   sources: Object.freeze([
+    Object.freeze({
+      title: 'Michigan SOS Dealer Manual Chapter 7: optional electronic filing and registration',
+      url: 'https://www.michigan.gov/sos/-/media/Project/Websites/sos/01preston/Dealer_Manual_Chapter_7.pdf',
+    }),
     Object.freeze({
       title: 'Michigan Treasury RAB 2022-17: trade-in credit',
       url: 'https://www.michigan.gov/taxes/rep-legal/rab/2022-revenue-administrative-bulletins/revenue-administrative-bulletin-2022-17',
@@ -31,12 +40,12 @@ export const POLICY_CONFIG = Object.freeze({
     }),
     Object.freeze({
       title: 'Michigan SOS Dealer Manual Chapter 8: sales tax',
-      url: 'https://www.michigan.gov/documents/sos/Dealer_Manual_Chapter_8_186065_7.pdf',
+      url: 'https://www.michigan.gov/sos/-/media/Project/Websites/sos/01preston/Dealer_Manual_Chapter_8.pdf',
     }),
   ]),
   assumptions: Object.freeze([
     'Michigan taxable retail vehicle purchase with an eligible owned motor-vehicle trade; leases, nonresident transactions and tax exemptions are outside this estimate.',
-    'The $34 taxable CRV charge is a dealership assumption and must be verified; it is not presented as a state-mandated fee.',
+    'The optional taxable electronic filing charge is limited to $34 and assumes customer consent on the RD-108; it is not a state-mandated charge.',
     'New registration costs must be supplied. Standard transfer and title amounts do not cover every renewal, replacement or commercial registration case.',
     'Optional product taxability must be verified. Manufacturer rebates are not supported and must not be deducted from the taxable selling price.',
     'Payments assume equal monthly periods and a two-decimal annual interest rate. Lender APR, credit-specific charges, timing, eligibility and final contract figures require separate verification.',

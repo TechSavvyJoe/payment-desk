@@ -108,6 +108,28 @@ test('laptop panel keeps a readable estimate and initial deal inputs above its f
   expect(metrics.overflow).toBe(false);
 });
 
+test('named worksheets survive a panel reload and restore into a reset worksheet', async () => {
+  const page = await openPanelDocument(450, 800);
+  const desk = page.frameLocator('#desk');
+  await desk.locator('#sale-price').fill('25000');
+  await desk.getByLabel('Cash down', { exact: true }).fill('1500');
+  await desk.getByRole('button', { name: 'Save worksheet', exact: true }).click();
+  const saved = desk.getByRole('dialog', { name: 'Saved worksheets' });
+  await saved.getByRole('textbox', { name: 'Worksheet name', exact: true }).fill('Panel alternative');
+  await saved.getByRole('button', { name: 'Save a copy', exact: true }).click();
+  await expect(saved.getByRole('heading', { name: 'Panel alternative', exact: true })).toBeVisible();
+  await saved.getByRole('button', { name: 'Close', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await desk.getByRole('button', { name: 'Reset deal', exact: true }).click();
+  await expect(desk.locator('#sale-price')).toHaveValue('');
+  await page.reload();
+  await expect(desk.locator('#sale-price')).toHaveValue('');
+  await desk.getByRole('button', { name: 'Saved worksheets', exact: true }).click();
+  await saved.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(desk.locator('#sale-price')).toHaveValue('25,000');
+  await expect(desk.getByLabel('Cash down', { exact: true })).toHaveValue('1,500');
+});
+
 // Native panels are page targets outside Playwright's tab inventory. Use CDP for
 // the real toolbar/panel test; the other cases use the identical panel document.
 const attachNativePanel = async (browserSession, targetId) => {

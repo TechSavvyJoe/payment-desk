@@ -293,9 +293,11 @@ function dealershipFeeCents(value, defaultCents, maximumCents) {
 function normalizeDealershipFees(fees, policy) {
   const source = fees && typeof fees === 'object' ? fees : {};
   const documentFeeMaximumCents = toCents(policy.documentFeeMaximum);
+  // Reapply the supported MiEFS/CVR ceiling even for callers bypassing settings.
+  const crvFeeMaximumCents = toCents(CRV_FEE_MAXIMUM);
   return {
     documentFeeCents: dealershipFeeCents(source.documentFee, DEFAULT_CENTS.documentFee, documentFeeMaximumCents),
-    crvFeeCents: dealershipFeeCents(source.crvFee, DEFAULT_CENTS.crvFee, toCents(CRV_FEE_MAXIMUM)),
+    crvFeeCents: dealershipFeeCents(source.crvFee, Math.min(DEFAULT_CENTS.crvFee, crvFeeMaximumCents), crvFeeMaximumCents),
   };
 }
 
@@ -846,6 +848,7 @@ export function solveSalePriceForTarget(
     dealInput.salePrice ?? dealInput.sellingPrice ?? 0,
     'Sale price',
   );
+  const minimumSalePriceCents = nonNegativeCents(minSalePrice, 'Minimum sale price');
   const targetCents = toCents(target);
   const evaluate = (salePriceCents) => {
     const deal = calculateDeal({ ...dealInput, salePrice: fromCents(salePriceCents) });
@@ -854,7 +857,7 @@ export function solveSalePriceForTarget(
   const upperCents =
     maxSalePrice === undefined
       ? upperBoundForMonotonicDealValue({
-          currentValueCents: currentSalePriceCents,
+          currentValueCents: Math.max(currentSalePriceCents, minimumSalePriceCents),
           targetCents,
           evaluate,
         })
@@ -862,7 +865,7 @@ export function solveSalePriceForTarget(
 
   const solution = solveCentValueForTarget({
     target,
-    min: minSalePrice,
+    min: fromCents(minimumSalePriceCents),
     max: fromCents(upperCents),
     evaluate,
   });
@@ -901,6 +904,7 @@ export function solveOptionalItemAmountForTarget(
     items[itemIndex].amount ?? 0,
     `Optional item ${itemIndex + 1}`,
   );
+  const minimumAmountCents = nonNegativeCents(minAmount, 'Minimum optional item amount');
   const targetCents = toCents(target);
   const evaluate = (amountCents) => {
     const optionalItems = items.map((item, index) =>
@@ -912,7 +916,7 @@ export function solveOptionalItemAmountForTarget(
   const upperCents =
     maxAmount === undefined
       ? upperBoundForMonotonicDealValue({
-          currentValueCents: currentAmountCents,
+          currentValueCents: Math.max(currentAmountCents, minimumAmountCents),
           targetCents,
           evaluate,
         })
@@ -920,7 +924,7 @@ export function solveOptionalItemAmountForTarget(
 
   const solution = solveCentValueForTarget({
     target,
-    min: minAmount,
+    min: fromCents(minimumAmountCents),
     max: fromCents(upperCents),
     evaluate,
   });

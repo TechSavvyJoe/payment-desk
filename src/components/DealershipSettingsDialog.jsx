@@ -12,7 +12,7 @@ const SAVE_FAILED = "Couldn't save on this device — storage is blocked or full
 const CLEAR_FAILED = "Couldn't remove the saved settings on this device. Payment Desk and the default fees apply until this page is closed.";
 const FEES_INVALID = "Correct the highlighted fee before saving.";
 const DOCUMENT_FEE_HELP = `Michigan maximum ${formatCurrency(DOCUMENT_FEE_MAXIMUM)}; never more than ${POLICY_CONFIG.documentFeeSalePricePercent}% of the selling price`;
-const CRV_FEE_HELP = "Taxable dealer fee";
+const CRV_FEE_HELP = `Optional taxable electronic filing fee; Michigan maximum ${formatCurrency(CRV_FEE_MAXIMUM)}. Customer consent/initials are obtained on the RD-108.`;
 const orBlank = (amount) => amount ?? "";
 const orNull = (amount) => amount === "" || amount === undefined ? null : amount;
 
@@ -143,6 +143,7 @@ export default function DealershipSettingsDialog({ settings, feeSettings, onSave
         <ValidationContext.Provider value={reportFeeError}>
           <fieldset aria-describedby={feesHintId} className="settings-dialog__fees" disabled={finished} key={feeFieldsKey} ref={feesRef}>
             <legend>Fees</legend>
+            {feeSettings.crvFeeNeedsReview && !finished ? <p className="settings-dialog__note" role="alert">The previously saved electronic filing fee exceeded Michigan's $34 limit. Estimates use $34 instead. Enter $0–$34, or leave blank for $34, then Save to replace the old setting. Cancel keeps the old saved value and this warning on reload.</p> : null}
             <FeeField helper={DOCUMENT_FEE_HELP} label="Document fee" max={DOCUMENT_FEE_MAXIMUM} onChange={setDocumentFee}
               placeholder={formatNumber(FEE_DEFAULTS.documentFee)} value={documentFee} />
             <FeeField helper={CRV_FEE_HELP} label="CRV dealer fee" max={CRV_FEE_MAXIMUM} onChange={setCrvFee}

@@ -4,7 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 const FEES_KEY = 'payment-desk.fees.v1';
 const BRAND_KEY = 'payment-desk.dealership.v1';
 const DOC_HELP = 'Michigan maximum $280; never more than 5% of the selling price';
-const CRV_HELP = 'Taxable dealer fee';
+const CRV_HELP = 'Optional taxable electronic filing fee; Michigan maximum $34. Customer consent/initials are obtained on the RD-108.';
 
 const test = base.extend({
   clientErrors: [async ({ page }, use) => {
@@ -89,13 +89,13 @@ test('a custom CRV fee reaches the worksheet, payment, grid, target solver, cust
   await expect(selectedPayment(page)).toHaveText('$540.67');
   await expect(feeLine(page, 'CRV fee')).toHaveText('$34');
 
-  await saveFees(page, { crvFee: '125.50' });
-  expect(JSON.parse(await storedFees(page))).toEqual({ documentFee: null, crvFee: 125.5 });
+  await saveFees(page, { crvFee: '25.50' });
+  expect(JSON.parse(await storedFees(page))).toEqual({ documentFee: null, crvFee: 25.5 });
 
   // Worksheet fee lines and the selected payment.
-  await expect(feeLine(page, 'CRV fee')).toHaveText('$125.50');
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$25.50');
   await expect(feeLine(page, 'Document fee')).toHaveText('$280');
-  await expect(selectedPayment(page)).toHaveText('$542.30');
+  await expect(selectedPayment(page)).toHaveText('$540.52');
 
   // Payment grid: the selected 72-month cell and another term/down cell.
   if (page.viewportSize().width <= 800) {
@@ -104,8 +104,8 @@ test('a custom CRV fee reaches the worksheet, payment, grid, target solver, cust
     await currentSummary(page).getByRole('button', { name: 'Compare payments', exact: true }).click();
   }
   const grid = page.locator('#payment-grid');
-  await expect(grid.getByRole('button', { name: /^Use 72 months at 6\.50 percent with \$0 down for \$542\.30 per month$/ }).filter({ visible: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(grid.getByRole('button', { name: /^Use 60 months at 6\.00 percent with \$1,000 down for \$604\.36 per month$/ }).filter({ visible: true })).toBeVisible();
+  await expect(grid.getByRole('button', { name: /^Use 72 months at 6\.50 percent with \$0 down for \$540\.52 per month$/ }).filter({ visible: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(grid.getByRole('button', { name: /^Use 60 months at 6\.00 percent with \$1,000 down for \$602\.31 per month$/ }).filter({ visible: true })).toBeVisible();
   await grid.getByRole('button', { name: 'Back to calculator', exact: true }).click();
 
   // Target solver: the applied cash down reaches the payment exactly, so the
@@ -115,18 +115,18 @@ test('a custom CRV fee reaches the worksheet, payment, grid, target solver, cust
   await expect(apply).toBeEnabled();
   await apply.click();
   await expect(selectedPayment(page)).toHaveText('$500.00');
-  await expect(page.getByRole('textbox', { name: 'Cash down', exact: true })).toHaveValue('2,516.51');
+  await expect(page.getByRole('textbox', { name: 'Cash down', exact: true })).toHaveValue('2,410.51');
 
   // Customer estimate and copied text.
   await page.getByRole('button', { name: 'Customer view', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your purchase estimate', exact: true })).toBeVisible();
   const ledger = page.locator('.customer-ledger').first();
-  await expect(ledger.locator('.customer-ledger__row').filter({ hasText: 'CRV dealer fee (taxable)' })).toContainText('$125.50');
+  await expect(ledger.locator('.customer-ledger__row').filter({ hasText: 'CRV dealer fee (taxable)' })).toContainText('$25.50');
   await expect(ledger.locator('.customer-ledger__row').filter({ hasText: 'Document fee (taxable)' })).toContainText('$280.00');
-  await expect(ledger.locator('.customer-ledger__row.is-total')).toContainText('$32,260.83');
+  await expect(ledger.locator('.customer-ledger__row.is-total')).toContainText('$32,154.83');
   await expect(page.locator('.results-panel--customer .payment-number strong')).toHaveText('$500.00');
-  const assumption = 'Document fee $280.00 (dealership setting; never more than $280 or 5% of the selling price) and CRV dealer fee $125.50 are set by the dealership.';
-  await expect(page.locator('.proposal-qualification li').filter({ hasText: 'CRV dealer fee $125.50' })).toHaveText(assumption);
+  const assumption = 'Document fee $280.00 (dealership setting; never more than $280 or 5% of the selling price) and CRV dealer fee $25.50 are set by the dealership.';
+  await expect(page.locator('.proposal-qualification li').filter({ hasText: 'CRV dealer fee $25.50' })).toHaveText(assumption);
 
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.testCopiedEstimate = text; } } }));
   await page.getByRole('button', { name: 'Copy summary', exact: true }).click();
@@ -134,10 +134,10 @@ test('a custom CRV fee reaches the worksheet, payment, grid, target solver, cust
   const copied = (await page.evaluate(() => window.testCopiedEstimate)).split('\n');
   expect(copied).toEqual(expect.arrayContaining([
     'Estimated payment: $500.00/mo',
-    'CRV dealer fee (taxable): $125.50',
+    'CRV dealer fee (taxable): $25.50',
     'Document fee (taxable): $280.00',
-    'Out-the-door total: $32,260.83',
-    'Less cash down: −$2,516.51',
+    'Out-the-door total: $32,154.83',
+    'Less cash down: −$2,410.51',
     assumption,
     'Product tax treatment must be confirmed for this transaction.',
   ]));
@@ -172,8 +172,11 @@ test('out-of-range and malformed fees explain the problem and block Save', async
   await expect(dialog.getByRole('status')).toHaveText('Correct the highlighted fee before saving.');
   expect(await storedFees(page)).toBeNull();
 
+  await documentFee.fill('199');
   for (const [text, message] of [
-    ['1000', 'Enter an amount from $0 to $999.99.'],
+    ['34.01', 'Enter an amount from $0 to $34.00.'],
+    ['125.50', 'Enter an amount from $0 to $34.00.'],
+    ['1000', 'Enter an amount from $0 to $34.00.'],
     ['-5', 'Enter a number, such as 30,000. Letters and negative amounts are not supported.'],
     ['12.345', 'Use no more than two decimal places for an amount.'],
     ['abc', 'Enter a number, such as 30,000. Letters and negative amounts are not supported.'],
@@ -181,6 +184,11 @@ test('out-of-range and malformed fees explain the problem and block Save', async
     await crvFee.fill(text);
     await expect(crvFee).toHaveAttribute('aria-invalid', 'true');
     await expect(crvFee).toHaveAccessibleDescription(`${CRV_HELP} ${message}`);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeVisible();
+    await expect(crvFee).toBeFocused();
+    expect(await storedFees(page)).toBeNull();
+    await expect(feeLine(page, 'CRV fee')).toHaveText('$34');
   }
 
   await documentFee.fill('199');
@@ -211,24 +219,24 @@ test('Cancel discards fee drafts, including invalid ones', async ({ page }) => {
 });
 
 test('saved fees survive reload and Reset deal, and Clear restores the defaults', async ({ page }) => {
-  await seedFees(page, { documentFee: 199, crvFee: 50 });
+  await seedFees(page, { documentFee: 199, crvFee: 25 });
   await page.reload();
   await enterPrice(page);
   await expect(feeLine(page, 'Document fee')).toHaveText('$199');
-  await expect(feeLine(page, 'CRV fee')).toHaveText('$50');
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$25');
 
   page.once('dialog', confirm => confirm.accept());
   await page.getByRole('button', { name: 'Reset deal' }).click();
   await expect(price(page)).toHaveValue('');
   await enterPrice(page);
-  await expect(feeLine(page, 'CRV fee')).toHaveText('$50');
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$25');
 
   await page.reload();
   await enterPrice(page);
-  await expect(feeLine(page, 'CRV fee')).toHaveText('$50');
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$25');
   const dialog = await openSettings(page);
   await expect(feeInputs(dialog).documentFee).toHaveValue('199');
-  await expect(feeInputs(dialog).crvFee).toHaveValue('50');
+  await expect(feeInputs(dialog).crvFee).toHaveValue('25');
 
   let confirmText = '';
   page.once('dialog', confirm => { confirmText = confirm.message(); return confirm.accept(); });
@@ -256,14 +264,14 @@ test('when the browser refuses to save, the fees still apply for this visit with
   await enterPrice(page);
   await page.evaluate(() => { Storage.prototype.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); }; });
   const dialog = await openSettings(page);
-  await feeInputs(dialog).crvFee.fill('75');
+  await feeInputs(dialog).crvFee.fill('20');
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dialog.getByRole('status')).toContainText("Couldn't save on this device");
-  await expect(feeLine(page, 'CRV fee')).toHaveText('$75');
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$20');
   await expect(feeInputs(dialog).crvFee).toBeDisabled();
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(dialog).toBeHidden();
-  await expect(feeLine(page, 'CRV fee')).toHaveText('$75');
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$20');
 });
 
 test('the dialog with fees fits a 375×667 phone, scrolls inside, uses 16px inputs, and passes an accessibility scan', async ({ page }) => {
@@ -293,4 +301,80 @@ test('the dialog with fees fits a 375×667 phone, scrolls inside, uses 16px inpu
   expect(scan.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))).toEqual([]);
   await dialog.getByRole('button', { name: 'Save' }).scrollIntoViewIfNeeded();
   await expect(dialog.getByRole('button', { name: 'Save' })).toBeInViewport();
+});
+
+
+for (const crvFee of [34.01, '125.50', 999.99]) {
+  test(`legacy filing fee ${crvFee} is bounded and Settings preserves evidence until recovery`, async ({ page }) => {
+    const legacy = { documentFee: 199, crvFee };
+    await seedFees(page, legacy);
+    await page.reload();
+    await enterPrice(page);
+    await expect(feeLine(page, 'Document fee')).toHaveText('$199');
+    await expect(feeLine(page, 'CRV fee')).toHaveText('$34');
+    expect(await storedFees(page)).toBe(JSON.stringify(legacy));
+
+    let dialog = await openSettings(page);
+    await expect(dialog.getByRole('alert')).toContainText("The previously saved electronic filing fee exceeded Michigan's $34 limit. Estimates use $34 instead.");
+    await expect(dialog.getByRole('alert')).toContainText('Save to replace the old setting');
+    await expect(feeInputs(dialog).crvFee).toHaveValue('');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    expect(await storedFees(page)).toBe(JSON.stringify(legacy));
+
+    await page.reload();
+    dialog = await openSettings(page);
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await feeInputs(dialog).crvFee.fill('20');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+    expect(JSON.parse(await storedFees(page))).toEqual({ documentFee: 199, crvFee: 20 });
+    await expect(feeLine(page, 'CRV fee')).toHaveText('$20');
+    await page.reload();
+    dialog = await openSettings(page);
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
+    await expect(feeInputs(dialog).crvFee).toHaveValue('20');
+  });
+}
+
+for (const action of ['Save', 'Clear dealership settings']) {
+  test(`legacy excessive filing fee can recover to defaults using ${action}`, async ({ page }) => {
+    await seedFees(page, { documentFee: null, crvFee: 125.5 });
+    await page.reload();
+    await enterPrice(page);
+    const dialog = await openSettings(page);
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    if (action === 'Clear dealership settings') page.once('dialog', confirm => confirm.accept());
+    await dialog.getByRole('button', { name: action, exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(await storedFees(page)).toBeNull();
+    await expect(feeLine(page, 'CRV fee')).toHaveText('$34');
+    await page.reload();
+    const reopened = await openSettings(page);
+    await expect(reopened.getByRole('alert')).toHaveCount(0);
+  });
+}
+
+test('failed legacy fee recovery keeps the original record and warns again after reload', async ({ page }) => {
+  const legacy = { documentFee: 199, crvFee: 125.5 };
+  await seedFees(page, legacy);
+  await page.reload();
+  await enterPrice(page);
+  await page.evaluate(([key, raw]) => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (storageKey, value) {
+      if (storageKey === key && value !== raw) throw new DOMException('full', 'QuotaExceededError');
+      return original.call(this, storageKey, value);
+    };
+  }, [FEES_KEY, JSON.stringify(legacy)]);
+  const dialog = await openSettings(page);
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await feeInputs(dialog).crvFee.fill('20');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.getByRole('status')).toContainText("Couldn't save on this device");
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$20');
+  expect(await storedFees(page)).toBe(JSON.stringify(legacy));
+  await page.reload();
+  await expect(feeLine(page, 'CRV fee')).toHaveText('$34');
+  const reopened = await openSettings(page);
+  await expect(reopened.getByRole('alert')).toBeVisible();
 });

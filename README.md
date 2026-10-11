@@ -50,7 +50,7 @@ The worksheet saves on this device, including payment/cash limits, independent c
 - The current fee/tax review window ends **December 31, 2026**. Later dates show the scheduled credit but require policy review before proposal export. From 30 days before the window ends (December 1), Dealer view shows a slim reminder under the header to have the rules reviewed and the app updated before January 1.
 - **Document and CRV fees are dealership settings** (Settings → Fees), saved per device. Blank uses the default. Both fees are taxable.
   - Document fee: default $280. Whatever is entered, the fee charged is never more than $280 or 5% of the selling price, rounded down to cents. The dealership must confirm the approved contract basis.
-  - CRV dealer fee: default $34, from $0 to $999.99. It is a dealership charge, not a represented state mandate.
+  - CRV electronic filing fee: default $34, configurable from $0 to $34. This optional taxable MiEFS/CVR charge follows [SOS Dealer Manual Chapter 7, rev. July 2026, p. 5](https://www.michigan.gov/sos/-/media/Project/Websites/sos/01preston/Dealer_Manual_Chapter_7.pdf). Customer consent/initials are obtained on the RD-108. An older saved amount above $34 falls back to $34; Settings explains the recovery, and Save or Clear replaces the old record.
   - Estimate assumptions state the amounts actually charged on the deal.
 - Enter the assumed **annual interest rate** with up to two significant decimal places. Extra precision is rejected instead of silently changing the rate. This is not a lender APR disclosure. Payments use exact cent rounding for regular monthly amortization; credit-specific charges, payment dates and final installments need separate lender verification.
 
@@ -69,3 +69,9 @@ Dealership name/logo, fees and the public identifier of a connected companion ar
 [Staff quick start](public/help.html) · [Technical data handling](public/data-practices.html) · [Third-party notices](public/THIRD-PARTY-NOTICES.txt)
 
 Commercial ownership, licensing, approved privacy/store disclosures, staffed support and nationwide provider acceptance remain separate business gates. This release does not claim a Chrome Web Store listing or nationwide certification.
+
+## Named worksheets (2.3)
+
+Save worksheet keeps an explicit local copy; Saved worksheets searches, opens, renames, updates and deletes up to 50 copies and compares the current worksheet with two ready alternatives. Copies retain inputs and unfinished text, not historical totals or device branding/fees. Opening recalculates with current rules/fees and preserves the estimate date. Reset clears only the current draft. Website and companion libraries remain separate.
+
+The versioned `payment-desk.worksheets.v1` collection uses its own Web Lock and exact-byte conflict checks. Unknown/corrupt records are preserved, and failed writes never claim success. See [workspace design](docs/WORKSPACE-UPGRADE-DESIGN.md), [primary-source research](docs/WORKSPACE-UPGRADE-RESEARCH.md), and [data handling](public/data-practices.html).

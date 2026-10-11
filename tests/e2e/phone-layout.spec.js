@@ -31,7 +31,7 @@ test.describe('phone worksheet starts at the inputs', () => {
   test('the opening screen shows Selling price in the top half with no intro or start box', async ({ page }) => {
     const price = page.getByRole('textbox', { name: 'Selling price', exact: true });
     expect((await pageBox(price)).bottom).toBeLessThanOrEqual(page.viewportSize().height * 0.45);
-    await expect(page.getByRole('heading', { name: 'Build the deal. See the payment.' })).toBeAttached();
+    await expect(page.getByRole('heading', { name: 'Current worksheet' })).toBeAttached();
     expect((await pageBox(page.locator('#worksheet-heading'))).height).toBeLessThanOrEqual(1);
     await expect(page.locator('.mobile-results')).toBeHidden();
     await expect(page.locator('.estimate-start:visible')).toHaveCount(0);
@@ -130,7 +130,7 @@ test.describe('phone worksheet starts at the inputs', () => {
 test('desktop keeps the full heading and start card', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'Desktop layout only.');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Build the deal. See the payment.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Current worksheet' })).toBeVisible();
   expect((await page.locator('#worksheet-heading').boundingBox()).height).toBeGreaterThan(20);
   await expect(page.locator('.desktop-results').getByRole('button', { name: 'Enter selling price', exact: true })).toBeVisible();
 });
